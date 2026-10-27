@@ -7,10 +7,11 @@ import type { RequestRow } from "@/lib/types";
 import { lines } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select, Textarea } from "@/components/ui/form";
-import { Card, CardContent, CardHeader, CardTitle, Spinner } from "@/components/ui/misc";
-import { useToast } from "@/components/ui/toast";
 import { CURRENCIES, DEPARTMENTS, SENIORITIES } from "../../shared/types";
+import { Field, Select, Spinner, useToast } from "@/components/kit";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 type Form = Record<string, string>;
 const EMPTY: Form = {
