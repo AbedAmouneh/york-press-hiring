@@ -3,9 +3,10 @@ import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/form";
-import { Card, Spinner } from "@/components/ui/misc";
 import { AuthLayout } from "./Login";
+import { Field, Spinner } from "@/components/kit";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 export default function Invite() {
   const { token } = useParams();
