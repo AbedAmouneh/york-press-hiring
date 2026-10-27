@@ -1,10 +1,9 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
-import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, requireRole, type AppEnv, type SessionUser } from "../auth.js";
-import { CANDIDATE_STATUSES, HM_DECISIONS } from "../../shared/types.js";
+import { RoleCandidatePatch } from "../../shared/schemas.js";
 import { canEditCandidates, isStaff, loadRequest } from "./access.js";
 import { appIsPublic, env, mock } from "../env.js";
 import { revealContacts } from "../services/providers/signalhire.js";
@@ -110,13 +109,7 @@ candidateRoutes.patch("/role-candidates/:id", async (c) => {
   const user = c.get("user");
   const { rc, request } = await loadRc(c.req.param("id"), user);
   if (!canEditCandidates(user, request)) throw new HTTPException(403, { message: "You can view but not change candidates for this role." });
-  const body = z.object({
-    status: z.enum(CANDIDATE_STATUSES).optional(),
-    hmDecision: z.enum(HM_DECISIONS).nullable().optional(),
-    hmComment: z.string().max(2000).nullable().optional(),
-    followUpDate: z.string().nullable().optional(),
-    dateContacted: z.string().nullable().optional(),
-  }).parse(await c.req.json());
+  const body = RoleCandidatePatch.parse(await c.req.json());
   const recruiter = hasRole(user, "recruiter", "admin");
   const patch = recruiter ? body : { hmDecision: body.hmDecision, hmComment: body.hmComment };
   const db = await getDb();
