@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/auth";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import { Field } from "@/components/kit";
+import { Field, FormError } from "@/components/kit";
+import { LoginInput } from "../../shared/schemas";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
@@ -37,23 +39,16 @@ export default function Login() {
   const me = useMe();
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const form = useForm({ resolver: zodResolver(LoginInput), defaultValues: { email: "", password: "" } });
+  const { errors, isSubmitting } = form.formState;
 
-  async function signIn(e?: React.FormEvent, creds?: { email: string; password: string }) {
-    e?.preventDefault();
-    setBusy(true);
-    setError("");
+  async function signIn(creds: { email: string; password: string }) {
     try {
-      await api("/auth/login", { body: creds ?? { email, password } });
+      await api("/auth/login", { body: creds });
       await qc.invalidateQueries();
       navigate(params.get("next") ?? "/", { replace: true });
     } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
+      form.setError("root", { message: (err as Error).message });
     }
   }
 
@@ -63,11 +58,15 @@ export default function Login() {
         <div className="mb-6 lg:hidden"><Logo /></div>
         <h1 className="text-xl font-bold">Sign in</h1>
         <p className="mb-5 text-sm text-muted-foreground">Use your York Press email.</p>
-        <form onSubmit={signIn} className="grid gap-4">
-          <Field label="Email" htmlFor="email"><Input id="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
-          <Field label="Password" htmlFor="password"><Input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={busy}>Sign in</Button>
+        <form onSubmit={form.handleSubmit(signIn)} className="grid gap-4" noValidate>
+          <Field label="Email" htmlFor="email" error={errors.email?.message}>
+            <Input id="email" type="email" autoComplete="username" aria-invalid={!!errors.email} {...form.register("email")} />
+          </Field>
+          <Field label="Password" htmlFor="password" error={errors.password?.message}>
+            <Input id="password" type="password" autoComplete="current-password" aria-invalid={!!errors.password} {...form.register("password")} />
+          </Field>
+          <FormError>{errors.root?.message}</FormError>
+          <Button type="submit" disabled={isSubmitting}>Sign in</Button>
         </form>
         <p className="mt-4 text-xs text-muted-foreground">Forgot your password? Ask your admin to send a new invite link.</p>
         {me.data?.demoMode && me.data.demoPassword && (
@@ -75,7 +74,7 @@ export default function Login() {
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Demo · sign in as</p>
             <div className="grid grid-cols-2 gap-2">
               {DEMO.map(([e, label]) => (
-                <Button key={e} variant="outline" size="sm" disabled={busy} onClick={() => signIn(undefined, { email: e, password: me.data!.demoPassword! })}>{label}</Button>
+                <Button key={e} variant="outline" size="sm" disabled={isSubmitting} onClick={() => signIn({ email: e, password: me.data!.demoPassword! })}>{label}</Button>
               ))}
             </div>
           </div>
