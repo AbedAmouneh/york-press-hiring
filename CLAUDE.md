@@ -8,8 +8,10 @@ A web app for York Press: managers request a position, Khalil (CEO) approves it,
 sources about 50 candidates from People Data Labs and SignalHire, scores them with Claude on a
 weighted 100-point scorecard, flags the Top 10, reveals their contacts through SignalHire and sends
 templated outreach. Email goes out automatically within a daily cap; LinkedIn notes are approved in
-the app and sent from Abed's account by Claude in Chrome (see the parent folder's CLAUDE.md, §9).
+the app and sent from Abed's account by Claude in Chrome (see §9 of
+`~/Documents/Linkedin Automation /CLAUDE.md`, the sourcing workflow's working memory).
 
+- Local path: `~/Development/hiring-platform`.
 - Owner: Abed El-Fattah Amouneh. CEO approver: Khalil Sayegh (khalil.sayegh@york-press.com).
 - Repo: https://github.com/AbedAmouneh/york-press-hiring (public). Hosting: Vercel. DB: Neon Postgres.
 - Plain-English setup: `SETUP_GUIDE.md`. Technical overview: `README.md`.
