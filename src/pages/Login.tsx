@@ -5,8 +5,9 @@ import { api } from "@/lib/api";
 import { useMe } from "@/lib/auth";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/form";
-import { Card } from "@/components/ui/misc";
+import { Field } from "@/components/kit";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 const DEMO = [
   ["demo.manager@york-press.test", "Manager"],
