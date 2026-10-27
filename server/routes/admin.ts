@@ -12,6 +12,7 @@ import { getSettings, updateSettings } from "../services/settings.js";
 import { sentTodayCount } from "../services/outreach.js";
 import { PLACEHOLDERS } from "../services/templates.js";
 import { publicUser } from "./access.js";
+import { previewRetention, RETENTION_MONTHS } from "../services/retention.js";
 
 export const adminRoutes = new Hono<AppEnv>();
 
@@ -73,6 +74,12 @@ adminRoutes.patch("/settings", async (c) => {
   requireRole(c, "recruiter", "admin");
   const body = SettingsPatch.parse(await c.req.json());
   return c.json({ settings: await updateSettings({ ...body, defaultWeights: body.defaultWeights as Weights | undefined }) });
+});
+
+// ---------------------------------------------------------------- data retention
+adminRoutes.get("/retention", async (c) => {
+  requireRole(c, "recruiter", "admin", "ceo");
+  return c.json({ months: RETENTION_MONTHS, nextRun: await previewRetention() });
 });
 
 // ---------------------------------------------------------------- templates
