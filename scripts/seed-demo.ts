@@ -47,12 +47,16 @@ await manager("POST", "/requests?submit=true", {
   locationPolicy: "Remote", searchLocations: [], salaryMin: 60000, salaryMax: 80000, currency: "USD", justification: "Backfill.",
 });
 
+// The real admin account needs two-step login, so the demo recruiter watches the run.
+const recruiter = client();
+await recruiter("POST", "/auth/login", { email: "demo.recruiter@york-press.test", password: "demo-york-2026" });
+
 const ceo = client();
 await ceo("POST", "/auth/login", { email: "demo.ceo@york-press.test", password: "demo-york-2026" });
 await ceo("POST", `/requests/${role.id}/decision`, { action: "approve" });
 for (let i = 0; i < 100; i++) {
   await new Promise((r) => setTimeout(r, 200));
-  if ((await admin("GET", `/requests/${role.id}`)).request.status === "open") break;
+  if ((await recruiter("GET", `/requests/${role.id}`)).request.status === "open") break;
 }
 console.log("Demo data ready. Sign in with any demo.*@york-press.test account, password demo-york-2026.");
 process.exit(0);
