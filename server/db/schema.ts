@@ -306,6 +306,9 @@ export const usageLog = pgTable("usage_log", {
   units: integer("units").notNull().default(0),
   inputTokens: integer("input_tokens").notNull().default(0),
   outputTokens: integer("output_tokens").notNull().default(0),
+  // Prompt caching: tokens read from cache (~10% of the input price) and written to it (~125%).
+  cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+  cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
   mock: boolean("mock").notNull().default(false),
   createdAt: createdAt(),
 });
