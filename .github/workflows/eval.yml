@@ -1,0 +1,35 @@
+name: Scoring eval
+
+# Runs the scoring test set against the real Claude API. It costs a few cents, so it runs weekly,
+# on demand, and on pull requests that touch the prompts or the test set. Without the
+# ANTHROPIC_API_KEY repository secret it skips itself.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
+  pull_request:
+    paths:
+      - server/services/claude.ts
+      - evals/**
+      - scripts/eval-scoring.ts
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    name: Scoring test set
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      EVAL_RUNS: ${{ github.event_name == 'schedule' && '3' || '1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --include=dev
+      - name: Score the test set
+        run: npm run eval:scoring
