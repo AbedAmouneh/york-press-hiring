@@ -4,7 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
+import type { UserRow } from "@/lib/types";
 import { fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 
-type U = { id: string; email: string; name: string; roles: Role[]; department: string | null; active: boolean; isDemo: boolean; invited: boolean; lastLoginAt: string | null };
+type U = UserRow;
 
 function RolePicker({ value, onChange }: { value: Role[]; onChange: (r: Role[]) => void }) {
   return (
@@ -40,7 +41,7 @@ function InviteUserForm({ onDone, onCancel }: { onDone: (email: string, link: st
   const { errors, isSubmitting } = form.formState;
   const submit = form.handleSubmit(async (values) => {
     try {
-      const res = await api<{ inviteLink?: string }>("/users", { body: values });
+      const res = await call(rpc.users.$post({ json: values }));
       form.reset(INVITE_DEFAULTS);
       onDone(values.email, res.inviteLink ?? null);
     } catch (err) {
@@ -68,7 +69,7 @@ function InviteUserForm({ onDone, onCancel }: { onDone: (email: string, link: st
 export default function Users() {
   const qc = useQueryClient();
   const toast = useToast();
-  const q = useQuery({ queryKey: ["users"], queryFn: () => api<{ users: U[] }>("/users") });
+  const q = useQuery({ queryKey: ["users"], queryFn: () => call(rpc.users.$get()) });
   const [open, setOpen] = useState(false);
   const [link, setLink] = useState<string | null>(null);
 
@@ -78,14 +79,14 @@ export default function Users() {
     toast(`Invite sent to ${email}.`);
     qc.invalidateQueries({ queryKey: ["users"] });
   }
-  async function update(u: U, body: Partial<U>) {
+  async function update(u: U, body: Pick<Partial<U>, "name" | "roles" | "department" | "active">) {
     try {
-      await api(`/users/${u.id}`, { method: "PATCH", body });
+      await call(rpc.users[":id"].$patch({ param: { id: u.id }, json: body }));
       qc.invalidateQueries({ queryKey: ["users"] });
     } catch (err) { toast((err as Error).message, "error"); }
   }
   async function resend(u: U) {
-    const res = await api<{ inviteLink?: string }>(`/users/${u.id}/invite`, { method: "POST" });
+    const res = await call(rpc.users[":id"].invite.$post({ param: { id: u.id } }));
     setLink(res.inviteLink ?? null);
     toast(`New invite link sent to ${u.email}.`);
   }
