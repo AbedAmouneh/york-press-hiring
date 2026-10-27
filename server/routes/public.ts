@@ -15,6 +15,8 @@ import { toReq } from "../services/mappers.js";
 import { notifyRoles } from "../services/notify.js";
 import { normalizeLinkedin } from "../services/providers/types.js";
 import { publicUser } from "./access.js";
+import { APPLY_LIMITS, assertWithinLimits, clearHits, clientIp, INVITE_LIMITS, LOGIN_LIMITS, recordHit } from "../services/rate-limit.js";
+
 
 export const publicRoutes = new Hono();
 
@@ -32,12 +34,17 @@ publicRoutes.post("/setup", async (c) => {
 
 // ---------------------------------------------------------------- auth
 publicRoutes.post("/auth/login", async (c) => {
-  const { email, password } = LoginInput.parse(await c.req.json());
+  const { email: rawEmail, password } = LoginInput.parse(await c.req.json());
+  const email = rawEmail.trim().toLowerCase();
+  const limits = LOGIN_LIMITS(email, clientIp(c));
+  await assertWithinLimits(limits, "Too many failed sign-in attempts. Please wait 15 minutes and try again.");
   const db = await getDb();
-  const [u] = await db.select().from(schema.users).where(eq(schema.users.email, email.trim().toLowerCase()));
+  const [u] = await db.select().from(schema.users).where(eq(schema.users.email, email));
   if (!u || !u.active || !u.passwordHash || !(await verifyPassword(password, u.passwordHash))) {
+    await recordHit(limits);
     throw new HTTPException(401, { message: "Email or password is incorrect." });
   }
+  await clearHits([limits[0].key]);
   await db.update(schema.users).set({ lastLoginAt: new Date() }).where(eq(schema.users.id, u.id));
   await createSession(c, u.id);
   return c.json({ user: publicUser(u) });
@@ -62,9 +69,14 @@ publicRoutes.get("/auth/invite/:token", async (c) => {
 
 publicRoutes.post("/auth/invite/:token", async (c) => {
   const { password } = InvitePasswordInput.parse(await c.req.json());
+  const limits = INVITE_LIMITS(clientIp(c));
+  await assertWithinLimits(limits);
   const db = await getDb();
   const [u] = await db.select().from(schema.users).where(and(eq(schema.users.inviteToken, c.req.param("token")), gt(schema.users.inviteExpiresAt, new Date())));
-  if (!u) throw new HTTPException(404, { message: "This invite link is invalid or has expired." });
+  if (!u) {
+    await recordHit(limits);
+    throw new HTTPException(404, { message: "This invite link is invalid or has expired." });
+  }
   await db.update(schema.users).set({ passwordHash: await hashPassword(password), inviteToken: null, inviteExpiresAt: null, lastLoginAt: new Date() }).where(eq(schema.users.id, u.id));
   await createSession(c, u.id);
   return c.json({ ok: true });
@@ -82,6 +94,10 @@ publicRoutes.post("/public/apply/:token", async (c) => {
   const db = await getDb();
   const [r] = await db.select().from(schema.roleRequests).where(eq(schema.roleRequests.applyToken, c.req.param("token")));
   if (!r || !["open", "sourcing"].includes(r.status)) throw new HTTPException(404, { message: "This position is no longer open." });
+  // Each CV costs a Claude call, so cap uploads per visitor.
+  const limits = APPLY_LIMITS(clientIp(c));
+  await assertWithinLimits(limits, "We've received several CVs from this connection. Please try again in an hour.");
+  await recordHit(limits);
   const form = await c.req.parseBody();
   const fields = ApplyFields.parse({
     name: String(form.name ?? ""),
