@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,6 +11,7 @@ import { Field, FormError } from "@/components/kit";
 import { LoginInput } from "../../shared/schemas";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { CodeStep } from "./TwoFactor";
 
 const DEMO = [
   ["demo.manager@york-press.test", "Manager"],
@@ -41,15 +43,25 @@ export default function Login() {
   const navigate = useNavigate();
   const form = useForm({ resolver: zodResolver(LoginInput), defaultValues: { email: "", password: "" } });
   const { errors, isSubmitting } = form.formState;
+  const [codeStep, setCodeStep] = useState(false);
+
+  async function finish() {
+    await qc.invalidateQueries();
+    navigate(params.get("next") ?? "/", { replace: true });
+  }
 
   async function signIn(creds: { email: string; password: string }) {
     try {
-      await call(rpc.auth.login.$post({ json: creds }));
-      await qc.invalidateQueries();
-      navigate(params.get("next") ?? "/", { replace: true });
+      const res = await call(rpc.auth.login.$post({ json: creds }));
+      if (res.mfaRequired) setCodeStep(true);
+      else await finish();
     } catch (err) {
       form.setError("root", { message: (err as Error).message });
     }
+  }
+
+  if (codeStep) {
+    return <AuthLayout><CodeStep onDone={finish} onCancel={() => { setCodeStep(false); form.reset(); }} /></AuthLayout>;
   }
 
   return (
