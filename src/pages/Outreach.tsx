@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { fmtDate } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -9,28 +9,23 @@ import { Badge, DataTable, EmptyState, Spinner, Td, Th, useToast } from "@/compo
 import { Card } from "@/components/ui/card";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 
-export type Msg = {
-  id: string; channel: "email" | "linkedin"; status: string; toAddress: string; subject: string | null; body: string; queuedAt: string; sentAt: string | null;
-  candidateName: string; rank: number | null; score: number | null; roleTitle: string; requestId: string; roleCandidateId: string; dateContacted: string | null; followUpDate: string | null;
-};
-export type OutreachData = { messages: Msg[]; sentToday: number; dailyCap: number; autoSendEnabled: boolean };
 
 const TONE: Record<string, "warn" | "good" | "bad" | "neutral" | "info"> = { queued: "warn", sent: "good", failed: "bad", cancelled: "neutral", approved: "info", awaiting_approval: "warn" };
 
 export default function Outreach() {
   const qc = useQueryClient();
   const toast = useToast();
-  const q = useQuery({ queryKey: ["outreach", "email"], queryFn: () => api<OutreachData>("/outreach?channel=email") });
+  const q = useQuery({ queryKey: ["outreach", "email"], queryFn: () => call(rpc.outreach.$get({ query: { channel: "email" } })) });
   const msgs = q.data?.messages ?? [];
   const queued = msgs.filter((m) => m.status === "queued").length;
 
   async function sendNow() {
-    const r = await api<{ sent: number; paused: boolean; remaining: number }>("/outreach/send-now", { method: "POST" });
+    const r = await call(rpc.outreach["send-now"].$post());
     toast(r.paused ? "Sending is paused in Settings." : `${r.sent} email(s) sent${r.remaining ? `; ${r.remaining} wait for tomorrow's cap` : ""}.`);
     qc.invalidateQueries({ queryKey: ["outreach"] });
   }
   async function cancel(id: string) {
-    await api(`/outreach/${id}/cancel`, { method: "POST" });
+    await call(rpc.outreach[":id"].cancel.$post({ param: { id } }));
     qc.invalidateQueries({ queryKey: ["outreach"] });
   }
 
