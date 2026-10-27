@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { setMonitoringUser } from "./lib/monitoring";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
 import { homeFor, useMe } from "./lib/auth";
@@ -28,6 +30,8 @@ export default function App() {
   const location = useLocation();
   const setup = useQuery({ queryKey: ["setup"], queryFn: () => api<{ needsSetup: boolean }>("/setup") });
   const me = useMe();
+  const userId = me.data?.user?.id ?? null;
+  useEffect(() => setMonitoringUser(userId), [userId]);
 
   if (location.pathname.startsWith("/apply/")) return <Routes><Route path="/apply/:token" element={<Apply />} /></Routes>;
   if (location.pathname.startsWith("/invite/")) return <Routes><Route path="/invite/:token" element={<Invite />} /></Routes>;
