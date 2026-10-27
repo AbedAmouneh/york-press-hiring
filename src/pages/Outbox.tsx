@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
+import type { OutboxEmail } from "@/lib/types";
 import { fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Badge, DataTable, EmptyState, Modal, Spinner, Td, Th } from "@/components/kit";
 import { Card } from "@/components/ui/card";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 
-type Email = { id: string; toAddress: string; fromAddress: string; replyTo: string | null; subject: string; body: string; kind: string; mock: boolean; status: string; error: string | null; createdAt: string };
 
 export default function Outbox() {
-  const q = useQuery({ queryKey: ["outbox"], queryFn: () => api<{ emails: Email[]; mock: boolean }>("/outbox") });
-  const [open, setOpen] = useState<Email | null>(null);
+  const q = useQuery({ queryKey: ["outbox"], queryFn: () => call(rpc.outbox.$get()) });
+  const [open, setOpen] = useState<OutboxEmail | null>(null);
   return (
     <>
       <PageHeader eyebrow="Every email the platform sent" title="Sent emails" />
