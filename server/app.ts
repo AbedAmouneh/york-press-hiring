@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { requireAuth, type AppEnv } from "./auth.js";
 import { env } from "./env.js";
+import { captureError } from "./monitoring.js";
 import { publicRoutes } from "./routes/public.js";
 import { requestRoutes } from "./routes/requests.js";
 import { candidateRoutes } from "./routes/candidates.js";
@@ -10,7 +11,8 @@ import { outreachRoutes } from "./routes/outreach.js";
 import { adminRoutes } from "./routes/admin.js";
 import { apiHeaders, noStore, sameOrigin } from "./security.js";
 
-const app = new Hono().basePath("/api");
+// AppEnv so the error handler can read the signed-in user (unset on public routes).
+const app = new Hono<AppEnv>().basePath("/api");
 
 app.use("*", apiHeaders, noStore, sameOrigin);
 
@@ -21,6 +23,7 @@ app.onError((err, c) => {
     return c.json({ error: `${first.path.join(".") || "Input"}: ${first.message}` }, 400);
   }
   console.error(err);
+  captureError(err, { tags: { route: c.req.routePath, method: c.req.method }, userId: c.var.user?.id });
   // Internal messages can name tables, providers or keys; only show them during development.
   return c.json({ error: !env.isProd && err instanceof Error ? err.message : "Something went wrong. Please try again." }, 500);
 });
