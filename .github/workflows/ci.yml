@@ -70,6 +70,11 @@ jobs:
     name: Browser tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Playwright's own image has the system libraries preinstalled; installing them with apt on every
+    # run was slow and sometimes hung. Keep the tag in step with @playwright/test in package.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --user 1001
     steps:
       - uses: actions/checkout@v4
 
@@ -81,8 +86,8 @@ jobs:
       - name: Install
         run: npm ci --include=dev
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Chromium for this Playwright version (already in the image unless versions drifted)
+        run: npx playwright install chromium
 
       - name: Run Playwright
         run: npm run test:e2e
