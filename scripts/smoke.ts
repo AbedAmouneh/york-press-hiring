@@ -116,6 +116,7 @@ for (let i = 0; i < 5; i++) await raw("POST", "/auth/login", { email: "demo.ceo@
 const locked = await raw("POST", "/auth/login", { email: "demo.ceo@york-press.test", password: "demo-york-2026" });
 ok(locked.status === 429, "sign-in locks after 5 failed attempts, even with the right password");
 ok((await raw("POST", "/auth/login", { email: "demo.recruiter@york-press.test", password: "demo-york-2026" })).status === 200, "other accounts can still sign in");
+ok((await raw("POST", "/internal/queue/runs", { runId: weekly.runId })).status === 401, "the job queue endpoint rejects unsigned calls");
 ok((await raw("POST", "/setup", { adminName: "X Y", adminEmail: "x@y.test", adminPassword: "a-long-password", ceoName: "C D", ceoEmail: "c@d.test" })).status === 409, "setup can't run twice");
 console.log("\nAll smoke checks passed.");
 process.exit(0);
