@@ -5,8 +5,10 @@ import { CheckCircle2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/form";
-import { Card, Spinner } from "@/components/ui/misc";
+import { Field, Spinner } from "@/components/kit";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 /** Public page linked from outreach emails: candidates upload their CV here. */
 export default function Apply() {
