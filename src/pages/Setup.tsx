@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/form";
-import { Card } from "@/components/ui/misc";
 import { AuthLayout } from "./Login";
+import { Field } from "@/components/kit";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function Setup() {
   const qc = useQueryClient();
