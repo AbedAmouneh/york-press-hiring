@@ -30,6 +30,12 @@ export const users = pgTable("users", {
   inviteToken: text("invite_token"),
   inviteExpiresAt: ts("invite_expires_at"),
   lastLoginAt: ts("last_login_at"),
+  // Two-step login: secrets are AES-GCM encrypted, recovery codes are SHA-256 hashes.
+  totpSecret: text("totp_secret"),
+  totpPendingSecret: text("totp_pending_secret"),
+  totpEnabledAt: ts("totp_enabled_at"),
+  totpLastStep: integer("totp_last_step"),
+  recoveryCodes: text("recovery_codes").array().notNull().default(sql`'{}'::text[]`),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("users_email_idx").on(t.email)]);
 
