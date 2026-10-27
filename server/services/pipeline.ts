@@ -1,0 +1,535 @@
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { waitUntil } from "@vercel/functions";
+import { getDb, schema } from "../db/client.js";
+import { appIsPublic, env, mock, POOL_SIZE, TOP_N } from "../env.js";
+import type { RunState } from "../db/schema.js";
+import { buildBrief, scoreBatch, totalScore, webFindings } from "./claude.js";
+import { pdlProvider } from "./providers/pdl.js";
+import { lastCreditsLeft, revealContacts, signalhireProvider, type RevealResult } from "./providers/signalhire.js";
+import { normalizeLinkedin, type NormalizedProfile } from "./providers/types.js";
+import { getSettings, logUsage, updateSettings, weightsFor } from "./settings.js";
+import { toAI, toReq } from "./mappers.js";
+import { drainEmailQueue, isSuppressed, queueOutreach } from "./outreach.js";
+import { notifyRoles, notifyUsers } from "./notify.js";
+
+const STEPS = ["brief", "search", "enrich", "score", "rank", "reveal", "outreach", "done"] as const;
+type Step = (typeof STEPS)[number];
+type Run = typeof schema.sourcingRuns.$inferSelect;
+type Request = typeof schema.roleRequests.$inferSelect;
+
+const TIME_BUDGET_MS = 230_000;
+const WEB_ENRICH_TOP = 20;
+const REVEAL_WAIT_MS = 20 * 60_000;
+
+// ------------------------------------------------------------------ scheduling
+
+export async function startRun(requestId: string, kind: "initial" | "weekly" | "manual") {
+  const db = await getDb();
+  const active = await db
+    .select({ id: schema.sourcingRuns.id })
+    .from(schema.sourcingRuns)
+    .where(and(eq(schema.sourcingRuns.requestId, requestId), inArray(schema.sourcingRuns.status, ["queued", "running", "waiting"])))
+    .limit(1);
+  if (active.length) return active[0].id;
+  const [run] = await db.insert(schema.sourcingRuns).values({ requestId, kind, state: { log: [] } }).returning();
+  if (kind === "initial") {
+    await db.update(schema.roleRequests).set({ status: "sourcing", updatedAt: new Date() }).where(eq(schema.roleRequests.id, requestId));
+  }
+  kick(run.id);
+  return run.id;
+}
+
+/** Run in the background: on Vercel after the response is sent, locally on the next tick. */
+export function kick(runId: string) {
+  const p = runPipeline(runId).catch((e) => console.error("pipeline", e));
+  if (env.onVercel) waitUntil(p);
+}
+
+function continueLater(runId: string) {
+  if (env.onVercel) {
+    waitUntil(
+      fetch(`${env.appUrl}/api/internal/runs/${runId}/continue`, {
+        method: "POST",
+        headers: { "x-internal-secret": env.internalSecret },
+      }).catch((e) => console.error("continue", e)),
+    );
+  } else {
+    setTimeout(() => kick(runId), 50);
+  }
+}
+
+// ------------------------------------------------------------------ runner
+
+async function acquire(runId: string): Promise<Run | null> {
+  const db = await getDb();
+  const now = new Date();
+  const [run] = await db
+    .update(schema.sourcingRuns)
+    .set({ lockedUntil: new Date(now.getTime() + 6 * 60_000), status: "running", startedAt: sql`coalesce(${schema.sourcingRuns.startedAt}, now())` })
+    .where(and(
+      eq(schema.sourcingRuns.id, runId),
+      notInArray(schema.sourcingRuns.status, ["done", "failed"]),
+      or(isNull(schema.sourcingRuns.lockedUntil), lt(schema.sourcingRuns.lockedUntil, now)),
+    ))
+    .returning();
+  return run ?? null;
+}
+
+async function save(runId: string, patch: Partial<typeof schema.sourcingRuns.$inferInsert>) {
+  const db = await getDb();
+  await db.update(schema.sourcingRuns).set(patch).where(eq(schema.sourcingRuns.id, runId));
+}
+
+function log(state: RunState, msg: string) {
+  state.log.push({ at: new Date().toISOString(), msg });
+}
+
+export async function runPipeline(runId: string) {
+  const run = await acquire(runId);
+  if (!run) return;
+  const db = await getDb();
+  const [request] = await db.select().from(schema.roleRequests).where(eq(schema.roleRequests.id, run.requestId));
+  const deadline = Date.now() + TIME_BUDGET_MS;
+  const state: RunState = run.state ?? { log: [] };
+  let step = run.step as Step;
+  const counters = {
+    found: run.found, kept: run.kept, newContenders: run.newContenders, pdlRecords: run.pdlRecords,
+    signalhireSearches: run.signalhireSearches, signalhireCredits: run.signalhireCredits, webSearches: run.webSearches,
+  };
+  try {
+    while (step !== "done") {
+      if (Date.now() > deadline) {
+        await save(runId, { step, state, ...counters, lockedUntil: null, status: "queued" });
+        continueLater(runId);
+        return;
+      }
+      const result = await STEP_FNS[step]({ run, request, state, counters, deadline });
+      if (result === "waiting") {
+        await save(runId, { step, state, ...counters, lockedUntil: null, status: "waiting" });
+        return;
+      }
+      if (result === "again") continue;
+      step = STEPS[STEPS.indexOf(step) + 1];
+      await save(runId, { step, state, ...counters });
+    }
+    await finish(run, request, state, counters);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    log(state, `Failed at step "${step}": ${message}`);
+    await save(runId, { step, state, ...counters, status: "failed", error: message, lockedUntil: null, finishedAt: new Date() });
+    if (request.status === "sourcing") {
+      await db.update(schema.roleRequests).set({ status: "open" }).where(eq(schema.roleRequests.id, request.id));
+    }
+    await notifyRoles(["recruiter"], { type: "run_failed", title: `Sourcing failed for ${request.title}`, link: `/roles/${request.id}`, emailBody: `The sourcing run stopped at "${step}": ${message}\nYou can re-run it from the role page.` });
+  }
+}
+
+type Ctx = { run: Run; request: Request; state: RunState; counters: Record<string, number>; deadline: number };
+type StepResult = void | "waiting" | "again";
+
+const STEP_FNS: Record<Exclude<Step, "done">, (ctx: Ctx) => Promise<StepResult>> = {
+  brief: stepBrief,
+  search: stepSearch,
+  enrich: stepEnrich,
+  score: stepScore,
+  rank: stepRank,
+  reveal: stepReveal,
+  outreach: stepOutreach,
+};
+
+// ------------------------------------------------------------------ steps
+
+async function stepBrief({ run, request, state }: Ctx) {
+  const db = await getDb();
+  if (run.kind !== "initial") {
+    const [prev] = await db
+      .select({ state: schema.sourcingRuns.state })
+      .from(schema.sourcingRuns)
+      .where(and(eq(schema.sourcingRuns.requestId, request.id), eq(schema.sourcingRuns.status, "done")))
+      .orderBy(desc(schema.sourcingRuns.createdAt))
+      .limit(1);
+    if (prev?.state?.brief) {
+      state.brief = prev.state.brief;
+      log(state, "Reused the saved search brief.");
+      return;
+    }
+  }
+  state.brief = await buildBrief(toReq(request), run.id);
+  log(state, `Search brief ready: ${state.brief.titles.join(", ")}.`);
+}
+
+function prescore(p: NormalizedProfile, titles: string[], skills: string[], minYears: number | null) {
+  const t = `${p.currentTitle ?? ""} ${p.headline ?? ""}`.toLowerCase();
+  const titleHit = titles.some((x) => t.includes(x.toLowerCase())) ? 1 : titles.some((x) => x.toLowerCase().split(/\s+/).some((w) => w.length > 3 && t.includes(w))) ? 0.5 : 0;
+  const sk = new Set(p.skills.map((s) => s.toLowerCase()));
+  const skillHit = skills.length ? skills.filter((s) => sk.has(s.toLowerCase()) || [...sk].some((x) => x.includes(s.toLowerCase()))).length / skills.length : 0.5;
+  const yrs = p.totalYears ?? 0;
+  const yearsHit = minYears ? Math.min(1, yrs / minYears) : 0.7;
+  return Math.round((titleHit * 50 + skillHit * 30 + yearsHit * 20) * 10) / 10;
+}
+
+const nameKey = (p: { fullName: string; currentCompany?: string | null }) =>
+  `${p.fullName.toLowerCase().replace(/\s+/g, " ").trim()}|${(p.currentCompany ?? "").toLowerCase().trim()}`;
+
+async function stepSearch({ run, request, state, counters }: Ctx) {
+  const db = await getDb();
+  const brief = state.brief!;
+  const size = run.kind === "initial" ? POOL_SIZE : 25;
+  const seed = Math.floor(Date.now() / 1000) % 100000;
+  const settled = await Promise.allSettled([
+    pdlProvider.search(brief, { size, requestTitle: request.title, seed }),
+    signalhireProvider.search(brief, { size, requestTitle: request.title, seed }),
+  ]);
+  const profiles: NormalizedProfile[] = [];
+  settled.forEach((s, i) => {
+    const name = i === 0 ? "People Data Labs" : "SignalHire";
+    if (s.status === "fulfilled") {
+      profiles.push(...s.value.profiles);
+      if (i === 0) counters.pdlRecords += s.value.billedRecords;
+      else counters.signalhireSearches += s.value.searches;
+      log(state, `${name}: ${s.value.profiles.length} profiles${s.value.mock ? " (sample data)" : ""}.`);
+    } else {
+      log(state, `${name} search failed: ${s.reason instanceof Error ? s.reason.message : s.reason}`);
+    }
+  });
+  if (settled.every((s) => s.status === "rejected")) throw new Error("Both candidate searches failed.");
+  await logUsage({ runId: run.id, provider: "pdl", action: "search", units: counters.pdlRecords, mock: mock.pdl });
+  await logUsage({ runId: run.id, provider: "signalhire", action: "search", units: counters.signalhireSearches, mock: mock.signalhire });
+  counters.found += profiles.length;
+
+  // Merge duplicates across sources.
+  const excluded = brief.excludeCompanies.map((c) => c.toLowerCase());
+  const merged = new Map<string, NormalizedProfile & { sources: string[] }>();
+  for (const p of profiles) {
+    if (p.currentCompany && excluded.some((x) => x && p.currentCompany!.toLowerCase().includes(x))) continue;
+    const li = normalizeLinkedin(p.linkedinUrl);
+    const key = li ?? nameKey(p);
+    const altKey = nameKey(p);
+    const existing = merged.get(key) ?? merged.get(altKey);
+    if (existing) {
+      if (!existing.sources.includes(p.source)) existing.sources.push(p.source);
+      existing.email ??= p.email; existing.phone ??= p.phone; existing.linkedinUrl ??= li;
+      if (p.experience.some((e) => e.start) && !existing.experience.some((e) => e.start)) existing.experience = p.experience;
+      if (!existing.education.length) existing.education = p.education;
+      existing.skills = [...new Set([...existing.skills, ...p.skills])];
+      (existing as Record<string, unknown>)[p.source === "PDL" ? "pdlId" : "signalhireUid"] = p.sourceId;
+    } else {
+      const rec = { ...p, linkedinUrl: li, sources: [p.source] } as NormalizedProfile & { sources: string[] } & Record<string, unknown>;
+      rec[p.source === "PDL" ? "pdlId" : "signalhireUid"] = p.sourceId;
+      merged.set(key, rec);
+      if (altKey !== key) merged.set(altKey, rec);
+    }
+  }
+  const unique = [...new Set(merged.values())];
+
+  // Skip people already screened for this role.
+  const already = await db
+    .select({ c: schema.candidates })
+    .from(schema.roleCandidates)
+    .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
+    .where(eq(schema.roleCandidates.requestId, request.id));
+  const seenKeys = new Set(already.flatMap(({ c }) => [c.linkedinUrl, c.pdlId, c.signalhireUid, nameKey(c)].filter(Boolean) as string[]));
+
+  const scored = unique
+    .filter((p) => {
+      const x = p as unknown as Record<string, string | undefined>;
+      return ![p.linkedinUrl, x.pdlId, x.signalhireUid, nameKey(p)].some((k) => k && seenKeys.has(k));
+    })
+    .map((p) => ({ p, pre: prescore(p, brief.titles, brief.skills, request.minYears) }))
+    .sort((a, b) => b.pre - a.pre)
+    .slice(0, run.kind === "initial" ? POOL_SIZE : 25);
+
+  const newIds: string[] = [];
+  for (const { p, pre } of scored) {
+    const x = p as NormalizedProfile & { sources: string[]; pdlId?: string; signalhireUid?: string };
+    const candidateId = await upsertCandidate(x);
+    const [cand] = await db.select().from(schema.candidates).where(eq(schema.candidates.id, candidateId));
+    if (await isSuppressed(cand)) continue;
+    const [rc] = await db
+      .insert(schema.roleCandidates)
+      .values({ requestId: request.id, candidateId, runId: run.id, prescore: pre })
+      .onConflictDoNothing()
+      .returning({ id: schema.roleCandidates.id });
+    if (rc) newIds.push(rc.id);
+  }
+  state.newRoleCandidateIds = newIds;
+  counters.kept += newIds.length;
+  log(state, `${unique.length} unique people after merging; ${newIds.length} new for this role.`);
+}
+
+async function upsertCandidate(p: NormalizedProfile & { sources: string[]; pdlId?: string; signalhireUid?: string }) {
+  const db = await getDb();
+  const c = schema.candidates;
+  const conds = [];
+  if (p.linkedinUrl) conds.push(eq(c.linkedinUrl, p.linkedinUrl));
+  if (p.pdlId) conds.push(eq(c.pdlId, p.pdlId));
+  if (p.signalhireUid) conds.push(eq(c.signalhireUid, p.signalhireUid));
+  conds.push(and(eq(sql`lower(${c.fullName})`, p.fullName.toLowerCase()), eq(sql`lower(coalesce(${c.currentCompany}, ''))`, (p.currentCompany ?? "").toLowerCase()))!);
+  const [existing] = await db.select().from(c).where(or(...conds)).limit(1);
+  const contact = p.email ? { email: p.email.toLowerCase(), phone: p.phone ?? null, contactSource: "PDL", contactRetrievedAt: new Date() } : {};
+  if (existing) {
+    await db.update(c).set({
+      sources: [...new Set([...existing.sources, ...p.sources])],
+      pdlId: existing.pdlId ?? p.pdlId ?? null,
+      signalhireUid: existing.signalhireUid ?? p.signalhireUid ?? null,
+      linkedinUrl: existing.linkedinUrl ?? p.linkedinUrl ?? null,
+      headline: p.headline ?? existing.headline,
+      currentTitle: p.currentTitle ?? existing.currentTitle,
+      currentCompany: p.currentCompany ?? existing.currentCompany,
+      location: p.location ?? existing.location,
+      experience: p.experience.some((e) => e.start) || !existing.experience.length ? p.experience : existing.experience,
+      education: p.education.length ? p.education : existing.education,
+      skills: [...new Set([...existing.skills, ...p.skills])].slice(0, 60),
+      totalYears: p.totalYears ?? existing.totalYears,
+      openToWork: p.openToWork ?? existing.openToWork,
+      profileUpdatedAt: p.profileUpdatedAt ?? existing.profileUpdatedAt,
+      lastRefreshedAt: new Date(),
+      ...(existing.email ? {} : contact),
+    }).where(eq(c.id, existing.id));
+    return existing.id;
+  }
+  const [row] = await db.insert(c).values({
+    sources: p.sources,
+    pdlId: p.pdlId ?? null,
+    signalhireUid: p.signalhireUid ?? null,
+    fullName: p.fullName,
+    headline: p.headline ?? null,
+    currentTitle: p.currentTitle ?? null,
+    currentCompany: p.currentCompany ?? null,
+    location: p.location ?? null,
+    linkedinUrl: p.linkedinUrl ?? null,
+    otherUrls: p.otherUrls ?? [],
+    experience: p.experience,
+    education: p.education,
+    skills: p.skills.slice(0, 60),
+    certifications: p.certifications ?? [],
+    languages: p.languages ?? [],
+    totalYears: p.totalYears ?? null,
+    openToWork: p.openToWork ?? null,
+    profileUpdatedAt: p.profileUpdatedAt ?? null,
+    isSample: !!p.isSample,
+    ...contact,
+  }).returning({ id: c.id });
+  return row.id;
+}
+
+async function stepEnrich({ run, state, counters, deadline }: Ctx): Promise<StepResult> {
+  const settings = await getSettings();
+  if (mock.claude || !settings.webSearchEnabled) {
+    if (mock.claude) log(state, "Web search skipped (mock mode).");
+    return;
+  }
+  const db = await getDb();
+  const ids = state.newRoleCandidateIds ?? [];
+  if (!ids.length) return;
+  const rows = await db
+    .select({ rc: schema.roleCandidates, c: schema.candidates })
+    .from(schema.roleCandidates)
+    .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
+    .where(inArray(schema.roleCandidates.id, ids))
+    .orderBy(desc(schema.roleCandidates.prescore))
+    .limit(WEB_ENRICH_TOP);
+  for (const { rc, c } of rows) {
+    if (rc.webFindings) continue;
+    if (Date.now() > deadline) return "again";
+    const res = await webFindings({ ...toAI(c, rc), fullName: c.fullName }, run.id).catch(() => ({ findings: [], searches: 0 }));
+    counters.webSearches += res.searches;
+    await db.update(schema.roleCandidates).set({ webFindings: res.findings }).where(eq(schema.roleCandidates.id, rc.id));
+  }
+  log(state, `Web search checked the top ${rows.length} profiles.`);
+}
+
+async function stepScore({ run, request, state, deadline }: Ctx): Promise<StepResult> {
+  const db = await getDb();
+  const settings = await getSettings();
+  const weights = weightsFor(request, settings);
+  const ids = state.newRoleCandidateIds ?? [];
+  while (true) {
+    if (Date.now() > deadline) return "again";
+    const batch = ids.length
+      ? await db
+          .select({ rc: schema.roleCandidates, c: schema.candidates })
+          .from(schema.roleCandidates)
+          .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
+          .where(and(inArray(schema.roleCandidates.id, ids), isNull(schema.roleCandidates.scoredAt)))
+          .limit(5)
+      : [];
+    if (!batch.length) break;
+    const results = await scoreBatch(toReq(request), weights, batch.map(({ c, rc }) => toAI(c, rc)), run.id);
+    const byKey = new Map(results.map((r) => [r.key, r]));
+    for (const { rc } of batch) {
+      const r = byKey.get(rc.id);
+      if (!r) {
+        await db.update(schema.roleCandidates).set({ scoredAt: new Date(), gaps: "Needs review: the scorer returned no result." }).where(eq(schema.roleCandidates.id, rc.id));
+        continue;
+      }
+      const { breakdown, score } = totalScore(r.breakdown, weights, r.dealBreakerMissing);
+      await db.update(schema.roleCandidates).set({
+        score,
+        scoreBreakdown: breakdown,
+        dealBreakerMissing: r.dealBreakerMissing,
+        whyRecommended: r.why,
+        gaps: r.dealBreakerMissing ? `Deal-breaker not met (score capped at 40). ${r.gaps}` : r.gaps,
+        redFlags: r.redFlags || null,
+        relevantYears: r.relevantYears,
+        scoredAt: new Date(),
+      }).where(eq(schema.roleCandidates.id, rc.id));
+    }
+  }
+  log(state, `Scored ${ids.length} candidates.`);
+}
+
+async function stepRank({ run, request, state, counters }: Ctx) {
+  const db = await getDb();
+  const all = await db
+    .select({ id: schema.roleCandidates.id, wasTop: schema.roleCandidates.isTop10 })
+    .from(schema.roleCandidates)
+    .where(and(eq(schema.roleCandidates.requestId, request.id), isNotNull(schema.roleCandidates.score)))
+    .orderBy(desc(schema.roleCandidates.score), desc(schema.roleCandidates.prescore));
+  const newIds = new Set(state.newRoleCandidateIds ?? []);
+  let contenders = 0;
+  for (let i = 0; i < all.length; i++) {
+    const isTop = i < TOP_N;
+    const newContender = run.kind !== "initial" && isTop && newIds.has(all[i].id);
+    if (newContender) contenders++;
+    await db.update(schema.roleCandidates).set({ rank: i + 1, isTop10: isTop, ...(newContender ? { newContender: true } : {}) }).where(eq(schema.roleCandidates.id, all[i].id));
+  }
+  counters.newContenders = contenders;
+  log(state, run.kind === "initial" ? `Ranked ${all.length} candidates; Top ${Math.min(TOP_N, all.length)} flagged.` : `${contenders} new contender(s) entered the Top ${TOP_N}.`);
+}
+
+/** Top-10 people to reach out to in this run: all of them for the first run, only new contenders afterwards. */
+async function outreachTargets(run: Run, requestId: string) {
+  const db = await getDb();
+  const rc = schema.roleCandidates;
+  return db
+    .select({ rc, c: schema.candidates })
+    .from(rc)
+    .innerJoin(schema.candidates, eq(schema.candidates.id, rc.candidateId))
+    .where(and(eq(rc.requestId, requestId), eq(rc.isTop10, true), eq(rc.status, "new"), ...(run.kind === "initial" ? [] : [eq(rc.newContender, true)])));
+}
+
+async function stepReveal({ run, request, state, counters }: Ctx) {
+  const settings = await getSettings();
+  if (!settings.signalhireRevealEnabled) { log(state, "Contact reveal is turned off in Settings."); return; }
+  const db = await getDb();
+  const targets = (await outreachTargets(run, request.id)).filter(({ c }) => !c.email);
+  const existing = targets.length
+    ? await db.select({ rcId: schema.contactReveals.roleCandidateId }).from(schema.contactReveals).where(inArray(schema.contactReveals.roleCandidateId, targets.map((t) => t.rc.id)))
+    : [];
+  const done = new Set(existing.map((e) => e.rcId));
+  const todo = targets.filter(({ rc, c }) => !done.has(rc.id) && (c.linkedinUrl || c.signalhireUid));
+  if (!todo.length) { log(state, "No contacts to reveal."); return; }
+  const items = todo.map(({ c }) => (c.linkedinUrl ?? c.signalhireUid)!);
+  const callback = appIsPublic() && !mock.signalhire ? `${env.appUrl}/api/webhooks/signalhire/${env.webhookSecret}` : null;
+  const res = await revealContacts(items, callback);
+  for (let i = 0; i < todo.length; i++) {
+    await db.insert(schema.contactReveals).values({
+      roleCandidateId: todo[i].rc.id, candidateId: todo[i].c.id, runId: run.id, item: items[i], requestId: res.requestId,
+    });
+  }
+  if (res.results) {
+    const credits = await applyRevealResults(res.results, res.mock);
+    counters.signalhireCredits += credits;
+    log(state, `SignalHire revealed contacts for ${credits} of ${items.length} people${res.mock ? " (sample data)" : ""}.`);
+  } else {
+    log(state, `Asked SignalHire for ${items.length} contacts; waiting for results.`);
+  }
+  if (res.creditsLeft != null || lastCreditsLeft != null) await updateSettings({ signalhireCreditsLeft: res.creditsLeft ?? lastCreditsLeft });
+}
+
+/** Apply SignalHire results (from sync mode, mock mode or the webhook). Returns credits used. */
+export async function applyRevealResults(results: RevealResult[], isMock = false) {
+  const db = await getDb();
+  let credits = 0;
+  for (const r of results) {
+    const [reveal] = await db
+      .select()
+      .from(schema.contactReveals)
+      .where(and(eq(schema.contactReveals.item, r.item), eq(schema.contactReveals.status, "pending")))
+      .orderBy(desc(schema.contactReveals.requestedAt))
+      .limit(1);
+    if (!reveal) continue;
+    const success = r.status === "success";
+    if (success) credits++;
+    await db.update(schema.contactReveals).set({ status: r.status, receivedAt: new Date(), creditsUsed: success && !isMock ? 1 : 0 }).where(eq(schema.contactReveals.id, reveal.id));
+    if (success && (r.email || r.phone)) {
+      await db.update(schema.candidates).set({
+        email: r.email?.toLowerCase() ?? null,
+        phone: r.phone,
+        contactSource: "SignalHire",
+        contactRetrievedAt: new Date(),
+        ...(r.linkedinUrl ? { linkedinUrl: r.linkedinUrl } : {}),
+      }).where(and(eq(schema.candidates.id, reveal.candidateId), isNull(schema.candidates.email)));
+    }
+  }
+  await logUsage({ provider: "signalhire", action: "reveal", units: credits, mock: isMock });
+  return credits;
+}
+
+async function stepOutreach({ run, request, state }: Ctx): Promise<StepResult> {
+  const db = await getDb();
+  const pending = await db
+    .select({ id: schema.contactReveals.id })
+    .from(schema.contactReveals)
+    .where(and(eq(schema.contactReveals.runId, run.id), eq(schema.contactReveals.status, "pending"), gt(schema.contactReveals.requestedAt, new Date(Date.now() - REVEAL_WAIT_MS))));
+  if (pending.length) {
+    log(state, `Waiting for ${pending.length} contact result(s) from SignalHire.`);
+    return "waiting";
+  }
+  const targets = await outreachTargets(run, request.id);
+  const q = await queueOutreach(request.id, targets.map((t) => t.rc.id), run.id);
+  const drained = await drainEmailQueue();
+  log(state, `Outreach: ${q.email} email(s) queued, ${q.linkedin} LinkedIn message(s) awaiting approval; ${drained.paused ? "sending is paused" : `${drained.sent} sent now`}.`);
+}
+
+async function finish(run: Run, request: Request, state: RunState, counters: Record<string, number>) {
+  const db = await getDb();
+  log(state, "Run finished.");
+  await save(run.id, { step: "done", state, ...counters, status: "done", lockedUntil: null, finishedAt: new Date() });
+  if (request.status === "sourcing" || request.status === "open") {
+    await db.update(schema.roleRequests).set({ status: "open", updatedAt: new Date() }).where(eq(schema.roleRequests.id, request.id));
+  }
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.roleCandidates).where(eq(schema.roleCandidates.requestId, request.id));
+  if (run.kind === "initial") {
+    await notifyRoles(["recruiter", "ceo"], {
+      type: "run_done",
+      title: `${request.title}: ${n} candidates screened, Top 10 ready`,
+      link: `/roles/${request.id}`,
+      emailBody: `Sourcing for ${request.title} is finished. ${n} candidates were screened and scored, and the Top 10 are flagged. Top-10 candidates with an email were contacted automatically; the rest are in the LinkedIn queue for approval.`,
+    }, [request.hiringManagerId, request.requesterId]);
+  } else if (counters.newContenders > 0) {
+    await notifyRoles(["recruiter"], {
+      type: "new_contender",
+      title: `${request.title}: ${counters.newContenders} new contender(s) in the Top 10`,
+      link: `/roles/${request.id}`,
+      emailBody: `This week's refresh found ${counters.kept} new profile(s) for ${request.title}; ${counters.newContenders} beat the current #10.`,
+    }, [request.hiringManagerId]);
+  }
+}
+
+/** Called by the SignalHire webhook and the daily cron to resume runs that were waiting for contacts. */
+export async function resumeWaitingRuns(force = false) {
+  const db = await getDb();
+  const waiting = await db.select().from(schema.sourcingRuns).where(eq(schema.sourcingRuns.status, "waiting"));
+  for (const run of waiting) {
+    const [pending] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.contactReveals)
+      .where(and(eq(schema.contactReveals.runId, run.id), eq(schema.contactReveals.status, "pending"), gt(schema.contactReveals.requestedAt, new Date(Date.now() - REVEAL_WAIT_MS))));
+    if (force || pending.n === 0) kick(run.id);
+  }
+}
+
+/** Runs whose lock expired mid-way (function crashed or timed out). */
+export async function resumeStaleRuns() {
+  const db = await getDb();
+  const stale = await db
+    .select({ id: schema.sourcingRuns.id })
+    .from(schema.sourcingRuns)
+    .where(and(inArray(schema.sourcingRuns.status, ["queued", "running"]), or(isNull(schema.sourcingRuns.lockedUntil), lt(schema.sourcingRuns.lockedUntil, new Date()))));
+  stale.forEach((r) => kick(r.id));
+  return stale.length;
+}
+
+export { notifyUsers };

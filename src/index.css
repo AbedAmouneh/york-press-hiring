@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* York Press brand: black + York yellow, on a warm neutral ground. */
+@layer base {
+  :root {
+    --background: 40 14% 97%;
+    --foreground: 0 0% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 10% 92%;
+    --secondary-foreground: 0 0% 12%;
+    --muted: 40 10% 94%;
+    --muted-foreground: 30 4% 40%;
+    --accent: 52 96% 92%;
+    --accent-foreground: 0 0% 9%;
+    --brand: 52 93% 50%;
+    --brand-foreground: 0 0% 9%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 60% 32%;
+    --warning: 32 90% 40%;
+    --border: 40 8% 86%;
+    --input: 40 8% 82%;
+    --ring: 52 93% 45%;
+    --radius: 0.5rem;
+  }
+  * { @apply border-border; }
+  html, body, #root { height: 100%; }
+  body { @apply bg-background text-foreground antialiased; font-feature-settings: "cv11"; }
+  h1, h2, h3 { text-wrap: balance; }
+  .num { font-variant-numeric: tabular-nums; }
+}

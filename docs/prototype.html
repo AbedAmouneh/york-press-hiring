@@ -1,0 +1,625 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>York Press Hiring</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap">
+<style>
+/* Layout: app shell, a fixed left rail of views per role, a work area with tables and a slide-in candidate drawer */
+:root{
+  --bg:#F3F6F6; --surface:#FFFFFF; --surface-2:#E9EFEE; --line:#D6DFDD; --fg:#132220; --muted:#5A6B68;
+  --accent:#0D6B5B; --accent-fg:#FFFFFF; --accent-soft:#DCEFEA;
+  --good:#1E7A3B; --good-soft:#E1F2E5; --warn:#9A5B00; --warn-soft:#FBEFD9; --bad:#B0281C; --bad-soft:#FBE4E1; --info:#2C5AA3; --info-soft:#E2EAF8;
+  --shadow:0 12px 40px rgba(10,30,28,.18);
+  --display:'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --body:'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1615; --surface:#152120; --surface-2:#1B2A28; --line:#2A3B39; --fg:#E4EEEC; --muted:#93A6A2;
+  --accent:#4CC2AC; --accent-fg:#06221D; --accent-soft:#163C35;
+  --good:#5CC47C; --good-soft:#173525; --warn:#E3A848; --warn-soft:#3A2C12; --bad:#F07B6E; --bad-soft:#3E1D1A; --info:#82A8EA; --info-soft:#1B2A45;
+  --shadow:0 12px 40px rgba(0,0,0,.5); color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0E1615; --surface:#152120; --surface-2:#1B2A28; --line:#2A3B39; --fg:#E4EEEC; --muted:#93A6A2;
+  --accent:#4CC2AC; --accent-fg:#06221D; --accent-soft:#163C35;
+  --good:#5CC47C; --good-soft:#173525; --warn:#E3A848; --warn-soft:#3A2C12; --bad:#F07B6E; --bad-soft:#3E1D1A; --info:#82A8EA; --info-soft:#1B2A45;
+  --shadow:0 12px 40px rgba(0,0,0,.5); color-scheme:dark }
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--body)}
+h1,h2,h3{font-family:var(--display);font-weight:600;text-wrap:balance;margin:0}
+h1{font-size:1.65rem;line-height:1.2}
+h2{font-size:1.2rem}
+h3{font-size:1rem}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+
+/* Login */
+.login{min-height:100%;display:grid;place-items:center;padding-block:32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.login-card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px;display:grid;gap:16px}
+.mast{display:flex;align-items:baseline;gap:10px}
+.mast .mark{font-family:var(--display);font-weight:700;font-size:1.35rem}
+.mast .tag{font-size:12px;color:var(--muted)}
+.demo-users{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.demo-users button{text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);cursor:pointer}
+.demo-users button:hover{border-color:var(--accent)}
+.demo-users b{display:block;font-weight:600}
+
+/* Shell */
+.app{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100%}
+.rail{background:var(--surface);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh}
+.rail nav{display:grid;gap:2px}
+.rail nav button{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;padding:8px 10px;border:0;border-radius:7px;background:none;cursor:pointer;color:var(--fg)}
+.rail nav button:hover{background:var(--surface-2)}
+.rail nav button.on{background:var(--accent-soft);color:var(--fg);font-weight:600}
+.count{font-family:var(--mono);font-size:11.5px;background:var(--surface-2);border-radius:99px;padding:1px 7px;color:var(--muted)}
+.on .count{background:var(--surface)}
+.who{margin-top:auto;border-top:1px solid var(--line);padding-top:14px;display:grid;gap:8px}
+.who select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}
+.main{min-width:0;padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1160px;margin:0 auto;display:grid;gap:20px}
+.head{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+.head .left{display:grid;gap:4px;min-width:0}
+.demo-banner{font-size:12px;background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:6px 10px}
+
+/* Controls */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn.sm{padding:5px 10px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.field{display:grid;gap:5px;min-width:0}
+.field label{font-size:12.5px;font-weight:600}
+.field .hint{font-size:12px;color:var(--muted)}
+input[type=text],input[type=number],input[type=date],input[type=email],input[type=password],select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}
+textarea{resize:vertical;min-height:84px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:14px;min-width:0}
+.panel>h3{font-family:var(--body);font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+
+/* Pills */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;padding:2px 9px;border-radius:99px;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-draft{background:var(--surface-2);color:var(--muted)}
+.p-submitted{background:var(--info-soft);color:var(--info)}
+.p-changes{background:var(--warn-soft);color:var(--warn)}
+.p-rejected{background:var(--bad-soft);color:var(--bad)}
+.p-sourcing{background:var(--info-soft);color:var(--info)}
+.p-open{background:var(--good-soft);color:var(--good)}
+.p-new{background:var(--surface-2);color:var(--muted)}
+.p-contacted{background:var(--info-soft);color:var(--info)}
+.p-replied{background:var(--accent-soft);color:var(--accent)}
+.p-interview{background:var(--good-soft);color:var(--good)}
+.p-hired{background:var(--good-soft);color:var(--good)}
+.p-queued{background:var(--warn-soft);color:var(--warn)}
+.p-sent{background:var(--good-soft);color:var(--good)}
+.p-noemail{background:var(--surface-2);color:var(--muted)}
+.p-cancelled{background:var(--surface-2);color:var(--muted)}
+.tag{font-size:11.5px;padding:2px 8px;border-radius:5px;background:var(--surface-2);color:var(--fg)}
+.contender{font-size:11px;font-weight:600;color:var(--accent);border:1px solid var(--accent);border-radius:5px;padding:0 5px;margin-left:6px}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stat{background:var(--surface);padding:12px 14px;display:grid;gap:2px}
+.stat .v{font-family:var(--mono);font-size:1.35rem;font-weight:500}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:0;background:none;padding:9px 12px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}
+.tabs button.on{color:var(--fg);border-bottom-color:var(--accent)}
+
+/* Tables */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover td{background:var(--surface-2)}
+tr.top td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.nm{font-weight:600}
+.sub{font-size:12.5px;color:var(--muted)}
+.score{display:flex;align-items:center;gap:8px;min-width:110px}
+.bar{flex:1;height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden;min-width:50px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.bar.lo i{background:var(--warn)}
+.dec{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.dec button{border:0;background:var(--surface);padding:4px 9px;font-size:12px;cursor:pointer;border-right:1px solid var(--line)}
+.dec button:last-child{border-right:0}
+.dec button.y{background:var(--good-soft);color:var(--good);font-weight:600}
+.dec button.m{background:var(--warn-soft);color:var(--warn);font-weight:600}
+.dec button.n{background:var(--bad-soft);color:var(--bad);font-weight:600}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.filters input,.filters select{width:auto;min-width:140px}
+
+/* Request cards */
+.req-list{display:grid;gap:10px}
+.req{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:center;cursor:pointer;text-align:left;width:100%}
+.req:hover{border-color:var(--accent)}
+.req .meta{font-size:12.5px;color:var(--muted)}
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:8px 12px;border-radius:0 8px 8px 0;font-size:13px}
+.note.bad{border-color:var(--bad);background:var(--bad-soft)}
+dl.kv{display:grid;grid-template-columns:160px minmax(0,1fr);gap:8px 16px;margin:0}
+dl.kv dt{color:var(--muted);font-size:12.5px}
+dl.kv dd{margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.timeline{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.timeline li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;font-size:13px}
+
+/* Drawer */
+.scrim{position:fixed;inset:0;background:rgba(5,15,14,.38);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(640px,100%);background:var(--bg);z-index:21;box-shadow:var(--shadow);overflow-y:auto;padding-top:calc(20px + env(safe-area-inset-top,0px));padding-bottom:calc(40px + env(safe-area-inset-bottom,0px));padding-left:20px;padding-right:max(20px,env(safe-area-inset-right,0px));display:grid;gap:16px;align-content:start}
+.drawer .top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.bigscore{font-family:var(--mono);font-size:2.2rem;line-height:1;font-weight:500}
+.crit{display:grid;grid-template-columns:minmax(0,1fr) 120px 52px;gap:10px;align-items:center;font-size:13px}
+.xp{display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.xp li{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px}
+.xp .d{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.msg{white-space:pre-wrap;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:13px}
+
+/* Modal + toast */
+.modal{position:fixed;inset:0;display:grid;place-items:center;z-index:30;background:rgba(5,15,14,.45);padding:16px}
+.modal-card{background:var(--surface);border-radius:12px;padding:24px;width:100%;max-width:480px;display:grid;gap:16px;box-shadow:var(--shadow)}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.steps li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;color:var(--muted)}
+.steps li .dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--line)}
+.steps li.run{color:var(--fg)}
+.steps li.run .dot{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+.steps li.done{color:var(--fg)}
+.steps li.done .dot{background:var(--accent);border-color:var(--accent)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;z-index:40;font-size:13.5px;max-width:calc(100% - 32px)}
+.switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer}
+.switch input{appearance:none;width:40px;height:22px;border-radius:99px;background:var(--line);position:relative;cursor:pointer;transition:background .15s}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface);transition:left .15s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{left:21px}
+.paused{background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:10px 14px;font-weight:500}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+@media (max-width:860px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .rail{position:sticky;top:env(safe-area-inset-top,0px);height:auto;z-index:10;flex-direction:row;flex-wrap:wrap;align-items:center;padding:10px 16px;gap:10px;border-right:0;border-bottom:1px solid var(--line)}
+  .rail nav{display:flex;overflow-x:auto;width:100%;order:3}
+  .rail nav button{width:auto;white-space:nowrap;gap:6px}
+  .who{margin:0 0 0 auto;border:0;padding:0;display:flex;align-items:center}
+  .who .muted{display:none}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid2,.grid3{grid-template-columns:minmax(0,1fr)}
+  dl.kv{grid-template-columns:minmax(0,1fr)}
+  dl.kv dt{margin-top:6px}
+  .xp li,.timeline li{grid-template-columns:minmax(0,1fr)}
+  .crit{grid-template-columns:minmax(0,1fr) 80px 44px}
+}
+</style>
+
+<div id="root"></div>
+
+<script>
+/* ---------- Sample data (fictional people and companies) ---------- */
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const FIRST=["Lina","Omar","Sara","Daniel","Mira","Yusuf","Elena","Karim","Nadia","Tomás","Priya","Jonas","Hana","Marco","Leila","Felix","Aisha","Rami","Ines","Victor","Noor","Adam","Julia","Samir","Chloe","Tariq","Maya","Lukas","Zeina","Ethan","Rania","Pablo","Dana","Hugo","Salma","Igor","Farah","Nikolai","Amira","Theo"];
+const LAST=["Haddad","Novak","Rahman","Costa","Khoury","Becker","Saleh","Moreau","Petrov","Aziz","Lindqvist","Mansour","Ferreira","Okafor","Nasser","Kowalski","Barakat","Silva","Hartmann","Yilmaz","Duarte","Farouk","Ivanova","Sabbagh","Meyer","Qasem","Rossi","Hamdan","Nilsen","Zaher"];
+const COMPANIES=["Quillstone Media","Larkhaven Books","Brightleaf Learning","Northpine Digital","Atlas & Reed","Copperline Studios","Meridian Press Group","Tidewater Apps","Saltmarsh Publishing","Kestrel Health","Fernway Fintech","Inkwell Labs","Harbor Lane Software","Bluegate Education"];
+const LOCS=["Amman, Jordan","Dubai, UAE","London, UK","Berlin, Germany","Lisbon, Portugal","Cairo, Egypt","Toronto, Canada","Warsaw, Poland","Beirut, Lebanon","Barcelona, Spain","Istanbul, Türkiye","Riyadh, Saudi Arabia"];
+const SCHOOLS=["University of Jordan","American University of Beirut","University of Leeds","TU Berlin","Universidade de Lisboa","Cairo University","University of Toronto","University of Warsaw"];
+const CRITERIA=[["must","Must-have skills",35],["exp","Relevant experience",20],["industry","Industry / domain fit",15],["seniority","Seniority / title match",10],["trajectory","Career trajectory",10],["remote","Remote / time zone / language",5],["signals","Supporting signals",5]];
+const PROFILES={
+  design:{domain:"product design",titles:["Senior Product Designer","Lead UX Designer","Product Designer II","Senior UX/UI Designer","Design Lead"],prev:["Product Designer","UX Designer","UI Designer","Visual Designer"],degree:["BA Graphic Design","BSc Human-Computer Interaction","BA Interaction Design","MA Digital Design"],skills:["Figma","Design systems","Prototyping","User research","Accessibility (WCAG 2.2)","B2B SaaS","Usability testing","Information architecture","Design ops"],strengths:["Owned a design system used by 4 product teams","Led redesign of a B2B reading platform","Strong prototyping and research evidence in role descriptions","Shipped accessibility work to WCAG 2.2 AA"],gaps:["No B2B SaaS examples listed","Limited design-system ownership","No people-management experience","Portfolio link not public","No publishing or edtech background"],web:[["Portfolio with 6 case studies","portfolio.example"],["Talk on design systems at a regional UX meetup (2025)","meetup.example"],["Open-source Figma plugin, 1.2k installs","plugins.example"]],personal:c=>`Your work as ${c.title} at ${c.company}, especially the design-system ownership described on your profile, stood out to me.`},
+  finance:{domain:"finance and FP&A",titles:["Finance Manager","Senior Financial Analyst","FP&A Manager","Financial Controller","Finance Business Partner"],prev:["Financial Analyst","Senior Accountant","Auditor","Accountant"],degree:["BSc Accounting","BA Finance","MSc Finance","BCom Accounting"],skills:["IFRS","FP&A","Budgeting & forecasting","Month-end close","Excel modelling","NetSuite","Power BI","Cash-flow management","Audit"],strengths:["Ran month-end close for a multi-entity group","Built the annual budget and rolling forecast","ACCA/CPA qualified per profile","Led ERP migration to NetSuite"],gaps:["No publishing-industry background","No people-management experience","Limited multi-currency exposure","No ERP implementation experience"],web:[["Co-authored a public article on rolling forecasts (2024)","journal.example"],["Speaker at a regional CFO forum (2025)","forum.example"]],personal:c=>`Your experience leading finance at ${c.company}, including the budgeting and forecasting work on your profile, caught my attention.`},
+  editorial:{domain:"editorial and acquisitions",titles:["Acquisitions Editor","Senior Commissioning Editor","Editor","Managing Editor","Development Editor"],prev:["Assistant Editor","Editorial Assistant","Copy Editor","Production Editor"],degree:["BA English Literature","MA Publishing","BA Journalism","MA Creative Writing"],skills:["Acquisitions","List building","Author relations","Contract negotiation","Developmental editing","Rights","Market analysis","Arabic–English"],strengths:["Built a non-fiction list of 30+ titles","Track record of acquiring award-shortlisted titles","Strong author-relations and contract experience"],gaps:["No academic-publishing experience","Limited P&L ownership","No rights-sales exposure"],web:[["Interviewed in a trade publication about list building (2025)","trade.example"],["Judge for a regional book prize (2024)","prize.example"]],personal:c=>`The list you built at ${c.company} and your author-relations experience stood out to me.`}
+};
+const REDFLAGS=["Three roles under 12 months (2021–2023)","Gap of 14 months (2019–2020) with no explanation on profile","Title on profile differs from dates listed for the same role"];
+
+function genCandidates(roleKey,n,seed,idBase){
+  const P=PROFILES[roleKey],r=rng(seed),pick=a=>a[Math.floor(r()*a.length)],out=[];
+  const used=new Set();
+  for(let i=0;i<n;i++){
+    let first,last;do{first=pick(FIRST);last=pick(LAST)}while(used.has(first+last));used.add(first+last);
+    const title=pick(P.titles),company=pick(COMPANIES),prevCo=pick(COMPANIES.filter(c=>c!==company)),prevTitle=pick(P.prev);
+    const total=Math.round(3+r()*13),curStart=2026-Math.ceil(r()*4),prevStart=curStart-Math.ceil(1+r()*4),firstStart=Math.max(2006,prevStart-Math.ceil(1+r()*4));
+    const base=.36+r()*.5,breakdown={};let sum=0;
+    CRITERIA.forEach(([k,,w])=>{let f=Math.min(1,Math.max(.15,base+(r()-.5)*.35));const s=Math.round(w*f);breakdown[k]=s;sum+=s});
+    const hasEmail=r()>.28,slug=(first+"-"+last).toLowerCase().replace(/[^a-z-]/g,"");
+    const rf=r()<.18?[pick(REDFLAGS)]:[];
+    const skills=[...new Set([pick(P.skills),pick(P.skills),pick(P.skills),pick(P.skills),pick(P.skills)])];
+    const c={id:idBase+"-"+(i+1),first,name:first+" "+last,title,company,location:pick(LOCS),
+      headline:`${title} at ${company} · ${skills.slice(0,2).join(" · ")}`,
+      linkedin:"linkedin.com/in/sample-"+slug,website:r()>.6?slug+".example":"",
+      email:hasEmail?`${slug.replace("-",".")}@example.com`:"",phone:hasEmail&&r()>.55?"+00 555 01"+String(Math.floor(r()*90+10)):"",
+      totalYears:Math.max(total,2026-firstStart),relevantYears:Math.max(2,Math.round((2026-firstStart)*(.5+r()*.5))),
+      experience:[{title,company,start:curStart,end:"Present"},{title:prevTitle,company:prevCo,start:prevStart,end:curStart},{title:pick(P.prev),company:pick(COMPANIES),start:firstStart,end:prevStart}],
+      education:{degree:pick(P.degree),school:pick(SCHOOLS),years:`${firstStart-4}–${firstStart}`},
+      skills,languages:r()>.5?["English","Arabic"]:["English"],
+      breakdown,score:sum,redFlags:rf,
+      why:`${Math.max(total,2026-firstStart)} years in ${P.domain}; currently ${title} at ${company}. ${pick(P.strengths)}.`,
+      gaps:pick(P.gaps)+".",
+      web:r()>.35?[pick(P.web)]:[],
+      status:"new",hm:"",hmComment:"",contacted:"",followUp:"",outreach:"none",newContender:false,
+      sources:pick([["PDL"],["SignalHire"],["PDL","SignalHire"],["PDL","SignalHire"]]),revealed:false,contactSource:"",contactDate:""};
+    c.personalLine=P.personal(c);
+    if(c.redFlags.length)c.score=Math.max(20,c.score-6);
+    out.push(c);
+  }
+  out.sort((a,b)=>b.score-a.score);out.forEach((c,i)=>{c.rank=i+1;c.top=i<10;if(c.top)reveal(c,"2026-10-21")});
+  return out;
+}
+function reveal(c,date){c.revealed=true;c.contactDate=date;c.contactSource=c.email?"SignalHire":""}
+
+/* ---------- App state ---------- */
+const TODAY="2026-10-27";
+const USERS={
+  manager:{key:"manager",name:"Department manager",short:"Manager"},
+  ceo:{key:"ceo",name:"Khalil",short:"CEO"},
+  recruiter:{key:"recruiter",name:"Abed",short:"Recruiter"},
+  hm:{key:"hm",name:"Hiring manager",short:"Hiring manager"}
+};
+const S={
+  user:null,view:null,roleId:null,roleTab:"top",drawer:null,reqId:null,editId:null,filters:{q:"",status:"",min:0},toast:"",modal:null,
+  settings:{autoSend:true,cap:30,sentToday:6,credits:243,weights:{must:35,exp:20,industry:15,seniority:10,trajectory:10,remote:5,signals:5}},
+  template:{subject:"{{role_title}} at York Press",body:"Hi {{first_name}},\n\n{{personal_line}}\n\nWe're hiring a {{role_title}} at York Press ({{location_policy}}). Based on your background I think you could be a strong fit, and I'd love to tell you more.\n\nIf you're interested, could you reply with your CV, or upload it here: {{apply_link}}\n\nBest regards,\n{{recruiter_name}}\nTalent team, York Press\n\nI found your contact details through {{data_source}}. If you'd rather not hear from us, just reply and we'll delete them."},
+  liTemplate:"Hi {{first_name}}, I'm hiring a {{role_title}} at York Press (remote) and your work at {{company}} stood out. Open to a quick chat? If so, feel free to send me your CV here. Thanks, Abed",
+  notifications:[
+    {to:["recruiter","hm","ceo"],text:"Senior Product Designer: 50 candidates screened, Top 10 ready",date:"2026-10-21",read:false},
+    {to:["ceo"],text:"New request awaiting approval: Finance Manager",date:"2026-10-26",read:false},
+    {to:["manager"],text:"Khalil requested changes on Acquisitions Editor",date:"2026-10-24",read:false},
+    {to:["recruiter"],text:"Outreach: 6 emails sent today (cap 30)",date:"2026-10-27",read:true}
+  ],
+  requests:[
+    {id:"R-104",title:"Senior Product Designer",dept:"Product & Technology",profile:"design",seniority:"Senior",headcount:1,start:"2027-01-11",kind:"New role",
+      jd:"Own the end-to-end design of York Press's reading and author platforms. Partner with product and engineering, run research, and evolve our design system.",
+      must:["5+ years in product design","Design-system ownership","B2B or platform web apps","Strong prototyping in Figma"],nice:["Publishing or edtech background","Accessibility (WCAG 2.2)"],deal:["No portfolio"],minYears:5,idealYears:8,languages:"English",location:"Remote, global",tz:"At least 4 hours overlap with GMT+3",salary:"USD 60,000–80,000 / year",justification:"Two product teams share one designer today; roadmap needs dedicated design capacity.",
+      requester:"manager",hmName:"Hiring manager",status:"open",
+      events:[["2026-10-20","Department manager","Submitted",""],["2026-10-21","Khalil","Approved",""],["2026-10-21","System","Sourcing run finished","50 screened, Top 10 flagged"]],
+      runs:[{date:"2026-10-21",kind:"Initial",found:68,kept:50,newC:0,pdl:68,searches:38,tin:"246k",tout:"41k"}]},
+    {id:"R-105",title:"Finance Manager",dept:"Finance",profile:"finance",seniority:"Manager",headcount:1,start:"2027-02-01",kind:"Backfill",
+      jd:"Lead month-end close, budgeting and forecasting for York Press and its two subsidiaries. Report to the CFO.",
+      must:["7+ years in finance","IFRS reporting","Budgeting & forecasting","Team leadership (2+ reports)"],nice:["Publishing industry","NetSuite"],deal:["No professional qualification (ACCA/CPA/CMA)"],minYears:7,idealYears:10,languages:"English, Arabic",location:"Remote, MENA time zones",tz:"GMT+2 to GMT+4",salary:"USD 70,000–90,000 / year",justification:"Backfill for the current Finance Manager, who leaves in January.",
+      requester:"manager",hmName:"Hiring manager",status:"submitted",events:[["2026-10-26","Department manager","Submitted",""]],runs:[]},
+    {id:"R-106",title:"Acquisitions Editor",dept:"Editorial",profile:"editorial",seniority:"Mid-senior",headcount:1,start:"2027-01-04",kind:"New role",
+      jd:"Acquire 12–15 non-fiction titles a year for the general trade list. Build author relationships and negotiate contracts.",
+      must:["5+ years acquiring titles","Author relations","Contract negotiation"],nice:["Arabic–English list experience"],deal:[],minYears:5,idealYears:8,languages:"English",location:"Remote, global",tz:"Flexible",salary:"USD 50,000–65,000 / year",justification:"Grow the non-fiction list from 20 to 35 titles a year.",
+      requester:"manager",hmName:"Hiring manager",status:"changes",
+      events:[["2026-10-23","Department manager","Submitted",""],["2026-10-24","Khalil","Requested changes","Please confirm the budget line and whether this replaces the open Editor role."]],runs:[]},
+    {id:"R-102",title:"Sales Operations Analyst",dept:"Sales",profile:"finance",seniority:"Mid",headcount:1,start:"2026-12-01",kind:"New role",
+      jd:"Own CRM hygiene, pipeline reporting and territory planning.",must:["3+ years in sales ops","CRM administration"],nice:["HubSpot"],deal:[],minYears:3,idealYears:5,languages:"English",location:"Remote",tz:"Flexible",salary:"USD 40,000–50,000 / year",justification:"Reduce manual reporting for the sales team.",
+      requester:"manager",hmName:"Hiring manager",status:"rejected",events:[["2026-10-10","Department manager","Submitted",""],["2026-10-12","Khalil","Rejected","Not this quarter. Revisit in Q1."]],runs:[]}
+  ],
+  candidates:{}
+};
+// seed R-104 candidates with outreach state
+(function(){const cs=genCandidates("design",50,104,"R-104");let sent=0;
+  cs.forEach(c=>{if(c.top){if(!c.email){c.outreach="noemail"}else if(sent<6){c.outreach="sent";c.status="contacted";c.contacted="2026-10-22";c.followUp="2026-10-29";sent++}else c.outreach="queued"}});
+  cs[0].hm="yes";cs[0].hmComment="Strong design-system story. Let's interview.";cs[0].status="replied";
+  cs[2].hm="maybe";cs[4].hm="yes";cs[4].status="interview";
+  S.candidates["R-104"]=cs})();
+
+/* ---------- Helpers ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const STATUS_REQ={draft:["Draft","p-draft"],submitted:["Awaiting Khalil","p-submitted"],changes:["Changes requested","p-changes"],rejected:["Rejected","p-rejected"],sourcing:["Sourcing","p-sourcing"],open:["Open · candidates ready","p-open"]};
+const STATUS_C={new:"New",contacted:"Contacted",replied:"Replied",interview:"Interview",rejected:"Rejected",hired:"Hired"};
+const OUT={sent:["Sent","p-sent"],queued:["Queued","p-queued"],noemail:["LinkedIn · awaiting approval","p-queued"],approved:["LinkedIn · approved, sends via Chrome","p-submitted"],none:["Not in queue","p-draft"],cancelled:["Cancelled","p-cancelled"]};
+const reqPill=s=>`<span class="pill ${STATUS_REQ[s][1]}">${STATUS_REQ[s][0]}</span>`;
+const cPill=s=>`<span class="pill p-${s}">${STATUS_C[s]}</span>`;
+const oPill=s=>`<span class="pill ${OUT[s][1]}">${OUT[s][0]}</span>`;
+const fmt=d=>{if(!d)return"—";const m=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];return`${Number(d.slice(8))} ${m.at(Number(d.slice(5,7))-1)} ${d.slice(0,4)}`};
+const req=id=>S.requests.find(r=>r.id===id);
+const myNotes=()=>S.notifications.filter(n=>n.to.includes(S.user));
+function toast(t){S.toast=t;render();clearTimeout(toast.t);toast.t=setTimeout(()=>{S.toast="";render()},2600)}
+function notify(to,text){S.notifications.unshift({to,text,date:TODAY,read:false})}
+function fill(tpl,c,r){return tpl.replace(/{{first_name}}/g,c.first).replace(/{{role_title}}/g,r.title).replace(/{{personal_line}}/g,c.personalLine).replace(/{{location_policy}}/g,r.location.toLowerCase()).replace(/{{recruiter_name}}/g,"Abed El-Fattah Amouneh").replace(/{{company}}/g,c.company).replace(/{{apply_link}}/g,"yorkpress-hiring.example/apply/"+r.id).replace(/{{data_source}}/g,c.contactSource==="SignalHire"?"SignalHire, a professional contact database":"your public LinkedIn profile")}
+
+/* ---------- Navigation per role ---------- */
+function navFor(u){
+  const pend=S.requests.filter(r=>r.status==="submitted").length,unread=myNotes().filter(n=>!n.read).length;
+  const queued=Object.values(S.candidates).flat().filter(c=>c.outreach==="queued").length;
+  return {
+    manager:[["requests","My requests",S.requests.length],["new","New request",""],["notes","Notifications",unread||""]],
+    ceo:[["approvals","Approvals",pend],["roles","Open roles",S.requests.filter(r=>r.status==="open").length],["requests","All requests",S.requests.length],["notes","Notifications",unread||""]],
+    recruiter:[["roles","Roles",S.requests.filter(r=>r.status==="open").length],["requests","All requests",S.requests.length],["outreach","Outreach queue",queued],["settings","Settings",""],["notes","Notifications",unread||""]],
+    hm:[["roles","My roles",S.requests.filter(r=>r.status==="open").length],["notes","Notifications",unread||""]]
+  }[u];
+}
+function go(view,extra={}){Object.assign(S,{view,drawer:null},extra);render();window.scrollTo(0,0)}
+function signIn(u){S.user=u;S.view=navFor(u)[0][0];S.roleId=null;S.reqId=null;render()}
+
+/* ---------- Views ---------- */
+function vLogin(){return`<div class="login"><form class="login-card" id="loginForm">
+  <div class="mast"><span class="mark">York Press</span><span class="tag">Hiring</span></div>
+  <div class="field"><label for="em">Work email</label><input id="em" type="email" value="abed.amouneh@york-press.com" autocomplete="username"></div>
+  <div class="field"><label for="pw">Password</label><input id="pw" type="password" value="prototype" autocomplete="current-password"></div>
+  <button class="btn primary" type="submit">Sign in</button>
+  <div class="eyebrow">Prototype · sign in as</div>
+  <div class="demo-users">${Object.values(USERS).map(u=>`<button type="button" data-signin="${u.key}"><b>${esc(u.name)}</b><span class="small muted">${esc(u.short)}</span></button>`).join("")}</div>
+  <p class="small muted" style="margin:0">All people and companies in this prototype are fictional sample data.</p>
+</form></div>`}
+
+function shell(content){
+  const u=USERS[S.user],nav=navFor(S.user);
+  return`<div class="app"><aside class="rail">
+    <div class="mast"><span class="mark">York Press</span><span class="tag">Hiring</span></div>
+    <nav>${nav.map(([k,l,c])=>`<button data-go="${k}" class="${S.view===k||(k==="roles"&&S.view==="role")||(k==="requests"&&S.view==="request"&&S.user!=="ceo")||(k==="approvals"&&S.view==="request"&&S.user==="ceo")?"on":""}"><span>${l}</span>${c!==""?`<span class="count">${c}</span>`:""}</button>`).join("")}</nav>
+    <div class="who"><span class="small muted">Viewing as</span><select id="who" aria-label="Switch demo user">${Object.values(USERS).map(x=>`<option value="${x.key}" ${x.key===S.user?"selected":""}>${esc(x.name)} · ${x.short}</option>`).join("")}</select></div>
+  </aside><main class="main"><div class="wrap">${content}</div></main></div>`;
+}
+
+function vRequests(){
+  const list=S.user==="manager"?S.requests.filter(r=>r.requester==="manager"):S.requests;
+  return`<div class="head"><div class="left"><span class="eyebrow">${S.user==="manager"?"Department manager":"All departments"}</span><h1>${S.user==="manager"?"My requests":"All requests"}</h1></div>
+  ${S.user==="manager"?`<button class="btn primary" data-go="new">New request</button>`:""}</div>
+  <div class="req-list">${list.map(reqCard).join("")||`<div class="empty">No requests yet.</div>`}</div>`;
+}
+function reqCard(r){const last=r.events.at(-1);return`<button class="req" data-req="${r.id}">
+  <div style="min-width:0"><div class="row"><span class="mono small muted">${r.id}</span><h3>${esc(r.title)}</h3></div>
+  <div class="meta">${esc(r.dept)} · ${esc(r.seniority)} · ${r.headcount} hire · ${esc(r.salary)}</div>
+  ${r.status==="changes"||r.status==="rejected"?`<div class="note ${r.status==="rejected"?"bad":""}" style="margin-top:6px"><b>Khalil:</b> ${esc(last[3])}</div>`:""}</div>
+  <div style="display:grid;gap:6px;justify-items:end">${reqPill(r.status)}<span class="small muted">${last[2]} ${fmt(last[0])}</span></div></button>`}
+
+function vApprovals(){
+  const pend=S.requests.filter(r=>r.status==="submitted");
+  return`<div class="head"><div class="left"><span class="eyebrow">CEO approvals</span><h1>${pend.length?`${pend.length} request${pend.length>1?"s":""} waiting for you`:"Nothing waiting"}</h1></div></div>
+  <div class="req-list">${pend.map(reqCard).join("")||`<div class="empty">All caught up. New requests will appear here and by email.</div>`}</div>
+  <h2>Recently decided</h2><div class="req-list">${S.requests.filter(r=>r.status!=="submitted"&&r.status!=="draft").map(reqCard).join("")}</div>`;
+}
+
+function vRequest(){
+  const r=req(S.reqId),isCeo=S.user==="ceo",canEdit=S.user==="manager"&&(r.status==="changes"||r.status==="draft");
+  const list=a=>a.length?`<div class="chips">${a.map(x=>`<span class="tag">${esc(x)}</span>`).join("")}</div>`:`<span class="muted">None</span>`;
+  return`<div class="head"><div class="left"><button class="btn sm" data-go="${isCeo?"approvals":"requests"}">← Back</button><span class="eyebrow" style="margin-top:8px">${r.id} · ${esc(r.dept)}</span><h1>${esc(r.title)}</h1></div>
+  <div class="row">${reqPill(r.status)}${r.status==="open"&&S.user!=="manager"?`<button class="btn" data-role="${r.id}">View candidates</button>`:""}${canEdit?`<button class="btn primary" data-edit="${r.id}">Edit and resubmit</button>`:""}</div></div>
+  ${isCeo&&r.status==="submitted"?`<div class="panel" style="border-color:var(--accent)"><h3>Your decision</h3>
+    <div class="field"><label for="dc">Comment (required for changes or rejection)</label><textarea id="dc" placeholder="e.g. Please confirm the budget line"></textarea></div>
+    <div class="row"><button class="btn primary" data-decide="approve">Approve and start sourcing</button><button class="btn" data-decide="changes">Request changes</button><button class="btn danger" data-decide="reject">Reject</button></div>
+    <p class="small muted" style="margin:0">Approving starts sourcing straight away: about 50 candidates, scored, with the Top 10 flagged and contacted from the template.</p></div>`:""}
+  <div class="grid2"><div class="panel"><h3>Role</h3><dl class="kv">
+    <dt>Seniority</dt><dd>${esc(r.seniority)}</dd><dt>Headcount</dt><dd>${r.headcount}</dd><dt>Target start</dt><dd>${fmt(r.start)}</dd><dt>Type</dt><dd>${esc(r.kind)}</dd>
+    <dt>Location</dt><dd>${esc(r.location)}</dd><dt>Time zone</dt><dd>${esc(r.tz)}</dd><dt>Languages</dt><dd>${esc(r.languages)}</dd>
+    <dt>Salary band</dt><dd>${esc(r.salary)}</dd><dt>Hiring manager</dt><dd>${esc(r.hmName)}</dd></dl></div>
+  <div class="panel"><h3>Requirements</h3><dl class="kv"><dt>Must-haves</dt><dd>${list(r.must)}</dd><dt>Nice-to-haves</dt><dd>${list(r.nice)}</dd><dt>Deal-breakers</dt><dd>${list(r.deal)}</dd><dt>Experience</dt><dd>${r.minYears}+ years, ideally ${r.idealYears}</dd></dl></div></div>
+  <div class="grid2"><div class="panel"><h3>Job description</h3><p style="margin:0">${esc(r.jd)}</p><h3>Business justification</h3><p style="margin:0">${esc(r.justification)}</p></div>
+  <div class="panel"><h3>History</h3><ul class="timeline">${r.events.map(e=>`<li><span class="mono small muted">${fmt(e[0])}</span><span><b>${esc(e[1])}</b> · ${esc(e[2])}${e[3]?`<br><span class="muted">${esc(e[3])}</span>`:""}</span></li>`).join("")}</ul></div></div>`;
+}
+
+function vNew(){
+  const r=S.editId?req(S.editId):null,v=(k,d="")=>esc(r?(Array.isArray(r[k])?r[k].join("\n"):r[k]):d);
+  return`<div class="head"><div class="left"><span class="eyebrow">${r?`Editing ${r.id}`:"New position"}</span><h1>${r?"Update and resubmit":"Request a new position"}</h1></div></div>
+  ${r&&r.status==="changes"?`<div class="note"><b>Khalil:</b> ${esc(r.events.at(-1)[3])}</div>`:""}
+  <form id="reqForm" class="wrap" style="gap:16px">
+  <div class="panel"><h3>Basics</h3><div class="grid3">
+    <div class="field"><label for="f-title">Job title</label><input id="f-title" type="text" required value="${v("title","Data Engineer")}"></div>
+    <div class="field"><label for="f-dept">Department</label><select id="f-dept">${["Product & Technology","Finance","Editorial","Sales","Operations","Marketing"].map(d=>`<option ${r&&r.dept===d?"selected":""}>${d}</option>`).join("")}</select></div>
+    <div class="field"><label for="f-sen">Seniority</label><select id="f-sen">${["Junior","Mid","Mid-senior","Senior","Manager","Director"].map(d=>`<option ${(r?r.seniority:"Senior")===d?"selected":""}>${d}</option>`).join("")}</select></div>
+    <div class="field"><label for="f-hc">Headcount</label><input id="f-hc" type="number" min="1" value="${v("headcount","1")}"></div>
+    <div class="field"><label for="f-start">Target start</label><input id="f-start" type="date" value="${v("start","2027-02-01")}"></div>
+    <div class="field"><label for="f-kind">Type</label><select id="f-kind"><option>New role</option><option ${r&&r.kind==="Backfill"?"selected":""}>Backfill</option></select></div>
+  </div></div>
+  <div class="panel"><h3>Job description</h3><div class="field"><label for="f-jd">Paste the JD</label><textarea id="f-jd" rows="5">${v("jd","Build and maintain the data pipelines behind York Press sales, royalties and reader analytics.")}</textarea><span class="hint">Or upload a PDF/DOCX in the full app.</span></div></div>
+  <div class="panel"><h3>Requirements</h3><div class="grid3">
+    <div class="field"><label for="f-must">Must-haves (one per line)</label><textarea id="f-must">${v("must","4+ years data engineering\nSQL and Python\nCloud data warehouse (BigQuery or Snowflake)")}</textarea></div>
+    <div class="field"><label for="f-nice">Nice-to-haves</label><textarea id="f-nice">${v("nice","dbt\nPublishing or retail data")}</textarea></div>
+    <div class="field"><label for="f-deal">Deal-breakers</label><textarea id="f-deal">${v("deal","")}</textarea></div>
+    <div class="field"><label for="f-min">Minimum years</label><input id="f-min" type="number" value="${v("minYears","4")}"></div>
+    <div class="field"><label for="f-ideal">Ideal years</label><input id="f-ideal" type="number" value="${v("idealYears","6")}"></div>
+    <div class="field"><label for="f-lang">Languages</label><input id="f-lang" type="text" value="${v("languages","English")}"></div>
+    <div class="field"><label for="f-loc">Location policy</label><input id="f-loc" type="text" value="${v("location","Remote, global")}"></div>
+    <div class="field"><label for="f-tz">Time-zone overlap</label><input id="f-tz" type="text" value="${v("tz","At least 3 hours with GMT+3")}"></div>
+    <div class="field"><label for="f-hm">Hiring manager</label><select id="f-hm"><option>Hiring manager</option><option>Department manager</option></select></div>
+  </div></div>
+  <div class="panel"><h3>Budget</h3><div class="grid2">
+    <div class="field"><label for="f-sal">Salary band and currency</label><input id="f-sal" type="text" value="${v("salary","USD 55,000–70,000 / year")}"></div>
+    <div class="field"><label for="f-just">Business justification for Khalil</label><textarea id="f-just">${v("justification","Reporting is manual today; this role automates royalty and sales dashboards.")}</textarea></div>
+  </div></div>
+  <div class="row"><button class="btn primary" type="submit">Submit to Khalil</button><button class="btn" type="button" data-go="requests">Cancel</button></div>
+  </form>`;
+}
+
+function rolesFor(){return S.requests.filter(r=>r.status==="open"||r.status==="sourcing")}
+function vRoles(){
+  const rs=rolesFor();
+  return`<div class="head"><div class="left"><span class="eyebrow">${S.user==="hm"?"Assigned to you":"Approved positions"}</span><h1>${S.user==="hm"?"My roles":"Open roles"}</h1></div></div>
+  <div class="req-list">${rs.map(r=>{const cs=S.candidates[r.id]||[];const top=cs.filter(c=>c.top);
+    return`<button class="req" data-role="${r.id}"><div style="min-width:0"><div class="row"><span class="mono small muted">${r.id}</span><h3>${esc(r.title)}</h3></div>
+    <div class="meta">${cs.length} screened · Top 10 avg score <span class="num">${top.length?Math.round(top.reduce((a,c)=>a+c.score,0)/top.length):"—"}</span> · ${top.filter(c=>c.outreach==="sent").length} contacted · ${top.filter(c=>c.hm==="yes").length} HM yes</div></div>
+    ${reqPill(r.status)}</button>`}).join("")||`<div class="empty">No open roles yet. A role appears here once Khalil approves it.</div>`}</div>`;
+}
+
+function vRole(){
+  const r=req(S.roleId),cs=S.candidates[r.id]||[],top=cs.filter(c=>c.top),t=S.roleTab,rec=S.user==="recruiter";
+  const tabs=[["top","Top 10"],["all",`All screened (${cs.length})`],["outreach","Outreach"],["runs","Runs & cost"],["brief","Role brief"]].filter(x=>S.user==="hm"?["top","all","brief"].includes(x[0]):true);
+  let body="";
+  if(t==="top")body=candTable(top,true);
+  if(t==="all"){
+    const f=S.filters,list=cs.filter(c=>(!f.q||(c.name+c.title+c.company+c.location).toLowerCase().includes(f.q.toLowerCase()))&&(!f.status||c.status===f.status)&&c.score>=f.min);
+    body=`<div class="filters"><input id="fq" type="text" placeholder="Search name, title, company" value="${esc(f.q)}" aria-label="Search"><select id="fs" aria-label="Status"><option value="">All statuses</option>${Object.entries(STATUS_C).map(([k,v])=>`<option value="${k}" ${f.status===k?"selected":""}>${v}</option>`).join("")}</select><select id="fm" aria-label="Minimum score">${[0,50,60,70,80].map(n=>`<option value="${n}" ${f.min==n?"selected":""}>${n?`Score ≥ ${n}`:"Any score"}</option>`).join("")}</select><span class="small muted">${list.length} shown</span></div>${candTable(list,false)}`;
+  }
+  if(t==="outreach")body=outreachTable(top.map(c=>({c,r})));
+  if(t==="runs")body=`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Run</th><th>Found</th><th>Kept</th><th>New contenders</th><th>PDL records</th><th>SignalHire credits</th><th>Web searches</th><th>Claude tokens in / out</th></tr></thead><tbody>${r.runs.map(x=>`<tr><td class="num">${fmt(x.date)}</td><td>${x.kind}</td><td class="num">${x.found}</td><td class="num">${x.kept}</td><td class="num">${x.newC}</td><td class="num">${x.pdl}</td><td class="num">${x.kind==="Weekly"?0:10}</td><td class="num">${x.searches} <span class="muted">($${(x.searches/100).toFixed(2)})</span></td><td class="num">${x.tin} / ${x.tout}</td></tr>`).join("")}</tbody></table></div>
+    <p class="small muted" style="margin:0">Searches used: PDL person search and SignalHire Search API with title variants (${PROFILES[r.profile].titles.slice(0,3).join(", ")}), excluding current York Press employees and the suppression list.</p>`;
+  if(t==="brief"){const w=S.settings.weights,tot=Object.values(w).reduce((a,b)=>a+b,0);
+    body=`<div class="grid2"><div class="panel"><h3>Search brief</h3><dl class="kv"><dt>Title variants</dt><dd>${PROFILES[r.profile].titles.join(", ")}</dd><dt>Must-haves</dt><dd>${r.must.map(esc).join(" · ")}</dd><dt>Deal-breakers</dt><dd>${r.deal.length?r.deal.map(esc).join(" · "):"None"} <span class="muted small">(caps score at 40)</span></dd><dt>Experience</dt><dd>${r.minYears}+ yrs, ideal ${r.idealYears}</dd><dt>Location</dt><dd>${esc(r.location)} · ${esc(r.tz)}</dd><dt>Excluded</dt><dd>Current York Press employees, suppression list, already screened</dd></dl></div>
+    <div class="panel"><h3>Scorecard weights for this role</h3>${CRITERIA.map(([k,l])=>`<div class="crit"><label for="w-${k}">${l}</label><input id="w-${k}" data-w="${k}" type="range" min="0" max="50" value="${w[k]}" ${rec?"":"disabled"}><span class="num">${w[k]}</span></div>`).join("")}
+    <div class="row"><b>Total</b><span class="num" id="wtot" style="color:${tot===100?"var(--good)":"var(--bad)"}">${tot} / 100</span>${rec?`<button class="btn sm" id="rescore" ${tot!==100?"disabled":""}>Re-score with these weights</button>`:""}</div></div></div>`}
+  return`<div class="head"><div class="left"><button class="btn sm" data-go="roles">← Roles</button><span class="eyebrow" style="margin-top:8px">${r.id} · ${esc(r.dept)} · ${esc(r.location)}</span><h1>${esc(r.title)}</h1></div>
+  <div class="row">${reqPill(r.status)}${rec?`<button class="btn" id="rerun">Run weekly refresh now</button>`:""}<button class="btn" data-req="${r.id}">Request details</button></div></div>
+  <div class="stats"><div class="stat"><span class="eyebrow">Screened</span><span class="v">${cs.length}</span></div><div class="stat"><span class="eyebrow">Top 10 avg</span><span class="v">${top.length?Math.round(top.reduce((a,c)=>a+c.score,0)/top.length):"—"}</span></div><div class="stat"><span class="eyebrow">Contacted</span><span class="v">${cs.filter(c=>c.outreach==="sent").length}</span></div><div class="stat"><span class="eyebrow">HM yes</span><span class="v">${cs.filter(c=>c.hm==="yes").length}</span></div><div class="stat"><span class="eyebrow">Last run</span><span class="v" style="font-size:1rem">${r.runs.length?fmt(r.runs.at(-1).date):"—"}</span></div></div>
+  <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-tab="${k}" class="${t===k?"on":""}">${l}</button>`).join("")}</div>${body}`;
+}
+
+function candTable(list,isTop){
+  if(!list.length)return`<div class="empty">No candidates match these filters.</div>`;
+  const canHm=S.user==="hm"||S.user==="recruiter";
+  return`<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Candidate</th><th>Current role</th><th>Location</th><th>Score</th><th>Status</th><th>HM decision</th>${isTop?"<th>Outreach</th>":"<th>Exp.</th>"}</tr></thead><tbody>
+  ${list.map(c=>`<tr class="click ${c.top?"top":""}" data-cand="${c.id}"><td class="num">${c.rank}</td>
+    <td><div class="nm">${esc(c.name)}${c.newContender?'<span class="contender">New contender</span>':""}</div><div class="sub">${esc(c.headline)}</div></td>
+    <td><div>${esc(c.title)}</div><div class="sub">${esc(c.company)}</div></td><td class="sub">${esc(c.location)}</td>
+    <td><div class="score"><span class="num">${c.score}</span><span class="bar ${c.score<60?"lo":""}"><i style="width:${c.score}%"></i></span></div></td>
+    <td>${cPill(c.status)}</td>
+    <td>${canHm?`<span class="dec" data-stop>${[["yes","Yes","y"],["maybe","Maybe","m"],["no","No","n"]].map(([k,l,cl])=>`<button data-hm="${c.id}:${k}" class="${c.hm===k?cl:""}" aria-pressed="${c.hm===k}">${l}</button>`).join("")}</span>`:(c.hm?`<span class="tag">${c.hm}</span>`:'<span class="muted">—</span>')}</td>
+    ${isTop?`<td>${oPill(c.outreach)}</td>`:`<td class="num">${c.totalYears}y</td>`}</tr>`).join("")}</tbody></table></div>`;
+}
+
+function outreachTable(rows){
+  return`${!S.settings.autoSend?`<div class="paused">Automatic sending is paused. Queued messages will wait until it's turned back on in Settings.</div>`:""}
+  <div class="tbl-wrap"><table><thead><tr><th>Candidate</th><th>Role</th><th>Channel</th><th>To</th><th>Status</th><th>Sent</th><th>Follow-up</th><th></th></tr></thead><tbody>
+  ${rows.map(({c,r})=>`<tr class="click" data-cand="${c.id}"><td><div class="nm">${esc(c.name)}</div><div class="sub">#${c.rank} · score ${c.score}</div></td><td>${esc(r.title)}</td><td>${c.email?"Email":"LinkedIn"}</td><td class="mono small">${c.email?esc(c.email):esc(c.linkedin)}</td><td>${oPill(c.outreach)}</td><td class="num">${fmt(c.contacted)}</td><td class="num">${fmt(c.followUp)}</td>
+  <td data-stop>${S.user==="recruiter"?(c.outreach==="queued"?`<button class="btn sm" data-cancel="${c.id}">Cancel</button>`:c.outreach==="noemail"?`<button class="btn sm primary" data-approve="${c.id}">Approve</button>`:""):""}</td></tr>`).join("")}</tbody></table></div>
+  <p class="small muted" style="margin:0">Email goes out automatically within the daily cap. LinkedIn messages go to candidates with no email; they are sent from your account by Claude in Chrome only after you approve them.</p>`;
+}
+
+function vOutreach(){
+  const rows=[];S.requests.forEach(r=>(S.candidates[r.id]||[]).filter(c=>c.top).forEach(c=>rows.push({c,r})));
+  const q=rows.filter(x=>x.c.outreach==="queued").length;
+  return`<div class="head"><div class="left"><span class="eyebrow">Automatic outreach</span><h1>Outreach queue</h1></div>
+  <div class="row"><span class="small muted">Sent today <b class="num">${S.settings.sentToday}</b> of <span class="num">${S.settings.cap}</span> · ${q} queued</span><button class="btn" id="drain" ${!S.settings.autoSend||!q?"disabled":""}>Send queued now</button></div></div>${outreachTable(rows)}`;
+}
+
+function vSettings(){
+  const st=S.settings;
+  return`<div class="head"><div class="left"><span class="eyebrow">Recruiter</span><h1>Settings</h1></div></div>
+  <div class="grid2"><div class="panel"><h3>Sending</h3>
+    <label class="switch" for="ks"><input id="ks" type="checkbox" ${st.autoSend?"checked":""}><span><b>Automatic sending</b><br><span class="small muted">Turn off to pause every outgoing email at once</span></span></label>
+    <div class="field"><label for="cap">Daily send cap</label><input id="cap" type="number" min="1" max="200" value="${st.cap}"><span class="hint">Counted across all roles. Sent today: ${st.sentToday}.</span></div></div>
+  <div class="panel"><h3>Connections</h3><dl class="kv"><dt>People Data Labs</dt><dd><span class="pill p-open">Connected</span> <span class="small muted">search</span></dd><dt>SignalHire</dt><dd><span class="pill p-open">Connected</span> <span class="small muted">search + Top-10 contacts · <span class="num">${st.credits}</span> credits left</span></dd><dt>LinkedIn messaging</dt><dd><span class="pill p-open">Claude in Chrome</span> <span class="small muted">approval required</span></dd><dt>Claude API</dt><dd><span class="pill p-open">Connected</span> <span class="small muted">Sonnet, web search on</span></dd><dt>Email (Resend)</dt><dd><span class="pill p-open">Connected</span> <span class="small muted">york-press.com verified</span></dd><dt>LinkedIn RSC</dt><dd><span class="pill p-submitted">Partner application pending</span></dd></dl></div></div>
+  <div class="panel"><h3>Outreach template · all departments</h3>
+    <div class="field"><label for="ts">Subject</label><input id="ts" type="text" value="${esc(S.template.subject)}"></div>
+    <div class="field"><label for="tb">Body</label><textarea id="tb" rows="11">${esc(S.template.body)}</textarea><span class="hint">Placeholders: {{first_name}} {{role_title}} {{personal_line}} {{location_policy}} {{apply_link}} {{data_source}} {{recruiter_name}}. Claude writes only {{personal_line}}, one sentence from the candidate's profile.</span></div>
+    <div class="row"><button class="btn primary" id="saveTpl">Save template</button></div></div>`;
+}
+
+function vNotes(){
+  const ns=myNotes();
+  return`<div class="head"><div class="left"><span class="eyebrow">In-app and email</span><h1>Notifications</h1></div><button class="btn" id="readAll">Mark all read</button></div>
+  <div class="tbl-wrap"><table><tbody>${ns.map(n=>`<tr><td style="width:12px">${n.read?"":'<span class="pill p-submitted" style="padding:2px 4px" aria-label="Unread"></span>'}</td><td>${esc(n.text)}</td><td class="num sub" style="white-space:nowrap">${fmt(n.date)}</td></tr>`).join("")||`<tr><td class="empty">Nothing yet.</td></tr>`}</tbody></table></div>`;
+}
+
+function vDrawer(){
+  const [rid]=S.drawer.split(/-(?=\d+$)/),r=req(rid),c=(S.candidates[rid]||[]).find(x=>x.id===S.drawer);if(!c)return"";
+  const canEdit=S.user==="recruiter"||S.user==="hm";
+  return`<div class="scrim" data-close></div><aside class="drawer" role="dialog" aria-label="${esc(c.name)}">
+  <div class="top"><div style="display:grid;gap:4px;min-width:0"><span class="eyebrow">#${c.rank} for ${esc(r.title)}${c.top?" · Top 10":""}</span><h2>${esc(c.name)}</h2><span class="muted">${esc(c.headline)}</span><span class="small">${esc(c.location)} · <span class="mono">${esc(c.linkedin)}</span>${c.website?` · <span class="mono">${esc(c.website)}</span>`:""}</span><span class="small muted">Found via ${c.sources.map(esc).join(" + ")}</span></div>
+  <div style="display:grid;justify-items:end;gap:6px"><button class="btn sm" data-close>Close</button><span class="bigscore">${c.score}</span><span class="small muted">of 100</span></div></div>
+  <div class="panel"><h3>Score breakdown</h3>${CRITERIA.map(([k,l,w])=>`<div class="crit"><span>${l}</span><span class="bar ${c.breakdown[k]/w<.6?"lo":""}"><i style="width:${Math.round(c.breakdown[k]/w*100)}%"></i></span><span class="num">${c.breakdown[k]}/${w}</span></div>`).join("")}</div>
+  <div class="panel"><h3>Why recommended</h3><p style="margin:0">${esc(c.why)}</p><h3>Gaps</h3><p style="margin:0">${esc(c.gaps)}</p><h3>Red flags</h3><p style="margin:0">${c.redFlags.length?esc(c.redFlags.join("; ")):'<span class="muted">None noted</span>'}</p></div>
+  <div class="panel"><h3>Experience · ${c.totalYears} yrs total, ${c.relevantYears} relevant</h3><ul class="xp">${c.experience.map(e=>`<li><span class="d">${e.start} – ${e.end}</span><span><b>${esc(e.title)}</b><br><span class="muted">${esc(e.company)}</span></span></li>`).join("")}</ul>
+  <h3>Education</h3><p style="margin:0">${esc(c.education.degree)} · ${esc(c.education.school)} <span class="mono small muted">${c.education.years}</span></p>
+  <h3>Skills & languages</h3><div class="chips">${c.skills.map(s=>`<span class="tag">${esc(s)}</span>`).join("")}${c.languages.map(s=>`<span class="tag">${esc(s)}</span>`).join("")}</div></div>
+  ${c.web.length?`<div class="panel"><h3>Found on the web</h3>${c.web.map(w=>`<p style="margin:0">${esc(w[0])} <span class="mono small muted">· ${esc(w[1])}</span></p>`).join("")}</div>`:""}
+  <div class="panel"><h3>Contact</h3>${c.revealed?(c.email?`<dl class="kv"><dt>Email</dt><dd class="mono">${esc(c.email)}</dd><dt>Phone</dt><dd class="mono">${c.phone?esc(c.phone):'<span class="muted">Not found</span>'}</dd></dl><p class="small muted" style="margin:0">Source: SignalHire · revealed ${fmt(c.contactDate)}</p>`:`<p style="margin:0">SignalHire found no email or phone for this person. They go to the LinkedIn queue instead.</p>`)
+    :`<p class="muted" style="margin:0">Not revealed. Contacts are revealed automatically for the Top 10 only.</p>${S.user==="recruiter"?`<div class="row"><button class="btn sm" id="revealBtn">Reveal with SignalHire · 1 credit</button><span class="small muted">${S.settings.credits} credits left</span></div>`:""}`}</div>
+  <div class="panel"><h3>Tracking</h3><div class="grid2">
+    <div class="field"><label for="d-st">Status</label><select id="d-st" ${canEdit?"":"disabled"}>${Object.entries(STATUS_C).map(([k,v])=>`<option value="${k}" ${c.status===k?"selected":""}>${v}</option>`).join("")}</select></div>
+    <div class="field"><label>HM decision</label><span class="dec">${[["yes","Yes","y"],["maybe","Maybe","m"],["no","No","n"]].map(([k,l,cl])=>`<button data-hm="${c.id}:${k}" class="${c.hm===k?cl:""}" ${canEdit?"":"disabled"}>${l}</button>`).join("")}</span></div>
+    <div class="field"><label>Date contacted</label><span class="num">${fmt(c.contacted)}</span></div><div class="field"><label for="d-fu">Follow-up date</label><input id="d-fu" type="date" value="${c.followUp}" ${canEdit?"":"disabled"}></div></div>
+    <div class="field"><label for="d-cm">HM comment</label><textarea id="d-cm" ${canEdit?"":"disabled"}>${esc(c.hmComment)}</textarea></div>
+    ${canEdit?`<div class="row"><button class="btn primary" id="saveCand">Save</button></div>`:""}</div>
+  ${c.top?(c.email?`<div class="panel"><h3>Outreach · Email · ${OUT[c.outreach][0]}</h3><p class="small muted" style="margin:0">Subject: ${esc(fill(S.template.subject,c,r))}</p><div class="msg">${esc(fill(S.template.body,c,r))}</div></div>`
+    :`<div class="panel"><h3>Outreach · LinkedIn · ${OUT[c.outreach][0]}</h3><div class="msg">${esc(fill(S.liTemplate,c,r))}</div><p class="small muted" style="margin:0">${fill(S.liTemplate,c,r).length} / 300 characters · connection note, sent by Claude in Chrome after you approve</p>${S.user==="recruiter"&&c.outreach==="noemail"?`<div class="row"><button class="btn sm primary" data-approve="${c.id}">Approve LinkedIn message</button></div>`:""}</div>`):""}
+  </aside>`;
+}
+
+function vModal(){const m=S.modal;return`<div class="modal"><div class="modal-card" role="dialog" aria-label="Sourcing"><span class="eyebrow">Approved · ${esc(m.title)}</span><h2>${m.done?"Candidates are ready":"Sourcing candidates"}</h2>
+  <ol class="steps">${m.steps.map((s,i)=>`<li class="${i<m.i?"done":i===m.i?"run":""}"><span class="dot"></span><span>${s[0]}</span><span class="mono small muted">${i<m.i?s[1]:""}</span></li>`).join("")}</ol>
+  ${m.done?`<div class="row"><button class="btn primary" data-role="${m.id}" data-closemodal>View candidates</button></div>`:`<p class="small muted" style="margin:0">In the real app this runs in the background and everyone is emailed when it's done.</p>`}</div></div>`}
+
+/* ---------- Render ---------- */
+function render(){
+  let html;
+  if(!S.user)html=vLogin();
+  else{const v={requests:vRequests,approvals:vApprovals,request:vRequest,new:vNew,roles:vRoles,role:vRole,outreach:vOutreach,settings:vSettings,notes:vNotes}[S.view]||vRequests;html=shell(v())}
+  if(S.drawer)html+=vDrawer();
+  if(S.modal)html+=vModal();
+  if(S.toast)html+=`<div class="toast" role="status">${esc(S.toast)}</div>`;
+  const fy=document.activeElement&&document.activeElement.id;
+  $("#root").innerHTML=html;
+  if(fy==="fq"){const el=$("#fq");el.focus();el.setSelectionRange(el.value.length,el.value.length)}
+}
+
+/* ---------- Actions ---------- */
+function decide(kind){
+  const r=req(S.reqId),cm=($("#dc").value||"").trim();
+  if(kind!=="approve"&&!cm){toast("Add a comment so the manager knows what to change");return}
+  if(kind==="reject"){r.status="rejected";r.events.push([TODAY,"Khalil","Rejected",cm]);notify(["manager"],`Khalil rejected ${r.title}`);toast("Request rejected. The manager has been notified.");return}
+  if(kind==="changes"){r.status="changes";r.events.push([TODAY,"Khalil","Requested changes",cm]);notify(["manager"],`Khalil requested changes on ${r.title}`);toast("Sent back to the manager with your comment");return}
+  r.status="sourcing";r.events.push([TODAY,"Khalil","Approved",cm]);
+  const steps=[["Building search brief with Claude","7 title variants"],["Searching People Data Labs + SignalHire","48 + 39 profiles"],["Merging sources, removing York Press staff","50 kept"],["Web search on top 20","34 searches"],["Scoring all 50 against the scorecard","done"],["Revealing Top-10 contacts (SignalHire)","10 credits"],["Queuing email and LinkedIn outreach","10 queued"]];
+  S.modal={id:r.id,title:r.title,steps,i:0,done:false};render();
+  const tick=()=>{S.modal.i++;if(S.modal.i>=steps.length){
+      const cs=genCandidates(r.profile,50,Number(r.id.slice(2))*7,r.id);
+      cs.filter(c=>c.top).forEach(c=>{c.outreach=c.email?"queued":"noemail";c.contactDate=TODAY});S.settings.credits-=10;
+      S.candidates[r.id]=cs;r.status="open";r.runs.push({date:TODAY,kind:"Initial",found:71,kept:50,newC:0,pdl:71,searches:34,tin:"251k",tout:"43k"});
+      r.events.push([TODAY,"System","Sourcing run finished","50 screened, Top 10 flagged"]);
+      notify(["recruiter","hm","ceo"],`${r.title}: 50 candidates screened, Top 10 ready`);notify(["manager"],`Khalil approved ${r.title}`);
+      S.modal.done=true;render();return}
+    render();setTimeout(tick,650)};
+  setTimeout(tick,650);
+}
+
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-signin],[data-go],[data-req],[data-role],[data-edit],[data-decide],[data-tab],[data-hm],[data-approve],[data-cand],[data-close],[data-cancel],#rerun,#rescore,#drain,#saveTpl,#readAll,#saveCand,#revealBtn");
+  if(!t)return;
+  const d=t.dataset;
+  if(d.signin)return signIn(d.signin);
+  if(d.closemodal!==undefined)S.modal=null;
+  if(d.go)return go(d.go,{editId:null});
+  if(d.req)return go("request",{reqId:d.req});
+  if(d.role)return go("role",{roleId:d.role,roleTab:"top",filters:{q:"",status:"",min:0}});
+  if(d.edit)return go("new",{editId:d.edit});
+  if(d.decide)return decide(d.decide);
+  if(d.tab){S.roleTab=d.tab;return render()}
+  if(d.hm){e.stopPropagation();const [id,k]=d.hm.split(/:(?=[a-z]+$)/);const rid=id.split(/-(?=\d+$)/)[0];const c=S.candidates[rid].find(x=>x.id===id);c.hm=c.hm===k?"":k;render();return}
+  if(d.approve){e.stopPropagation();const rid=d.approve.split(/-(?=\d+$)/)[0];const c=S.candidates[rid].find(x=>x.id===d.approve);c.outreach="approved";toast(`Approved. Claude in Chrome will send ${c.first}'s LinkedIn message in your next Cowork session.`);return}
+  if(t.id==="revealBtn"){const rid=S.drawer.split(/-(?=\d+$)/)[0],c=S.candidates[rid].find(x=>x.id===S.drawer);reveal(c,TODAY);S.settings.credits--;toast(c.email?`Contact revealed for ${c.name} (1 credit)`:`SignalHire found no contact for ${c.name}`);return}
+  if(d.cancel){e.stopPropagation();const rid=d.cancel.split(/-(?=\d+$)/)[0];S.candidates[rid].find(x=>x.id===d.cancel).outreach="cancelled";toast("Message cancelled. It won't be sent.");return}
+  if(d.cand){if(e.target.closest("[data-stop]"))return;S.drawer=d.cand;return render()}
+  if(d.close!==undefined){S.drawer=null;return render()}
+  if(t.id==="saveCand"){const rid=S.drawer.split(/-(?=\d+$)/)[0],c=S.candidates[rid].find(x=>x.id===S.drawer);c.status=$("#d-st").value;c.followUp=$("#d-fu").value;c.hmComment=$("#d-cm").value;S.drawer=null;toast(`Saved ${c.name}`);return}
+  if(t.id==="drain"){let n=0;Object.values(S.candidates).flat().forEach(c=>{if(c.outreach==="queued"&&S.settings.sentToday<S.settings.cap){c.outreach="sent";c.status="contacted";c.contacted=TODAY;c.followUp="2026-11-03";S.settings.sentToday++;n++}});toast(n?`${n} emails sent from abed.amouneh@york-press.com`:"Daily cap reached. The rest will go tomorrow.");return}
+  if(t.id==="saveTpl"){S.template.subject=$("#ts").value;S.template.body=$("#tb").value;toast("Template saved");return}
+  if(t.id==="readAll"){myNotes().forEach(n=>n.read=true);return render()}
+  if(t.id==="rescore"){toast("Re-scoring 50 candidates with the new weights");return}
+  if(t.id==="rerun"){const r=req(S.roleId),cs=S.candidates[r.id],add=genCandidates(r.profile,3,Date.now()%9999,r.id+"N").map((c,i)=>Object.assign(c,{id:r.id+"-"+(cs.length+i+1)}));
+    const tenth=cs.filter(c=>c.top).at(-1).score;add[0].score=Math.max(add[0].score,tenth+3);add.forEach(c=>{c.newContender=c.score>tenth;c.revealed=false;c.contactSource="";c.contactDate=""});
+    const all=cs.concat(add).sort((a,b)=>b.score-a.score);all.forEach((c,i)=>{c.rank=i+1;c.top=i<10;if(c.top&&c.outreach==="none"){if(!c.revealed){reveal(c,TODAY);S.settings.credits--}c.outreach=c.email?"queued":"noemail"}});
+    S.candidates[r.id]=all;r.runs.push({date:TODAY,kind:"Weekly",found:9,kept:3,newC:add.filter(c=>c.newContender).length,pdl:9,searches:6,tin:"31k",tout:"6k"});
+    notify(["recruiter","hm"],`${r.title}: weekly refresh added 3 new profiles, ${add.filter(c=>c.newContender).length} beat the current #10`);toast("Weekly refresh done: 3 new profiles, flagged as New contender where they beat #10");return}
+});
+document.addEventListener("change",e=>{
+  const t=e.target;
+  if(t.id==="who")return signIn(t.value);
+  if(t.id==="fs"){S.filters.status=t.value;render()}
+  if(t.id==="fm"){S.filters.min=Number(t.value);render()}
+  if(t.id==="ks"){S.settings.autoSend=t.checked;toast(t.checked?"Automatic sending is on":"Automatic sending paused for everyone")}
+  if(t.id==="cap"){S.settings.cap=Math.max(1,Number(t.value)||30);toast(`Daily cap set to ${S.settings.cap}`)}
+});
+document.addEventListener("input",e=>{
+  const t=e.target;
+  if(t.id==="fq"){S.filters.q=t.value;render()}
+  if(t.dataset.w){S.settings.weights[t.dataset.w]=Number(t.value);t.nextElementSibling.textContent=t.value;
+    const tot=Object.values(S.settings.weights).reduce((a,b)=>a+b,0),el=$("#wtot");el.textContent=tot+" / 100";el.style.color=tot===100?"var(--good)":"var(--bad)";const rb=$("#rescore");if(rb)rb.disabled=tot!==100}
+});
+document.addEventListener("submit",e=>{
+  e.preventDefault();
+  if(e.target.id==="loginForm")return signIn("recruiter");
+  if(e.target.id==="reqForm"){
+    const g=id=>$("#"+id).value.trim(),lines=id=>g(id).split("\n").map(s=>s.trim()).filter(Boolean);
+    const profile=g("f-dept")==="Finance"?"finance":g("f-dept")==="Editorial"?"editorial":"design";
+    const data={title:g("f-title")||"Untitled role",dept:g("f-dept"),profile,seniority:g("f-sen"),headcount:Number(g("f-hc"))||1,start:g("f-start"),kind:g("f-kind"),jd:g("f-jd"),must:lines("f-must"),nice:lines("f-nice"),deal:lines("f-deal"),minYears:Number(g("f-min"))||0,idealYears:Number(g("f-ideal"))||0,languages:g("f-lang"),location:g("f-loc"),tz:g("f-tz"),salary:g("f-sal"),justification:g("f-just"),hmName:g("f-hm")};
+    let r;
+    if(S.editId){r=req(S.editId);Object.assign(r,data);r.status="submitted";r.events.push([TODAY,"Department manager","Resubmitted","Updated after Khalil's comment"])}
+    else{r=Object.assign({id:"R-"+(107+S.requests.length-4),requester:"manager",status:"submitted",events:[[TODAY,"Department manager","Submitted",""]],runs:[]},data);S.requests.unshift(r)}
+    notify(["ceo"],`New request awaiting approval: ${r.title}`);
+    S.editId=null;go("request",{reqId:r.id});toast("Submitted. Khalil has been notified by email and in the app.");
+  }
+});
+render();
+</script>
