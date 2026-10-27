@@ -4,10 +4,14 @@ import { api } from "@/lib/api";
 import { cn, fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select, Textarea } from "@/components/ui/form";
-import { Badge, Card, CardContent, CardHeader, CardTitle, Spinner, Switch, Table, Tabs, TabsContent, TabsList, TabsTrigger, Td, Th } from "@/components/ui/misc";
-import { useToast } from "@/components/ui/toast";
 import { CRITERIA, DEFAULT_WEIGHTS, DEPARTMENTS, type Weights } from "../../shared/types";
+import { Badge, DataTable, Field, Select, Spinner, Td, Th, useToast } from "@/components/kit";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 
 type SettingsData = {
   settings: { autoSendEnabled: boolean; dailySendCap: number; signalhireRevealEnabled: boolean; webSearchEnabled: boolean; weeklySummaryEnabled: boolean; defaultWeights: Weights | null; signalhireCreditsLeft: number | null };
@@ -180,15 +184,15 @@ function Suppression() {
     <div className="grid gap-4">
       <p className="text-sm text-muted-foreground">People on this list are never contacted again. Current York Press employees are always excluded from searches.</p>
       <div className="flex max-w-md gap-2"><Input placeholder="email@example.com" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Email to block" /><Button onClick={add} disabled={!email}>Add</Button></div>
-      <Table>
-        <thead><tr><Th>Email / LinkedIn</Th><Th>Reason</Th><Th>Added</Th><Th /></tr></thead>
-        <tbody>
+      <DataTable>
+        <TableHeader><TableRow><Th>Email / LinkedIn</Th><Th>Reason</Th><Th>Added</Th><Th /></TableRow></TableHeader>
+        <TableBody>
           {q.data?.entries.map((e) => (
-            <tr key={e.id}><Td className="font-mono text-xs">{e.email ?? e.linkedinUrl}</Td><Td>{e.reason.replace("_", " ")}</Td><Td className="num text-xs">{fmtDateTime(e.createdAt)}</Td><Td><Button size="sm" variant="ghost" onClick={() => remove(e.id)}>Remove</Button></Td></tr>
+            <TableRow key={e.id}><Td className="font-mono text-xs">{e.email ?? e.linkedinUrl}</Td><Td>{e.reason.replace("_", " ")}</Td><Td className="num text-xs">{fmtDateTime(e.createdAt)}</Td><Td><Button size="sm" variant="ghost" onClick={() => remove(e.id)}>Remove</Button></Td></TableRow>
           ))}
-          {!q.data?.entries.length && <tr><Td colSpan={4} className="text-center text-muted-foreground">Nobody on the list.</Td></tr>}
-        </tbody>
-      </Table>
+          {!q.data?.entries.length && <TableRow><Td colSpan={4} className="text-center text-muted-foreground">Nobody on the list.</Td></TableRow>}
+        </TableBody>
+      </DataTable>
     </div>
   );
 }
@@ -209,14 +213,14 @@ function Usage() {
         ))}
         {!q.data.byProvider.some((p) => !p.mock) && <p className="text-sm text-muted-foreground sm:col-span-4">No paid usage yet. Everything so far ran in mock mode.</p>}
       </div>
-      <Table>
-        <thead><tr><Th>Run</Th><Th>Role</Th><Th>Status</Th><Th>PDL records</Th><Th>SignalHire credits</Th><Th>Web searches</Th></tr></thead>
-        <tbody>
+      <DataTable>
+        <TableHeader><TableRow><Th>Run</Th><Th>Role</Th><Th>Status</Th><Th>PDL records</Th><Th>SignalHire credits</Th><Th>Web searches</Th></TableRow></TableHeader>
+        <TableBody>
           {q.data.runs.map((r) => (
-            <tr key={r.id}><Td className="num text-xs">{fmtDateTime(r.createdAt)} · {r.kind}</Td><Td>{r.title}</Td><Td><Badge>{r.status}</Badge></Td><Td className="num">{r.pdlRecords}</Td><Td className="num">{r.signalhireCredits}</Td><Td className="num">{r.webSearches}</Td></tr>
+            <TableRow key={r.id}><Td className="num text-xs">{fmtDateTime(r.createdAt)} · {r.kind}</Td><Td>{r.title}</Td><Td><Badge>{r.status}</Badge></Td><Td className="num">{r.pdlRecords}</Td><Td className="num">{r.signalhireCredits}</Td><Td className="num">{r.webSearches}</Td></TableRow>
           ))}
-        </tbody>
-      </Table>
+        </TableBody>
+      </DataTable>
     </div>
   );
 }
