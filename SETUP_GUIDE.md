@@ -80,6 +80,10 @@ CVs that candidates upload are kept in a **private** Vercel Blob store, not in t
 
 Without the token (on your Mac), CVs stay in the local database.
 
+### Scoring quality check (optional, a few cents a week)
+
+The repo has a test set of fictional candidates with the scores a good recruiter would expect. To have GitHub check Claude's scoring every Monday and whenever the scoring prompts change, add your Anthropic key as a secret: **GitHub repo → Settings → Secrets and variables → Actions → New repository secret**, name `ANTHROPIC_API_KEY`. Results appear under the **Actions** tab as "Scoring eval".
+
 ### Reliable sourcing runs (Upstash QStash, free plan is enough)
 
 A sourcing run takes several minutes and is split into slices. QStash hands each slice to the app and retries automatically if one fails or times out, so a run never silently stops halfway.

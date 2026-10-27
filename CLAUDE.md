@@ -30,6 +30,7 @@ npm install --include=dev          # same reason: otherwise npm skips devDepende
 npm run check                      # lint + typecheck + unit tests + smoke: run before every push
 npm test                           # Vitest unit tests (tests/unit)
 npm run test:e2e                   # Playwright browser tests (tests/e2e) on a seeded demo database, ports 5174/3002
+npm run eval:scoring               # scoring test set against the real Claude API (needs ANTHROPIC_API_KEY)
 npm run build                      # typecheck both sides + Vite build
 npm run db:generate                # after any change to server/db/schema.ts; commit the migration
 ```
@@ -55,6 +56,10 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   and must not contain per-candidate data, or the cache stops hitting. Weekly refreshes score via
   the Message Batches API (half price) when QStash is on; first runs and manual refreshes score
   directly so results come quickly. Usage logs record cache reads and writes.
+- `evals/scoring/`: the scoring test set (fictional roles and candidates plus expected outcomes:
+  score bands, rankings, deal-breakers, fairness pairs, prompt injection, red flags). Run
+  `npm run eval:scoring` after any prompt or model change; `.github/workflows/eval.yml` runs it
+  weekly and on PRs that touch the prompts. Add a case whenever a real scoring mistake is found.
 - `server/services/providers/`: PDL and SignalHire clients plus fictional mock data.
 - `server/routes/`: public (setup, auth, apply page, SignalHire webhook, cron), requests,
   candidates, outreach, admin. Permission checks live in `routes/access.ts`.
