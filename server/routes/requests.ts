@@ -4,40 +4,13 @@ import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, randomToken, requireRole, type AppEnv, type SessionUser } from "../auth.js";
-import { CRITERIA, CURRENCIES, type Weights } from "../../shared/types.js";
+import { CRITERIA, type Weights } from "../../shared/types.js";
+import { DecisionInput, RequestFields, RequestInput, WeightsInput } from "../../shared/schemas.js";
 import { isStaff, loadRequest } from "./access.js";
 import { notifyRoles, notifyUsers } from "../services/notify.js";
 import { startRun } from "../services/pipeline.js";
 
 export const requestRoutes = new Hono<AppEnv>();
-
-const list = z.array(z.string().trim().min(1)).default([]);
-const RequestInput = z.object({
-  title: z.string().trim().min(2, "Add a job title."),
-  department: z.string().trim().min(1),
-  seniority: z.string().trim().min(1),
-  headcount: z.coerce.number().int().min(1).max(50).default(1),
-  startDate: z.string().nullable().optional(),
-  kind: z.enum(["new", "backfill"]).default("new"),
-  jdText: z.string().default(""),
-  mustHaves: list,
-  niceToHaves: list,
-  dealBreakers: list,
-  minYears: z.coerce.number().int().min(0).max(40).nullable().optional(),
-  idealYears: z.coerce.number().int().min(0).max(40).nullable().optional(),
-  languages: list,
-  locationPolicy: z.string().trim().default("Remote, global"),
-  searchLocations: list,
-  timeZone: z.string().nullable().optional(),
-  salaryMin: z.coerce.number().int().min(0).nullable().optional(),
-  salaryMax: z.coerce.number().int().min(0).nullable().optional(),
-  currency: z.enum(CURRENCIES).nullable().optional(),
-  salaryPeriod: z.enum(["year", "month"]).default("year"),
-  justification: z.string().default(""),
-  targetCompanies: list,
-  avoidCompanies: list,
-  hiringManagerId: z.string().uuid().nullable().optional(),
-});
 
 async function event(requestId: string, user: SessionUser | null, action: string, comment?: string | null) {
   const db = await getDb();
@@ -129,7 +102,7 @@ requestRoutes.patch("/requests/:id", async (c) => {
   const r = await loadRequest(c.req.param("id"), user);
   const editable = (r.requesterId === user.id && ["draft", "changes_requested"].includes(r.status)) || hasRole(user, "admin", "recruiter");
   if (!editable) throw new HTTPException(403, { message: "This request can't be edited now." });
-  const input = RequestInput.partial().parse(await c.req.json());
+  const input = RequestFields.partial().parse(await c.req.json());
   const db = await getDb();
   await db.update(schema.roleRequests).set({ ...input, updatedAt: new Date() }).where(eq(schema.roleRequests.id, r.id));
   await event(r.id, user, "edited");
@@ -160,9 +133,8 @@ requestRoutes.post("/requests/:id/submit", async (c) => {
 requestRoutes.post("/requests/:id/decision", async (c) => {
   const user = requireRole(c, "ceo");
   const r = await loadRequest(c.req.param("id"), user);
-  const { action, comment } = z.object({ action: z.enum(["approve", "reject", "request_changes"]), comment: z.string().trim().optional() }).parse(await c.req.json());
+  const { action, comment } = DecisionInput.parse(await c.req.json());
   if (r.status !== "submitted") throw new HTTPException(400, { message: "This request isn't waiting for a decision." });
-  if (action !== "approve" && !comment) throw new HTTPException(400, { message: "Add a comment so the manager knows why." });
   const db = await getDb();
   const status = action === "approve" ? "sourcing" : action === "reject" ? "rejected" : "changes_requested";
   await db.update(schema.roleRequests).set({ status, decidedAt: new Date(), updatedAt: new Date() }).where(eq(schema.roleRequests.id, r.id));
@@ -201,9 +173,7 @@ requestRoutes.get("/requests/:id/runs", async (c) => {
 requestRoutes.patch("/requests/:id/weights", async (c) => {
   const user = requireRole(c, "recruiter", "admin");
   const r = await loadRequest(c.req.param("id"), user);
-  const weights = z.object(Object.fromEntries(CRITERIA.map((k) => [k.key, z.number().int().min(0).max(100)]))).parse(await c.req.json()) as Weights;
-  const total = Object.values(weights).reduce((a, b) => a + b, 0);
-  if (total !== 100) throw new HTTPException(400, { message: `Weights must add up to 100 (now ${total}).` });
+  const weights: Weights = WeightsInput.parse(await c.req.json());
   const db = await getDb();
   await db.update(schema.roleRequests).set({ scorecardWeights: weights }).where(eq(schema.roleRequests.id, r.id));
   // Re-score everyone with the new weights by re-weighting their stored breakdown proportionally.
