@@ -67,6 +67,11 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   source and retrieval date. Opt-outs and closed roles can delete emails and phones.
 - **Secrets** live only in Vercel environment variables or a local `.env` (gitignored).
 - Permissions are enforced on the server for every route, not only hidden in the UI.
+- **Security** (`server/security.ts`, `server/services/rate-limit.ts`): state-changing requests
+  must come from our own origin (webhooks, cron and internal calls use their own secrets instead).
+  Sign-in, invite and CV upload are rate limited in Postgres. Page headers and the CSP live in
+  `vercel.json`: a new third-party script or API host must be added to the CSP there.
+  500 errors never show internal messages in production.
 
 ## GIT WORKFLOW
 
