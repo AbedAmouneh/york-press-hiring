@@ -5,8 +5,9 @@ import { api } from "@/lib/api";
 import { fmtDate } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { Badge, Card, EmptyState, Spinner, Table, Td, Th } from "@/components/ui/misc";
-import { useToast } from "@/components/ui/toast";
+import { Badge, DataTable, EmptyState, Spinner, Td, Th, useToast } from "@/components/kit";
+import { Card } from "@/components/ui/card";
+import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 
 export type Msg = {
   id: string; channel: "email" | "linkedin"; status: string; toAddress: string; subject: string | null; body: string; queuedAt: string; sentAt: string | null;
@@ -43,11 +44,11 @@ export default function Outreach() {
         <Card className="mb-4 border-destructive bg-red-50 px-4 py-3 text-sm font-medium text-destructive">Automatic sending is paused. Queued emails wait until you turn it back on in <Link to="/settings" className="underline">Settings</Link>.</Card>
       )}
       {q.isLoading ? <Spinner /> : msgs.length ? (
-        <Table>
-          <thead><tr><Th>Candidate</Th><Th>Role</Th><Th>To</Th><Th>Status</Th><Th>Sent</Th><Th>Follow up</Th><Th /></tr></thead>
-          <tbody>
+        <DataTable>
+          <TableHeader><TableRow><Th>Candidate</Th><Th>Role</Th><Th>To</Th><Th>Status</Th><Th>Sent</Th><Th>Follow up</Th><Th /></TableRow></TableHeader>
+          <TableBody>
             {msgs.map((m) => (
-              <tr key={m.id}>
+              <TableRow key={m.id}>
                 <Td><div className="font-medium">{m.candidateName}</div><div className="text-xs text-muted-foreground">#{m.rank ?? "—"} · score {m.score ?? "—"}</div></Td>
                 <Td><Link className="hover:underline" to={`/roles/${m.requestId}`}>{m.roleTitle}</Link></Td>
                 <Td className="font-mono text-xs">{m.toAddress}</Td>
@@ -55,10 +56,10 @@ export default function Outreach() {
                 <Td className="num text-xs">{fmtDate(m.sentAt)}</Td>
                 <Td className="num text-xs">{fmtDate(m.followUpDate)}</Td>
                 <Td>{m.status === "queued" && <Button size="sm" variant="ghost" onClick={() => cancel(m.id)}>Cancel</Button>}</Td>
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
-        </Table>
+          </TableBody>
+        </DataTable>
       ) : <EmptyState title="No emails yet">Top-10 candidates with an email address are contacted automatically after each sourcing run.</EmptyState>}
     </>
   );
