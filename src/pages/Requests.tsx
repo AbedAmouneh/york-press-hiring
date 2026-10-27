@@ -8,7 +8,8 @@ import { fmtDate, money } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { RequestStatusBadge } from "@/components/Status";
 import { Button } from "@/components/ui/button";
-import { Card, EmptyState, Spinner } from "@/components/ui/misc";
+import { EmptyState, Spinner } from "@/components/kit";
+import { Card } from "@/components/ui/card";
 
 export function RequestCard({ r }: { r: RequestRow }) {
   const comment = r.lastEvent?.comment && ["Requested changes", "Rejected"].includes(r.lastEvent.action) ? r.lastEvent : null;
