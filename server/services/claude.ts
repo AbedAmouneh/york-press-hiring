@@ -246,6 +246,41 @@ export async function scoreBatch(r: Req, weights: Weights, items: CandidateForAI
   return readScores(res);
 }
 
+// ---------------------------------------------------------------- Batch scoring (half price, results within 24 h)
+
+/** Submit scoring requests as one Message Batch. Each chunk's custom_id maps back to its candidates. */
+export async function submitScoreBatch(r: Req, weights: Weights, chunks: { id: string; items: CandidateForAI[] }[]) {
+  const batch = await ai().messages.batches.create({
+    requests: chunks.map((c) => ({ custom_id: c.id, params: scoreParams(r, weights, c.items) })),
+  });
+  return batch.id;
+}
+
+export type BatchOutcome =
+  | { status: "processing" }
+  | { status: "ended"; results: Map<string, ScoreResult[] | null> };
+
+/** Check a scoring batch. Failed or expired chunks come back as null so they can be scored directly. */
+export async function collectScoreBatch(batchId: string, runId?: string | null): Promise<BatchOutcome> {
+  const batch = await ai().messages.batches.retrieve(batchId);
+  if (batch.processing_status !== "ended") return { status: "processing" };
+  const results = new Map<string, ScoreResult[] | null>();
+  for await (const item of await ai().messages.batches.results(batchId)) {
+    if (item.result.type !== "succeeded") {
+      results.set(item.custom_id, null);
+      continue;
+    }
+    const msg = item.result.message;
+    await logUsage({ runId: runId ?? null, provider: "claude", action: "score_batch", units: 1, ...usageOf(msg.usage) });
+    try {
+      results.set(item.custom_id, readScores(msg));
+    } catch {
+      results.set(item.custom_id, null);
+    }
+  }
+  return { status: "ended", results };
+}
+
 /** Sum the breakdown, clamp each criterion to its weight, cap at 40 when a deal-breaker is missing. */
 export function totalScore(breakdown: ScoreBreakdown, weights: Weights, dealBreakerMissing: boolean) {
   const clean: ScoreBreakdown = {};
