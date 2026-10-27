@@ -28,16 +28,19 @@ app.onError((err, c) => {
   return c.json({ error: !env.isProd && err instanceof Error ? err.message : "Something went wrong. Please try again." }, 500);
 });
 
-app.route("/", publicRoutes);
+const authed = new Hono<AppEnv>()
+  .use("*", requireAuth)
+  .route("/", requestRoutes)
+  .route("/", candidateRoutes)
+  .route("/", outreachRoutes)
+  .route("/", adminRoutes);
 
-const authed = new Hono<AppEnv>();
-authed.use("*", requireAuth);
-authed.route("/", requestRoutes);
-authed.route("/", candidateRoutes);
-authed.route("/", outreachRoutes);
-authed.route("/", adminRoutes);
-app.route("/", authed);
+// Public routes first: their handlers answer before the sign-in check on `authed` runs.
+export const routes = app.route("/", publicRoutes).route("/", authed);
 
 app.notFound((c) => c.json({ error: "Not found." }, 404));
+
+/** Every API route with its input and output types, used by the typed browser client in src/lib/rpc.ts. */
+export type AppType = typeof routes;
 
 export default app;
