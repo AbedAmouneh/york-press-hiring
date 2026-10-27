@@ -48,6 +48,19 @@ export const adminRoutes = new Hono<AppEnv>()
     const { link } = await inviteUser({ email: u.email, name: u.name, roles: u.roles as (typeof ROLES)[number][], department: u.department }, admin.name);
     return c.json({ ok: true, inviteLink: mock.email ? link : undefined });
   })
+  /** For a lost phone: clears two-step login so the person sets it up again at next sign-in. */
+  .post("/users/:id/two-factor/reset", async (c) => {
+    const admin = requireRole(c, "admin");
+    if (c.req.param("id") === admin.id) throw new HTTPException(400, { message: "Ask another admin to reset your two-step login, or use a recovery code." });
+    const db = await getDb();
+    const [u] = await db.update(schema.users)
+      .set({ totpSecret: null, totpPendingSecret: null, totpEnabledAt: null, totpLastStep: null, recoveryCodes: [] })
+      .where(eq(schema.users.id, c.req.param("id")))
+      .returning();
+    if (!u) throw new HTTPException(404, { message: "User not found." });
+    await db.delete(schema.sessions).where(eq(schema.sessions.userId, u.id));
+    return c.json({ user: publicUser(u) });
+  })
   // ---------------------------------------------------------------- settings + integrations
   .get("/settings", async (c) => {
     requireRole(c, "recruiter", "admin", "ceo");
