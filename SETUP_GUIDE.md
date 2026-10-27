@@ -32,7 +32,7 @@ The code lives at **https://github.com/AbedAmouneh/york-press-hiring**. The loca
 1. In your Vercel project: **Storage → Create Database → Neon (Postgres)** → Continue → choose the free plan and a region close to you (e.g. Frankfurt).
 2. Connect it to the project. Vercel adds `DATABASE_URL` automatically.
 3. Go to **Settings → Environment Variables** and add `APP_URL` = your site address, e.g. `https://york-press-hiring.vercel.app` (no slash at the end).
-4. **Deployments → … → Redeploy.**
+4. **Deployments → … → Redeploy.** Each deployment sets up or updates the database tables before the new version goes live, so there's nothing to run by hand.
 
 ## Step 4 — First sign-in
 
@@ -130,6 +130,7 @@ Open http://localhost:5173. Data is stored in the `.data` folder.
 | You see | Do this |
 |---|---|
 | "DATABASE_URL is not set" | Step 3: add the Neon database and redeploy |
+| A deployment fails with "Migration failed" | The database update didn't apply, so the previous version stays live and nothing is lost. Send me the build log |
 | Candidates never appear | Role page → *Runs & cost* shows the error. Check the API key in Settings → Connections |
 | Emails stay "queued" | Settings → the kill switch may be off, or today's cap is reached |
 | Contacts stay "Waiting for SignalHire" | Check `APP_URL` is the live https address; SignalHire also emails you about failed deliveries |

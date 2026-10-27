@@ -41,7 +41,10 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 ## Code map
 
 - `shared/types.ts`: roles, statuses, scorecard criteria. Shared by app and server.
-- `server/db/schema.ts`: all tables. Migrations in `server/db/migrations/` apply on cold start.
+- `server/db/schema.ts`: all tables. Migrations in `server/db/migrations/` are applied by
+  `npm run db:migrate` in the Vercel build (`scripts/migrate.ts`), never on a function cold start.
+  Locally the built-in database still migrates itself on start. Migrations must be additive or
+  backwards compatible: the old version keeps serving until the new build goes live.
 - `server/services/pipeline.ts`: resumable sourcing run (brief, search, enrich, score, rank,
   reveal, outreach). Each step is saved so a run can continue after Vercel's 300 s limit.
 - `server/services/claude.ts`: every Claude call, with mock heuristics when no key is set.
