@@ -39,6 +39,13 @@ describe("run queue", () => {
     expect(queueEnabled()).toBe(false);
   });
 
+  it("is off on pull-request previews, which sit behind Vercel login", async () => {
+    live();
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", "york-press-hiring-abc123.vercel.app");
+    expect(queueEnabled()).toBe(false);
+  });
+
   it("publishes the run to our queue endpoint with retries", async () => {
     live();
     expect(await enqueueRun("r1", { delaySeconds: 30 })).toBe(true);
