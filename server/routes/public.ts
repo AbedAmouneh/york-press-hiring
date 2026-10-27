@@ -70,7 +70,7 @@ export const publicRoutes = new Hono()
   })
   .get("/auth/me", async (c) => {
     const u = await currentUser(c);
-    return c.json({ user: u ? publicUser(u) : null, demoMode: env.demoMode, demoPassword: env.demoMode ? DEMO_PASSWORD : undefined });
+    return c.json({ user: u ? publicUser(u) : null, demoMode: env.demoMode, demoPassword: env.demoMode ? DEMO_PASSWORD : undefined, preview: env.isPreview });
   })
   .get("/auth/invite/:token", async (c) => {
     const db = await getDb();
