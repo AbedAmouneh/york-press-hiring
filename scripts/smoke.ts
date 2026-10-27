@@ -74,5 +74,22 @@ const weekly = await admin("POST", `/requests/${id}/runs`);
 ok(weekly.runId, "manual refresh started");
 await new Promise((r) => setTimeout(r, 4000));
 ok((await admin("GET", "/outbox")).emails.length > 0, "emails captured in the mock outbox");
+
+// ---------------------------------------------------------------- security
+const raw = (method: string, url: string, body?: unknown, headers: Record<string, string> = {}) =>
+  app.fetch(new Request(`http://localhost/api${url}`, {
+    method,
+    headers: { "Content-Type": "application/json", "x-real-ip": "203.0.113.9", ...headers },
+    body: body ? JSON.stringify(body) : undefined,
+  }));
+const health = await raw("GET", "/health");
+ok(health.headers.get("x-frame-options") === "DENY" && health.headers.get("cache-control") === "no-store", "API responses carry security headers");
+ok((await raw("POST", "/auth/login", { email: "demo.ceo@york-press.test", password: "demo-york-2026" }, { origin: "https://evil.example" })).status === 403, "cross-site sign-in is blocked");
+ok((await raw("POST", "/auth/login", { email: "demo.ceo@york-press.test", password: "x" }, { "sec-fetch-site": "cross-site" })).status === 403, "Sec-Fetch-Site cross-site is blocked");
+for (let i = 0; i < 5; i++) await raw("POST", "/auth/login", { email: "demo.ceo@york-press.test", password: `wrong-${i}` });
+const locked = await raw("POST", "/auth/login", { email: "demo.ceo@york-press.test", password: "demo-york-2026" });
+ok(locked.status === 429, "sign-in locks after 5 failed attempts, even with the right password");
+ok((await raw("POST", "/auth/login", { email: "demo.recruiter@york-press.test", password: "demo-york-2026" })).status === 200, "other accounts can still sign in");
+ok((await raw("POST", "/setup", { adminName: "X Y", adminEmail: "x@y.test", adminPassword: "a-long-password", ceoName: "C D", ceoEmail: "c@d.test" })).status === 409, "setup can't run twice");
 console.log("\nAll smoke checks passed.");
 process.exit(0);
