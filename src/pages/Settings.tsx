@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { cn, fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { CRITERIA, DEFAULT_WEIGHTS, DEPARTMENTS, type Weights } from "../../shared/types";
-import { Badge, DataTable, Field, Select, Spinner, Td, Th, useToast } from "@/components/kit";
+import { LINKEDIN_NOTE_MAX, TemplateInput } from "../../shared/schemas";
+import { Badge, DataTable, Field, FormError, Select, Spinner, Td, Th, useToast } from "@/components/kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -106,19 +109,9 @@ function Templates() {
   const toast = useToast();
   const q = useQuery({ queryKey: ["templates"], queryFn: () => api<{ templates: Template[]; placeholders: string[] }>("/templates") });
   const [sel, setSel] = useState<string>("");
-  const [draft, setDraft] = useState<Template | null>(null);
-  useEffect(() => {
-    const t = q.data?.templates.find((x) => x.id === sel) ?? q.data?.templates[0];
-    if (t) { setSel(t.id); setDraft(t); }
-  }, [q.data, sel]);
-  if (!q.data || !draft) return <Spinner />;
-  async function save() {
-    try {
-      await api(`/templates/${draft!.id}`, { method: "PATCH", body: { name: draft!.name, subject: draft!.subject, body: draft!.body, department: draft!.department, active: draft!.active } });
-      toast("Template saved.");
-      qc.invalidateQueries({ queryKey: ["templates"] });
-    } catch (e) { toast((e as Error).message, "error"); }
-  }
+  if (!q.data) return <Spinner />;
+  const current = q.data.templates.find((x) => x.id === sel) ?? q.data.templates[0];
+  if (!current) return <Spinner />;
   async function addForDept(dept: string, channel: "email" | "linkedin") {
     const base = q.data!.templates.find((t) => t.channel === channel && !t.department)!;
     const res = await api<{ template: Template }>("/templates", { body: { name: `${dept} ${channel === "email" ? "email" : "LinkedIn note"}`, department: dept, channel, subject: base.subject, body: base.body } });
@@ -130,7 +123,7 @@ function Templates() {
     <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
       <Card className="h-fit p-2">
         {q.data.templates.map((t) => (
-          <button key={t.id} onClick={() => setSel(t.id)} className={cn("flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm hover:bg-secondary", t.id === sel && "bg-secondary font-semibold")}>
+          <button key={t.id} onClick={() => setSel(t.id)} className={cn("flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm hover:bg-secondary", t.id === current.id && "bg-secondary font-semibold")}>
             <span>{t.name}</span>{!t.active && <Badge>off</Badge>}
           </button>
         ))}
@@ -143,24 +136,49 @@ function Templates() {
           </div>
         )}
       </Card>
-      <Card>
-        <CardContent className="grid gap-4 pt-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Name" htmlFor="tn"><Input id="tn" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
-            <Field label="Used for" htmlFor="td"><Input id="td" value={draft.department ?? "All departments (default)"} disabled /></Field>
-          </div>
-          {draft.channel === "email" && <Field label="Subject" htmlFor="ts"><Input id="ts" value={draft.subject ?? ""} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></Field>}
-          <Field label={draft.channel === "email" ? "Email body" : "LinkedIn note (300 characters max after filling in)"} htmlFor="tb"
-            hint={`Placeholders: ${q.data.placeholders.map((p) => `{{${p}}}`).join(" ")}. Claude writes only {{personal_line}}: one sentence about a fact on the candidate's profile.`}>
-            <Textarea id="tb" rows={draft.channel === "email" ? 16 : 5} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} className="font-mono text-[13px]" />
-          </Field>
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 text-sm"><Switch checked={draft.active} onCheckedChange={(v) => setDraft({ ...draft, active: v })} /> Active</label>
-            <Button onClick={save}>Save template</Button>
-          </div>
-        </CardContent>
-      </Card>
+      <TemplateEditor key={current.id} template={current} placeholders={q.data.placeholders} onSaved={() => { toast("Template saved."); qc.invalidateQueries({ queryKey: ["templates"] }); }} />
     </div>
+  );
+}
+
+function TemplateEditor({ template, placeholders, onSaved }: { template: Template; placeholders: string[]; onSaved: () => void }) {
+  const form = useForm({
+    resolver: zodResolver(TemplateInput),
+    defaultValues: { name: template.name, department: template.department, channel: template.channel, subject: template.subject, body: template.body, active: template.active },
+  });
+  const { errors, isSubmitting } = form.formState;
+  const isEmail = template.channel === "email";
+  const save = form.handleSubmit(async (values) => {
+    try {
+      await api(`/templates/${template.id}`, { method: "PATCH", body: values });
+      onSaved();
+    } catch (e) {
+      form.setError("root", { message: (e as Error).message });
+    }
+  });
+  return (
+    <Card>
+      <CardContent className="pt-5">
+        <form onSubmit={save} className="grid gap-4" noValidate>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Name" htmlFor="tn" error={errors.name?.message}><Input id="tn" aria-invalid={!!errors.name} {...form.register("name")} /></Field>
+            <Field label="Used for" htmlFor="td"><Input id="td" value={template.department ?? "All departments (default)"} disabled readOnly /></Field>
+          </div>
+          {isEmail && <Field label="Subject" htmlFor="ts" error={errors.subject?.message}><Input id="ts" {...form.register("subject")} /></Field>}
+          <Field label={isEmail ? "Email body" : `LinkedIn note (${LINKEDIN_NOTE_MAX} characters max after filling in)`} htmlFor="tb" error={errors.body?.message}
+            hint={`Placeholders: ${placeholders.map((p) => `{{${p}}}`).join(" ")}. Claude writes only {{personal_line}}: one sentence about a fact on the candidate's profile.`}>
+            <Textarea id="tb" rows={isEmail ? 16 : 5} className="font-mono text-[13px]" aria-invalid={!!errors.body} {...form.register("body")} />
+          </Field>
+          <FormError>{errors.root?.message}</FormError>
+          <div className="flex items-center justify-between">
+            <Controller control={form.control} name="active" render={({ field }) => (
+              <label className="flex items-center gap-2 text-sm"><Switch checked={!!field.value} onCheckedChange={field.onChange} /> Active</label>
+            )} />
+            <Button type="submit" disabled={isSubmitting}>Save template</Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
