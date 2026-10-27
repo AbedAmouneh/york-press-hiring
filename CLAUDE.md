@@ -100,6 +100,11 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   Sign-in, invite and CV upload are rate limited in Postgres. Page headers and the CSP live in
   `vercel.json`: a new third-party script or API host must be added to the CSP there.
   500 errors never show internal messages in production.
+- **Two-step login** (`server/services/two-factor.ts`): required for admin and CEO (not demo
+  accounts). `requireAuth` blocks them until it's on; the setup and code routes are public and
+  check the session or the signed `yp_mfa` challenge themselves. TOTP secrets are AES-GCM
+  encrypted with `SESSION_SECRET`, codes can't be reused, recovery codes are stored hashed and
+  work once, wrong codes are rate limited.
 - **Monitoring** (`server/monitoring.ts`, `src/lib/monitoring.ts`): Sentry is off without a DSN.
   Report unexpected errors with `captureError`, passing only ids and step names as context, never
   candidate data, CV text or form values.
