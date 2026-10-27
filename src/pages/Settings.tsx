@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import type { InferRequestType } from "hono/client";
+import { call, rpc } from "@/lib/rpc";
+import type { Template } from "@/lib/types";
 import { cn, fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -16,12 +18,7 @@ import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
-type SettingsData = {
-  settings: { autoSendEnabled: boolean; dailySendCap: number; signalhireRevealEnabled: boolean; webSearchEnabled: boolean; weeklySummaryEnabled: boolean; defaultWeights: Weights | null; signalhireCreditsLeft: number | null };
-  sentToday: number;
-  integrations: { claude: { live: boolean; model: string }; pdl: { live: boolean }; signalhire: { live: boolean; creditsLeft: number | null }; email: { live: boolean; from: string }; database: { live: boolean }; appUrl: string };
-};
-type Template = { id: string; name: string; department: string | null; channel: "email" | "linkedin"; subject: string | null; body: string; active: boolean };
+type SettingsPatch = InferRequestType<typeof rpc.settings.$patch>["json"];
 
 function Live({ live }: { live: boolean }) {
   return <Badge tone={live ? "good" : "warn"} dot>{live ? "Live" : "Mock mode"}</Badge>;
@@ -36,10 +33,8 @@ function SwitchRow({ id, label, hint, checked, onChange }: { id: string; label: 
   );
 }
 
-type RetentionData = { months: number; nextRun: { cutoff: string; candidates: number; applications: number; emailLog: number; notifications: number } };
-
 function Retention() {
-  const q = useQuery({ queryKey: ["retention"], queryFn: () => api<RetentionData>("/retention") });
+  const q = useQuery({ queryKey: ["retention"], queryFn: () => call(rpc.retention.$get()) });
   const n = q.data?.nextRun;
   return (
     <Card className="lg:col-span-2">
@@ -63,16 +58,16 @@ function Retention() {
 function General() {
   const qc = useQueryClient();
   const toast = useToast();
-  const q = useQuery({ queryKey: ["settings"], queryFn: () => api<SettingsData>("/settings") });
+  const q = useQuery({ queryKey: ["settings"], queryFn: () => call(rpc.settings.$get()) });
   const [cap, setCap] = useState("");
   const [w, setW] = useState<Weights>(DEFAULT_WEIGHTS);
   useEffect(() => { if (q.data) { setCap(String(q.data.settings.dailySendCap)); setW(q.data.settings.defaultWeights ?? DEFAULT_WEIGHTS); } }, [q.data]);
   if (!q.data) return <Spinner />;
   const s = q.data.settings;
   const i = q.data.integrations;
-  async function patch(body: Record<string, unknown>, msg: string) {
+  async function patch(body: SettingsPatch, msg: string) {
     try {
-      await api("/settings", { method: "PATCH", body });
+      await call(rpc.settings.$patch({ json: body }));
       toast(msg);
       qc.invalidateQueries({ queryKey: ["settings"] });
     } catch (e) { toast((e as Error).message, "error"); }
@@ -132,14 +127,14 @@ function General() {
 function Templates() {
   const qc = useQueryClient();
   const toast = useToast();
-  const q = useQuery({ queryKey: ["templates"], queryFn: () => api<{ templates: Template[]; placeholders: string[] }>("/templates") });
+  const q = useQuery({ queryKey: ["templates"], queryFn: () => call(rpc.templates.$get()) });
   const [sel, setSel] = useState<string>("");
   if (!q.data) return <Spinner />;
   const current = q.data.templates.find((x) => x.id === sel) ?? q.data.templates[0];
   if (!current) return <Spinner />;
   async function addForDept(dept: string, channel: "email" | "linkedin") {
     const base = q.data!.templates.find((t) => t.channel === channel && !t.department)!;
-    const res = await api<{ template: Template }>("/templates", { body: { name: `${dept} ${channel === "email" ? "email" : "LinkedIn note"}`, department: dept, channel, subject: base.subject, body: base.body } });
+    const res = await call(rpc.templates.$post({ json: { name: `${dept} ${channel === "email" ? "email" : "LinkedIn note"}`, department: dept, channel, subject: base.subject, body: base.body } }));
     await qc.invalidateQueries({ queryKey: ["templates"] });
     setSel(res.template.id);
   }
@@ -166,7 +161,7 @@ function Templates() {
   );
 }
 
-function TemplateEditor({ template, placeholders, onSaved }: { template: Template; placeholders: string[]; onSaved: () => void }) {
+function TemplateEditor({ template, placeholders, onSaved }: { template: Template; placeholders: readonly string[]; onSaved: () => void }) {
   const form = useForm({
     resolver: zodResolver(TemplateInput),
     defaultValues: { name: template.name, department: template.department, channel: template.channel, subject: template.subject, body: template.body, active: template.active },
@@ -175,7 +170,7 @@ function TemplateEditor({ template, placeholders, onSaved }: { template: Templat
   const isEmail = template.channel === "email";
   const save = form.handleSubmit(async (values) => {
     try {
-      await api(`/templates/${template.id}`, { method: "PATCH", body: values });
+      await call(rpc.templates[":id"].$patch({ param: { id: template.id }, json: values }));
       onSaved();
     } catch (e) {
       form.setError("root", { message: (e as Error).message });
@@ -210,17 +205,17 @@ function TemplateEditor({ template, placeholders, onSaved }: { template: Templat
 function Suppression() {
   const qc = useQueryClient();
   const toast = useToast();
-  const q = useQuery({ queryKey: ["suppression"], queryFn: () => api<{ entries: { id: string; email: string | null; linkedinUrl: string | null; reason: string; createdAt: string }[] }>("/suppression") });
+  const q = useQuery({ queryKey: ["suppression"], queryFn: () => call(rpc.suppression.$get()) });
   const [email, setEmail] = useState("");
   async function add() {
     try {
-      await api("/suppression", { body: { email, reason: "manual" } });
+      await call(rpc.suppression.$post({ json: { email, reason: "manual" } }));
       setEmail("");
       qc.invalidateQueries({ queryKey: ["suppression"] });
     } catch (e) { toast((e as Error).message, "error"); }
   }
   async function remove(id: string) {
-    await api(`/suppression/${id}`, { method: "DELETE" });
+    await call(rpc.suppression[":id"].$delete({ param: { id } }));
     qc.invalidateQueries({ queryKey: ["suppression"] });
   }
   return (
@@ -245,7 +240,7 @@ const cacheShare = (p: { inputTokens: number; cacheReadTokens: number }) =>
   Math.round((100 * p.cacheReadTokens) / Math.max(1, p.inputTokens + p.cacheReadTokens));
 
 function Usage() {
-  const q = useQuery({ queryKey: ["usage"], queryFn: () => api<{ byProvider: { provider: string; mock: boolean; units: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; batchCalls: number; calls: number }[]; runs: { id: string; title: string; kind: string; status: string; pdlRecords: number; signalhireCredits: number; webSearches: number; createdAt: string }[] }>("/usage") });
+  const q = useQuery({ queryKey: ["usage"], queryFn: () => call(rpc.usage.$get()) });
   if (!q.data) return <Spinner />;
   const label: Record<string, string> = { claude: "Claude", pdl: "People Data Labs", signalhire: "SignalHire", resend: "Resend" };
   return (
