@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../server/db/client.js";
 import { previewRetention, retentionCutoff, runRetention } from "../../server/services/retention.js";
+import type { RequestStatus } from "../../shared/types.js";
 
 const MONTH = 30 * 864e5;
 const ago = (months: number) => new Date(Date.now() - months * MONTH);
@@ -16,7 +17,7 @@ beforeAll(async () => {
   process.env.PGLITE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "yp-retention-"));
   const db = await getDb();
   const [u] = await db.insert(schema.users).values({ email: "m@york-press.test", name: "Manager", roles: ["manager"] }).returning();
-  const role = (status: string, title: string) => ({ title, department: "Editorial", seniority: "Senior", requesterId: u.id, status, applyToken: `t-${title}` });
+  const role = (status: RequestStatus, title: string) => ({ title, department: "Editorial", seniority: "Senior", requesterId: u.id, status, applyToken: `t-${title}` });
   const [closedRole, openRole] = await db.insert(schema.roleRequests).values([role("closed", "Old editor"), role("open", "Live editor")]).returning();
   const person = (fullName: string, at: Date) => ({ fullName, firstSeenAt: at, lastRefreshedAt: at });
   const [stale, recent, inOpenRole, recentlyApplied] = await db.insert(schema.candidates).values([
