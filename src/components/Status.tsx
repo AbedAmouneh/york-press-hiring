@@ -1,5 +1,5 @@
-import { Badge, type Tone } from "./ui/misc";
 import { REQUEST_STATUS_LABELS, type CandidateStatus, type RequestStatus } from "../../shared/types";
+import { Badge, type Tone } from "@/components/kit";
 
 const REQ_TONE: Record<RequestStatus, Tone> = {
   draft: "neutral",
