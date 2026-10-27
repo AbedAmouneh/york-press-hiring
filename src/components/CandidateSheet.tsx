@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Linkedin, Mail, Phone } from "lucide-react";
+import { ExternalLink, Mail, Phone } from "lucide-react";
 import { api } from "@/lib/api";
 import type { CandidateDetail } from "@/lib/types";
 import { cn, fmtDate } from "@/lib/utils";
-import { Button } from "./ui/button";
-import { Field, Input, Select, Textarea } from "./ui/form";
-import { Badge, Card, CardContent, CardHeader, CardTitle, Sheet, Spinner } from "./ui/misc";
-import { useToast } from "./ui/toast";
+import { Button } from "@/components/ui/button";
 import { CandidateStatusBadge } from "./Status";
 import { CANDIDATE_STATUSES, CRITERIA, DEFAULT_WEIGHTS } from "../../shared/types";
+import { Badge, Field, Select, SidePanel, Spinner, useToast } from "@/components/kit";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 const href = (u: string) => (u.startsWith("http") ? u : `https://${u}`);
 
@@ -56,7 +57,7 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
   const d = q.data;
   const weights = d?.request.scorecardWeights ?? DEFAULT_WEIGHTS;
   return (
-    <Sheet open={!!id} onOpenChange={(o) => !o && onClose()} title={d ? `#${d.roleCandidate.rank ?? "—"} for ${d.request.title}` : "Candidate"}>
+    <SidePanel open={!!id} onOpenChange={(o) => !o && onClose()} title={d ? `#${d.roleCandidate.rank ?? "—"} for ${d.request.title}` : "Candidate"}>
       {!d ? <Spinner /> : (
         <div className="grid gap-4">
           <div className="flex items-start justify-between gap-4">
@@ -72,7 +73,7 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
                 <CandidateStatusBadge status={d.roleCandidate.status} />
               </div>
               <div className="mt-2 flex flex-wrap gap-3 text-sm">
-                {d.candidate.linkedinUrl && <a className="inline-flex items-center gap-1 underline" href={href(d.candidate.linkedinUrl)} target="_blank" rel="noreferrer"><Linkedin className="h-3.5 w-3.5" /> LinkedIn</a>}
+                {d.candidate.linkedinUrl && <a className="inline-flex items-center gap-1 underline" href={href(d.candidate.linkedinUrl)} target="_blank" rel="noreferrer"><ExternalLink className="h-3.5 w-3.5" /> LinkedIn</a>}
                 {d.candidate.otherUrls.map((u) => <a key={u} className="inline-flex items-center gap-1 underline" href={href(u)} target="_blank" rel="noreferrer"><ExternalLink className="h-3.5 w-3.5" /> {u.replace(/^https?:\/\//, "").slice(0, 30)}</a>)}
               </div>
             </div>
@@ -213,6 +214,6 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
           )}
         </div>
       )}
-    </Sheet>
+    </SidePanel>
   );
 }
