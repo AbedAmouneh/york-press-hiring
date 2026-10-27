@@ -27,13 +27,16 @@ React Router 7 · Hono API in one Vercel Function (`api/[[...route]].ts`) · Dri
 ```bash
 NODE_ENV=development npm run dev   # API :3001 + web :5173. Abed's shell sets NODE_ENV=production globally.
 npm install --include=dev          # same reason: otherwise npm skips devDependencies
-npm run check                      # lint + typecheck + smoke: run before every push
+npm run check                      # lint + typecheck + unit tests + smoke: run before every push
+npm test                           # Vitest unit tests (tests/unit)
+npm run test:e2e                   # Playwright browser tests (tests/e2e) on a seeded demo database, ports 5174/3002
 npm run build                      # typecheck both sides + Vite build
 npm run db:generate                # after any change to server/db/schema.ts; commit the migration
 ```
 
-CI (`.github/workflows/ci.yml`) runs lint (zero warnings), typecheck, a migration/schema drift
-check, build, the smoke test and `npm audit --omit=dev --audit-level=high`. Keep it green.
+CI (`.github/workflows/ci.yml`) runs lint (zero warnings), typecheck, unit tests, a migration/schema
+drift check, build, the smoke test, Playwright browser tests and `npm audit --omit=dev --audit-level=high`.
+Keep it green. New logic gets a unit test; a new screen or flow gets a browser test.
 
 ## Code map
 
@@ -45,7 +48,10 @@ check, build, the smoke test and `npm audit --omit=dev --audit-level=high`. Keep
 - `server/services/providers/`: PDL and SignalHire clients plus fictional mock data.
 - `server/routes/`: public (setup, auth, apply page, SignalHire webhook, cron), requests,
   candidates, outreach, admin. Permission checks live in `routes/access.ts`.
-- `src/pages/`, `src/components/`: React screens. `scripts/smoke.ts`: end-to-end test.
+- `server/services/merge.ts`: pure helpers that merge duplicate profiles and pre-rank them.
+- `shared/schemas.ts`: Zod rules used by both the API and the forms (`src/lib/forms.ts`).
+- `src/pages/`, `src/components/`: React screens. `scripts/smoke.ts`: API end-to-end test.
+- `tests/unit/`: Vitest. `tests/e2e/`: Playwright, signing in with the demo accounts.
 
 ## Rules the code must keep
 
