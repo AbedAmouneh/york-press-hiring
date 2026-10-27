@@ -8,7 +8,8 @@ import { appIsPublic, env } from "../env.js";
 export const QUEUE_PATH = "/api/internal/queue/runs";
 const RETRIES = 3;
 
-export const queueEnabled = () => !!env.qstashToken && appIsPublic();
+// Previews sit behind Vercel login, which QStash can't pass, so they run in the background instead.
+export const queueEnabled = () => !!env.qstashToken && appIsPublic() && !env.isPreview;
 const queueUrl = () => `${env.appUrl}${QUEUE_PATH}`;
 
 /** Queue a sourcing run (or the next slice of one). Returns false when the queue isn't configured. */
