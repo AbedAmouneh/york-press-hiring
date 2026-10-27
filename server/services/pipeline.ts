@@ -12,6 +12,7 @@ import { getSettings, logUsage, updateSettings, weightsFor } from "./settings.js
 import { toAI, toReq } from "./mappers.js";
 import { drainEmailQueue, isSuppressed, queueOutreach } from "./outreach.js";
 import { notifyRoles, notifyUsers } from "./notify.js";
+import { captureError } from "../monitoring.js";
 
 const STEPS = ["brief", "search", "enrich", "score", "rank", "reveal", "outreach", "done"] as const;
 type Step = (typeof STEPS)[number];
@@ -42,7 +43,10 @@ export async function startRun(requestId: string, kind: "initial" | "weekly" | "
 
 /** Run in the background: on Vercel after the response is sent, locally on the next tick. */
 export function kick(runId: string) {
-  const p = runPipeline(runId).catch((e) => console.error("pipeline", e));
+  const p = runPipeline(runId).catch((e) => {
+    console.error("pipeline", e);
+    void captureError(e, { tags: { area: "pipeline" }, extra: { runId } });
+  });
   if (env.onVercel) waitUntil(p);
 }
 
@@ -116,6 +120,7 @@ export async function runPipeline(runId: string) {
     await finish(run, request, state, counters);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    captureError(e, { tags: { area: "pipeline", step, kind: run.kind }, extra: { runId, requestId: run.requestId } });
     log(state, `Failed at step "${step}": ${message}`);
     await save(runId, { step, state, ...counters, status: "failed", error: message, lockedUntil: null, finishedAt: new Date() });
     if (request.status === "sourcing") {
