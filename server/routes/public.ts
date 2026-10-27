@@ -15,6 +15,8 @@ import { toReq } from "../services/mappers.js";
 import { notifyRoles } from "../services/notify.js";
 import { normalizeLinkedin } from "../services/providers/types.js";
 import { saveCv } from "../services/cv-store.js";
+import { verifyQueueRequest } from "../services/queue.js";
+import { z } from "zod";
 import { publicUser } from "./access.js";
 import { APPLY_LIMITS, assertWithinLimits, clearHits, clientIp, INVITE_LIMITS, LOGIN_LIMITS, recordHit } from "../services/rate-limit.js";
 
@@ -167,6 +169,16 @@ publicRoutes.get("/cron/daily", async (c) => {
   const auth = c.req.header("authorization");
   if (env.cronSecret ? auth !== `Bearer ${env.cronSecret}` : env.isProd) return c.json({ ok: false }, 401);
   return c.json(await runDaily());
+});
+
+// QStash delivers queued runs here. Only signed calls for this exact URL are accepted.
+publicRoutes.post("/internal/queue/runs", async (c) => {
+  const body = await c.req.text();
+  if (!(await verifyQueueRequest(c.req.header("upstash-signature"), body))) return c.json({ ok: false }, 401);
+  const { runId } = z.object({ runId: z.uuid() }).parse(JSON.parse(body));
+  const outcome = await runPipeline(runId);
+  // 503 tells QStash to retry later, by which time a crashed call's lock has expired.
+  return c.json({ ok: outcome !== "busy", outcome }, outcome === "busy" ? 503 : 200);
 });
 
 publicRoutes.post("/internal/runs/:id/continue", async (c) => {
