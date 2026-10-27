@@ -94,8 +94,11 @@ adminRoutes.post("/templates", async (c) => {
 adminRoutes.patch("/templates/:id", async (c) => {
   requireRole(c, "recruiter", "admin");
   const body = TemplatePatch.parse(await c.req.json());
-  if (body.channel === "linkedin" && body.body && body.body.length > 300) throw new HTTPException(400, { message: "LinkedIn notes are limited to 300 characters (placeholders included)." });
   const db = await getDb();
+  const [current] = await db.select().from(schema.outreachTemplates).where(eq(schema.outreachTemplates.id, c.req.param("id")));
+  if (!current) throw new HTTPException(404, { message: "Template not found." });
+  // Check the merged template, so the LinkedIn length rule applies even when the channel isn't sent.
+  TemplateInput.parse({ ...current, ...body });
   const [t] = await db.update(schema.outreachTemplates).set({ ...body, updatedAt: new Date() }).where(eq(schema.outreachTemplates.id, c.req.param("id"))).returning();
   return c.json({ template: t });
 });
