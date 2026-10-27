@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Mail, Phone } from "lucide-react";
 import { api } from "@/lib/api";
@@ -7,37 +9,77 @@ import { cn, fmtDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { CandidateStatusBadge } from "./Status";
 import { CANDIDATE_STATUSES, CRITERIA, DEFAULT_WEIGHTS } from "../../shared/types";
-import { Badge, Field, Select, SidePanel, Spinner, useToast } from "@/components/kit";
+import { RoleCandidatePatch } from "../../shared/schemas";
+import { Badge, Field, FormError, Select, SidePanel, Spinner, useToast } from "@/components/kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 const href = (u: string) => (u.startsWith("http") ? u : `https://${u}`);
+const emptyToNull = (v: unknown) => (v === "" ? null : v);
+
+/** Status, hiring manager decision, comment and follow-up date for one candidate. */
+function TrackingForm({ detail: d, onSaved }: { detail: CandidateDetail; onSaved: () => void }) {
+  const rc = d.roleCandidate;
+  const form = useForm({
+    resolver: zodResolver(RoleCandidatePatch),
+    defaultValues: { status: rc.status, hmDecision: rc.hmDecision, hmComment: rc.hmComment ?? "", followUpDate: rc.followUpDate },
+  });
+  const { errors, isSubmitting } = form.formState;
+  const save = form.handleSubmit(async (values) => {
+    try {
+      await api(`/role-candidates/${rc.id}`, { method: "PATCH", body: values });
+      onSaved();
+    } catch (e) {
+      form.setError("root", { message: (e as Error).message });
+    }
+  });
+  return (
+    <Card>
+      <CardHeader><CardTitle>Tracking</CardTitle></CardHeader>
+      <CardContent>
+        <form onSubmit={save} className="grid gap-3" noValidate>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {d.isRecruiter && (
+              <Field label="Status" htmlFor="st">
+                <Select id="st" {...form.register("status")}>
+                  {CANDIDATE_STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+                </Select>
+              </Field>
+            )}
+            <Field label="HM decision" htmlFor="hmd">
+              <Select id="hmd" {...form.register("hmDecision", { setValueAs: emptyToNull })}>
+                <option value="">—</option><option value="yes">Yes</option><option value="maybe">Maybe</option><option value="no">No</option>
+              </Select>
+            </Field>
+            {d.isRecruiter && (
+              <Field label="Follow-up date" htmlFor="fu">
+                <Input id="fu" type="date" {...form.register("followUpDate", { setValueAs: emptyToNull })} />
+              </Field>
+            )}
+          </div>
+          <Field label="HM comment" htmlFor="hmc" error={errors.hmComment?.message}>
+            <Textarea id="hmc" aria-invalid={!!errors.hmComment} {...form.register("hmComment")} />
+          </Field>
+          <FormError>{errors.root?.message}</FormError>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Contacted {fmtDate(rc.dateContacted)}</span>
+            <Button size="sm" type="submit" disabled={isSubmitting}>Save</Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; onClose: () => void; onChanged: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ["rc", id], queryFn: () => api<CandidateDetail>(`/role-candidates/${id}`), enabled: !!id });
-  const [form, setForm] = useState({ status: "new", hmDecision: "", hmComment: "", followUpDate: "" });
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (q.data) {
-      const rc = q.data.roleCandidate;
-      setForm({ status: rc.status, hmDecision: rc.hmDecision ?? "", hmComment: rc.hmComment ?? "", followUpDate: rc.followUpDate ?? "" });
-    }
-  }, [q.data]);
 
   const refresh = () => { qc.invalidateQueries({ queryKey: ["rc", id] }); onChanged(); };
 
-  async function save() {
-    setBusy(true);
-    try {
-      await api(`/role-candidates/${id}`, { method: "PATCH", body: { ...form, hmDecision: form.hmDecision || null, followUpDate: form.followUpDate || null } });
-      toast("Saved.");
-      refresh();
-    } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); }
-  }
   async function reveal() {
     setBusy(true);
     try {
@@ -181,33 +223,7 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
             </Card>
           ))}
 
-          {d.canEdit && (
-            <Card>
-              <CardHeader><CardTitle>Tracking</CardTitle></CardHeader>
-              <CardContent className="grid gap-3">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {d.isRecruiter && (
-                    <Field label="Status" htmlFor="st">
-                      <Select id="st" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                        {CANDIDATE_STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-                      </Select>
-                    </Field>
-                  )}
-                  <Field label="HM decision" htmlFor="hmd">
-                    <Select id="hmd" value={form.hmDecision} onChange={(e) => setForm({ ...form, hmDecision: e.target.value })}>
-                      <option value="">—</option><option value="yes">Yes</option><option value="maybe">Maybe</option><option value="no">No</option>
-                    </Select>
-                  </Field>
-                  {d.isRecruiter && <Field label="Follow-up date" htmlFor="fu"><Input id="fu" type="date" value={form.followUpDate} onChange={(e) => setForm({ ...form, followUpDate: e.target.value })} /></Field>}
-                </div>
-                <Field label="HM comment" htmlFor="hmc"><Textarea id="hmc" value={form.hmComment} onChange={(e) => setForm({ ...form, hmComment: e.target.value })} /></Field>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Contacted {fmtDate(d.roleCandidate.dateContacted)}</span>
-                  <Button size="sm" disabled={busy} onClick={save}>Save</Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {d.canEdit && <TrackingForm key={d.roleCandidate.id} detail={d} onSaved={() => { toast("Saved."); refresh(); }} />}
 
           {!!d.otherRoles.length && (
             <p className="text-xs text-muted-foreground">Also in: {d.otherRoles.map((o) => `${o.title} (${o.score ?? "—"})`).join(", ")}</p>
