@@ -14,6 +14,7 @@
     "check": "npm run lint && npm run typecheck && npm run smoke",
     "db:generate": "drizzle-kit generate",
     "smoke": "tsx scripts/smoke.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
     "preview": "vite preview"
   },
   "dependencies": {
