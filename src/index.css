@@ -1,36 +1,96 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
 
-/* York Press brand: black + York yellow, on a warm neutral ground. */
+@custom-variant dark (&:is(.dark *));
+
+/* York Press brand: near-black + York yellow on a warm neutral ground. */
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(0.975 0.004 85);
+  --foreground: oklch(0.18 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0 0);
+  --primary: oklch(0.18 0 0);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.006 85);
+  --secondary-foreground: oklch(0.22 0 0);
+  --muted: oklch(0.95 0.005 85);
+  --muted-foreground: oklch(0.5 0.01 70);
+  --accent: oklch(0.97 0.06 100);
+  --accent-foreground: oklch(0.18 0 0);
+  --brand: oklch(0.89 0.18 100);
+  --brand-foreground: oklch(0.18 0 0);
+  --destructive: oklch(0.55 0.21 27);
+  --success: oklch(0.52 0.13 150);
+  --warning: oklch(0.6 0.15 65);
+  --border: oklch(0.9 0.006 85);
+  --input: oklch(0.87 0.006 85);
+  --ring: oklch(0.8 0.16 100);
+  --radius: 0.5rem;
+}
+
 @layer base {
-  :root {
-    --background: 40 14% 97%;
-    --foreground: 0 0% 9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 40 10% 92%;
-    --secondary-foreground: 0 0% 12%;
-    --muted: 40 10% 94%;
-    --muted-foreground: 30 4% 40%;
-    --accent: 52 96% 92%;
-    --accent-foreground: 0 0% 9%;
-    --brand: 52 93% 50%;
-    --brand-foreground: 0 0% 9%;
-    --destructive: 0 72% 46%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 142 60% 32%;
-    --warning: 32 90% 40%;
-    --border: 40 8% 86%;
-    --input: 40 8% 82%;
-    --ring: 52 93% 45%;
-    --radius: 0.5rem;
+  * {
+    @apply border-border outline-ring/50;
   }
-  * { @apply border-border; }
-  html, body, #root { height: 100%; }
-  body { @apply bg-background text-foreground antialiased; font-feature-settings: "cv11"; }
-  h1, h2, h3 { text-wrap: balance; }
-  .num { font-variant-numeric: tabular-nums; }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
 }
