@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Mail, Phone } from "lucide-react";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import type { CandidateDetail } from "@/lib/types";
 import { cn, fmtDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ function TrackingForm({ detail: d, onSaved }: { detail: CandidateDetail; onSaved
   const { errors, isSubmitting } = form.formState;
   const save = form.handleSubmit(async (values) => {
     try {
-      await api(`/role-candidates/${rc.id}`, { method: "PATCH", body: values });
+      await call(rpc["role-candidates"][":id"].$patch({ param: { id: rc.id }, json: values }));
       onSaved();
     } catch (e) {
       form.setError("root", { message: (e as Error).message });
@@ -75,7 +75,7 @@ function TrackingForm({ detail: d, onSaved }: { detail: CandidateDetail; onSaved
 export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; onClose: () => void; onChanged: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const q = useQuery({ queryKey: ["rc", id], queryFn: () => api<CandidateDetail>(`/role-candidates/${id}`), enabled: !!id });
+  const q = useQuery({ queryKey: ["rc", id], queryFn: () => call(rpc["role-candidates"][":id"].$get({ param: { id: id! } })), enabled: !!id });
   const [busy, setBusy] = useState(false);
 
   const refresh = () => { qc.invalidateQueries({ queryKey: ["rc", id] }); onChanged(); };
@@ -83,14 +83,16 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
   async function reveal() {
     setBusy(true);
     try {
-      const res = await api<{ found?: boolean; pending?: boolean }>(`/role-candidates/${id}/reveal`, { method: "POST" });
-      toast(res.pending ? "Requested from SignalHire. Results usually arrive within a minute." : res.found ? "Contact details found." : "SignalHire had no contact details for this person.");
+      const res = await call(rpc["role-candidates"][":id"].reveal.$post({ param: { id: id! } }));
+      const pending = "pending" in res && res.pending;
+      const found = "already" in res || ("found" in res && res.found);
+      toast(pending ? "Requested from SignalHire. Results usually arrive within a minute." : found ? "Contact details found." : "SignalHire had no contact details for this person.");
       refresh();
     } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); }
   }
   async function messageAction(mid: string, action: "approve" | "cancel" | "sent") {
     try {
-      await api(`/outreach/${mid}/${action}`, { method: "POST" });
+      await call(rpc.outreach[":id"][action].$post({ param: { id: mid } }));
       toast(action === "approve" ? "Approved — it will be sent from your LinkedIn in the next Cowork session." : action === "sent" ? "Marked as sent." : "Cancelled.");
       refresh();
     } catch (e) { toast((e as Error).message, "error"); }
