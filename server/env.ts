@@ -20,6 +20,9 @@ export const env = {
   get vercelEnv() { return v("VERCEL_ENV"); }, // production | preview | development
   get sentryDsn() { return v("SENTRY_DSN"); },
   get blobToken() { return v("BLOB_READ_WRITE_TOKEN"); },
+  get qstashToken() { return v("QSTASH_TOKEN"); },
+  get qstashCurrentSigningKey() { return v("QSTASH_CURRENT_SIGNING_KEY"); },
+  get qstashNextSigningKey() { return v("QSTASH_NEXT_SIGNING_KEY"); },
   get isProd() { return v("NODE_ENV") === "production" || !!v("VERCEL"); },
 };
 
