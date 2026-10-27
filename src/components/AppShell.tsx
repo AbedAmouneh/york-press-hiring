@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, Briefcase, CheckSquare, FileText, Inbox, Send, LogOut, Mail, Settings, Users } from "lucide-react";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { can, useLogout } from "@/lib/auth";
 import type { Me } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -12,10 +12,10 @@ type Item = { to: string; label: string; icon: typeof Bell; count?: number; show
 
 export function AppShell({ me }: { me: Me }) {
   const logout = useLogout();
-  const notes = useQuery({ queryKey: ["notifications"], queryFn: () => api<{ unread: number }>("/notifications"), refetchInterval: 30_000 });
+  const notes = useQuery({ queryKey: ["notifications"], queryFn: () => call(rpc.notifications.$get()), refetchInterval: 30_000 });
   const approvals = useQuery({
     queryKey: ["requests", "approvals"],
-    queryFn: () => api<{ requests: unknown[] }>("/requests?scope=approvals"),
+    queryFn: () => call(rpc.requests.$get({ query: { scope: "approvals" } })),
     enabled: can(me, "ceo"),
     refetchInterval: 60_000,
   });

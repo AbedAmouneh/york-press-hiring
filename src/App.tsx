@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { setMonitoringUser } from "./lib/monitoring";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "./lib/api";
+import { call, rpc } from "./lib/rpc";
 import { homeFor, useMe } from "./lib/auth";
 import { AppShell } from "./components/AppShell";
 import { Spinner } from "./components/kit";
@@ -28,7 +28,7 @@ function Loading() {
 
 export default function App() {
   const location = useLocation();
-  const setup = useQuery({ queryKey: ["setup"], queryFn: () => api<{ needsSetup: boolean }>("/setup") });
+  const setup = useQuery({ queryKey: ["setup"], queryFn: () => call(rpc.setup.$get()) });
   const me = useMe();
   const userId = me.data?.user?.id ?? null;
   useEffect(() => setMonitoringUser(userId), [userId]);
