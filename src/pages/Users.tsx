@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
 import { call, rpc } from "@/lib/rpc";
+import { useMe } from "@/lib/auth";
 import type { UserRow } from "@/lib/types";
 import { fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
@@ -67,6 +68,7 @@ function InviteUserForm({ onDone, onCancel }: { onDone: (email: string, link: st
 }
 
 export default function Users() {
+  const me = useMe().data!.user!;
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ["users"], queryFn: () => call(rpc.users.$get()) });
@@ -82,6 +84,14 @@ export default function Users() {
   async function update(u: U, body: Pick<Partial<U>, "name" | "roles" | "department" | "active">) {
     try {
       await call(rpc.users[":id"].$patch({ param: { id: u.id }, json: body }));
+      qc.invalidateQueries({ queryKey: ["users"] });
+    } catch (err) { toast((err as Error).message, "error"); }
+  }
+  async function resetTwoFactor(u: U) {
+    if (!window.confirm(`Reset two-step login for ${u.name}? They'll be signed out and set it up again with a new QR code.`)) return;
+    try {
+      await call(rpc.users[":id"]["two-factor"].reset.$post({ param: { id: u.id } }));
+      toast(`Two-step login reset for ${u.name}.`);
       qc.invalidateQueries({ queryKey: ["users"] });
     } catch (err) { toast((err as Error).message, "error"); }
   }
@@ -103,7 +113,7 @@ export default function Users() {
           <TableBody>
             {q.data?.users.map((u) => (
               <TableRow key={u.id}>
-                <Td><div className="font-medium">{u.name} {u.isDemo && <Badge tone="warn">demo</Badge>} {u.invited && <Badge tone="info">invited</Badge>}</div><div className="font-mono text-xs text-muted-foreground">{u.email}</div></Td>
+                <Td><div className="font-medium">{u.name} {u.isDemo && <Badge tone="warn">demo</Badge>} {u.invited && <Badge tone="info">invited</Badge>} {u.twoFactorEnabled && <Badge tone="good">2-step</Badge>}</div><div className="font-mono text-xs text-muted-foreground">{u.email}</div></Td>
                 <Td className="min-w-[260px]"><RolePicker value={u.roles} onChange={(roles) => update(u, { roles })} /></Td>
                 <Td>
                   <Select value={u.department ?? ""} onChange={(e) => update(u, { department: e.target.value || null })} aria-label="Department" className="w-44">
@@ -112,7 +122,10 @@ export default function Users() {
                 </Td>
                 <Td className="num text-xs">{fmtDateTime(u.lastLoginAt)}</Td>
                 <Td><Switch checked={u.active} onCheckedChange={(active) => update(u, { active })} aria-label="Active" /></Td>
-                <Td>{u.invited && <Button size="sm" variant="ghost" onClick={() => resend(u)}>Resend invite</Button>}</Td>
+                <Td className="whitespace-nowrap">
+                  {u.invited && <Button size="sm" variant="ghost" onClick={() => resend(u)}>Resend invite</Button>}
+                  {u.twoFactorEnabled && u.id !== me.id && <Button size="sm" variant="ghost" onClick={() => resetTwoFactor(u)}>Reset 2-step</Button>}
+                </Td>
               </TableRow>
             ))}
           </TableBody>
