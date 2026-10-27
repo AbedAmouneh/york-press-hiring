@@ -9,9 +9,9 @@ import { fmtDate, fmtDateTime, money } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { RequestStatusBadge } from "@/components/Status";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/form";
-import { Badge, Card, CardContent, CardHeader, CardTitle, Spinner } from "@/components/ui/misc";
-import { useToast } from "@/components/ui/toast";
+import { Badge, Spinner, useToast } from "@/components/kit";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 
 type Ev = { id: string; actorName: string; action: string; comment: string | null; createdAt: string };
 
