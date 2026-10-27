@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Badge as UiBadge } from "@/components/ui/badge";
-import { Field as UiField, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Field as UiField, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableCell, TableHead } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -12,15 +12,21 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 
 // ---------------------------------------------------------------- form helpers
 
-/** A label, the control and an optional hint, stacked. */
-export function Field({ label, hint, htmlFor, children, className }: { label: string; hint?: string; htmlFor?: string; children: React.ReactNode; className?: string }) {
+/** A label, the control, an optional hint and the validation error, stacked. */
+export function Field({ label, hint, error, htmlFor, children, className }: { label: string; hint?: string; error?: string; htmlFor?: string; children: React.ReactNode; className?: string }) {
   return (
-    <UiField className={cn("gap-1.5", className)}>
+    <UiField className={cn("gap-1.5", className)} data-invalid={error ? true : undefined}>
       <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
       {children}
-      {hint && <FieldDescription className="text-xs">{hint}</FieldDescription>}
+      {error ? <FieldError className="text-xs">{error}</FieldError> : hint && <FieldDescription className="text-xs">{hint}</FieldDescription>}
     </UiField>
   );
+}
+
+/** Message for a form-level (not field-level) error. */
+export function FormError({ children }: { children?: React.ReactNode }) {
+  if (!children) return null;
+  return <p role="alert" className="text-sm text-destructive">{children}</p>;
 }
 
 /** Full-width native select (shadcn NativeSelect). */
