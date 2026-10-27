@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { ApplyForm } from "@/lib/forms";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
@@ -15,10 +15,10 @@ import { Textarea } from "@/components/ui/textarea";
 
 /** Public page linked from outreach emails: candidates upload their CV here. */
 export default function Apply() {
-  const { token } = useParams();
+  const { token = "" } = useParams();
   const role = useQuery({
     queryKey: ["apply", token],
-    queryFn: () => api<{ title: string; department: string; locationPolicy: string; description: string }>(`/public/apply/${token}`),
+    queryFn: () => call(rpc.public.apply[":token"].$get({ param: { token } })),
     retry: false,
   });
   const [done, setDone] = useState(false);
@@ -26,15 +26,11 @@ export default function Apply() {
   const { errors, isSubmitting } = form.formState;
 
   const submit = form.handleSubmit(async (values) => {
-    const data = new FormData();
-    data.set("name", values.name);
-    data.set("email", values.email);
-    if (values.linkedin) data.set("linkedin", values.linkedin);
-    if (values.note) data.set("note", values.note);
-    data.set("consent", "true");
-    data.set("cv", values.cv[0]);
     try {
-      await api(`/public/apply/${token}`, { form: data });
+      await call(rpc.public.apply[":token"].$post({
+        param: { token },
+        form: { name: values.name, email: values.email, linkedin: values.linkedin || undefined, note: values.note || undefined, consent: "true", cv: values.cv[0] },
+      }));
       setDone(true);
     } catch (err) {
       form.setError("root", { message: (err as Error).message });
