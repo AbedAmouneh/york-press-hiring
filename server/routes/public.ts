@@ -2,9 +2,10 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { and, eq, gt } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
-import { ApplyFields, cvProblem, InvitePasswordInput, LoginInput, SetupInput } from "../../shared/schemas.js";
+import { ApplyFields, cvProblem, InvitePasswordInput, LoginInput, SetupInput, TwoFactorCodeInput } from "../../shared/schemas.js";
 import { env, mock } from "../env.js";
-import { createSession, currentUser, destroySession, hashPassword, randomToken, verifyPassword } from "../auth.js";
+import { clearMfaChallenge, createSession, currentUser, destroySession, getMfaChallenge, hashPassword, randomToken, setMfaChallenge, verifyPassword } from "../auth.js";
+import { checkCode, createChallenge, decryptSecret, encryptSecret, newRecoveryCodes, newSetup, readChallenge, redeemRecoveryCode } from "../services/two-factor.js";
 import { runSetup, userCount, DEMO_PASSWORD } from "../services/setup.js";
 import { applyRevealResults, resumeWaitingRuns, runPipeline } from "../services/pipeline.js";
 import { parseCandidate, type SHCandidate } from "../services/providers/signalhire.js";
@@ -19,7 +20,7 @@ import { verifyQueueRequest } from "../services/queue.js";
 import { z } from "zod";
 import { form, json } from "../validate.js";
 import { publicUser } from "./access.js";
-import { APPLY_LIMITS, assertWithinLimits, clearHits, clientIp, INVITE_LIMITS, LOGIN_LIMITS, recordHit } from "../services/rate-limit.js";
+import { APPLY_LIMITS, assertWithinLimits, clearHits, clientIp, INVITE_LIMITS, LOGIN_LIMITS, MFA_LIMITS, recordHit } from "../services/rate-limit.js";
 
 /** The apply page's multipart form. Field rules live in ApplyFields and cvProblem, checked in the handler. */
 const ApplyForm = z.object({
@@ -60,9 +61,64 @@ export const publicRoutes = new Hono()
       throw new HTTPException(401, { message: "Email or password is incorrect." });
     }
     await clearHits([limits[0].key]);
+    if (u.totpEnabledAt) {
+      // Step two: the session is only created once the authenticator code checks out.
+      setMfaChallenge(c, createChallenge(u.id));
+      return c.json({ mfaRequired: true as const, user: null });
+    }
     await db.update(schema.users).set({ lastLoginAt: new Date() }).where(eq(schema.users.id, u.id));
     await createSession(c, u.id);
-    return c.json({ user: publicUser(u) });
+    return c.json({ mfaRequired: false as const, user: publicUser(u) });
+  })
+  // ---------------------------------------------------------------- two-step login
+  .post("/auth/mfa", json(TwoFactorCodeInput), async (c) => {
+    const userId = readChallenge(getMfaChallenge(c));
+    if (!userId) throw new HTTPException(401, { message: "Your sign-in timed out. Enter your password again." });
+    const limits = MFA_LIMITS(userId);
+    await assertWithinLimits(limits, "Too many wrong codes. Please wait 15 minutes and try again.");
+    const db = await getDb();
+    const [u] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
+    if (!u || !u.active || !u.totpSecret) throw new HTTPException(401, { message: "Your sign-in timed out. Enter your password again." });
+    const { code } = c.req.valid("json");
+    const step = checkCode(decryptSecret(u.totpSecret), code, u.totpLastStep);
+    const remaining = step === null ? redeemRecoveryCode(u.recoveryCodes, code) : null;
+    if (step === null && remaining === null) {
+      await recordHit(limits);
+      throw new HTTPException(401, { message: "That code didn't work. Check your authenticator app and try again." });
+    }
+    await db.update(schema.users).set({
+      lastLoginAt: new Date(),
+      ...(step !== null ? { totpLastStep: step } : { recoveryCodes: remaining! }),
+    }).where(eq(schema.users.id, u.id));
+    await clearHits([limits[0].key]);
+    clearMfaChallenge(c);
+    await createSession(c, u.id);
+    return c.json({ user: publicUser(u), recoveryCodesLeft: remaining?.length ?? u.recoveryCodes.length });
+  })
+  /** Admin and CEO set up their authenticator app here; it works before two-step login is on. */
+  .post("/auth/2fa/setup", async (c) => {
+    const u = await currentUser(c);
+    if (!u) throw new HTTPException(401, { message: "Please sign in." });
+    if (u.totpEnabledAt) throw new HTTPException(400, { message: "Two-step login is already on for this account." });
+    const setup = await newSetup(u.email);
+    const db = await getDb();
+    await db.update(schema.users).set({ totpPendingSecret: encryptSecret(setup.secret) }).where(eq(schema.users.id, u.id));
+    return c.json(setup);
+  })
+  .post("/auth/2fa/enable", json(TwoFactorCodeInput), async (c) => {
+    const u = await currentUser(c);
+    if (!u) throw new HTTPException(401, { message: "Please sign in." });
+    if (u.totpEnabledAt) throw new HTTPException(400, { message: "Two-step login is already on for this account." });
+    if (!u.totpPendingSecret) throw new HTTPException(400, { message: "Start the setup again to get a new QR code." });
+    const pending = decryptSecret(u.totpPendingSecret);
+    const step = checkCode(pending, c.req.valid("json").code, null);
+    if (step === null) throw new HTTPException(400, { message: "That code didn't match. Use the 6-digit code your app shows right now." });
+    const { codes, hashes } = newRecoveryCodes();
+    const db = await getDb();
+    await db.update(schema.users).set({
+      totpSecret: encryptSecret(pending), totpPendingSecret: null, totpEnabledAt: new Date(), totpLastStep: step, recoveryCodes: hashes,
+    }).where(eq(schema.users.id, u.id));
+    return c.json({ recoveryCodes: codes });
   })
   .post("/auth/logout", async (c) => {
     await destroySession(c);
