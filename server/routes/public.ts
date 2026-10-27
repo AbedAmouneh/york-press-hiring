@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { and, eq, gt } from "drizzle-orm";
-import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
+import { ApplyFields, cvProblem, InvitePasswordInput, LoginInput, SetupInput } from "../../shared/schemas.js";
 import { env, mock } from "../env.js";
 import { createSession, currentUser, destroySession, hashPassword, verifyPassword } from "../auth.js";
 import { runSetup, userCount, DEMO_PASSWORD } from "../services/setup.js";
@@ -24,14 +24,7 @@ publicRoutes.get("/health", (c) => c.json({ ok: true }));
 publicRoutes.get("/setup", async (c) => c.json({ needsSetup: (await userCount()) === 0, demoMode: env.demoMode }));
 
 publicRoutes.post("/setup", async (c) => {
-  const body = z.object({
-    adminName: z.string().min(2),
-    adminEmail: z.string().email(),
-    adminPassword: z.string().min(10, "Use at least 10 characters."),
-    ceoName: z.string().min(2),
-    ceoEmail: z.string().email(),
-    managers: z.array(z.object({ name: z.string(), email: z.string(), department: z.string().optional() })).default([]),
-  }).parse(await c.req.json());
+  const body = SetupInput.parse(await c.req.json());
   const { admin, invites } = await runSetup(body);
   await createSession(c, admin.id);
   return c.json({ ok: true, invites: invites.map((i) => ({ email: i.user.email, link: mock.email ? i.link : undefined })) });
@@ -39,7 +32,7 @@ publicRoutes.post("/setup", async (c) => {
 
 // ---------------------------------------------------------------- auth
 publicRoutes.post("/auth/login", async (c) => {
-  const { email, password } = z.object({ email: z.string(), password: z.string() }).parse(await c.req.json());
+  const { email, password } = LoginInput.parse(await c.req.json());
   const db = await getDb();
   const [u] = await db.select().from(schema.users).where(eq(schema.users.email, email.trim().toLowerCase()));
   if (!u || !u.active || !u.passwordHash || !(await verifyPassword(password, u.passwordHash))) {
@@ -68,7 +61,7 @@ publicRoutes.get("/auth/invite/:token", async (c) => {
 });
 
 publicRoutes.post("/auth/invite/:token", async (c) => {
-  const { password } = z.object({ password: z.string().min(10, "Use at least 10 characters.") }).parse(await c.req.json());
+  const { password } = InvitePasswordInput.parse(await c.req.json());
   const db = await getDb();
   const [u] = await db.select().from(schema.users).where(and(eq(schema.users.inviteToken, c.req.param("token")), gt(schema.users.inviteExpiresAt, new Date())));
   if (!u) throw new HTTPException(404, { message: "This invite link is invalid or has expired." });
@@ -90,22 +83,23 @@ publicRoutes.post("/public/apply/:token", async (c) => {
   const [r] = await db.select().from(schema.roleRequests).where(eq(schema.roleRequests.applyToken, c.req.param("token")));
   if (!r || !["open", "sourcing"].includes(r.status)) throw new HTTPException(404, { message: "This position is no longer open." });
   const form = await c.req.parseBody();
-  const name = String(form.name ?? "").trim();
-  const email = String(form.email ?? "").trim().toLowerCase();
-  const consent = String(form.consent ?? "") === "on" || String(form.consent ?? "") === "true";
+  const fields = ApplyFields.parse({
+    name: String(form.name ?? ""),
+    email: String(form.email ?? "").trim().toLowerCase(),
+    linkedin: form.linkedin ? String(form.linkedin) : undefined,
+    note: form.note ? String(form.note) : undefined,
+    consent: ["on", "true"].includes(String(form.consent ?? "")),
+  });
+  const { name, email } = fields;
   const file = form.cv;
-  if (!name || !/^\S+@\S+\.\S+$/.test(email)) throw new HTTPException(400, { message: "Please enter your name and a valid email." });
-  if (!consent) throw new HTTPException(400, { message: "Please agree to the privacy notice so we can process your CV." });
-  if (!(file instanceof File)) throw new HTTPException(400, { message: "Please attach your CV." });
-  if (file.size > 4 * 1024 * 1024) throw new HTTPException(400, { message: "The CV must be smaller than 4 MB." });
-  const okTypes = ["application/pdf", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"];
-  if (!okTypes.includes(file.type)) throw new HTTPException(400, { message: "Please upload a PDF, Word or text file." });
+  const problem = cvProblem(file instanceof File ? file : null);
+  if (problem || !(file instanceof File)) throw new HTTPException(400, { message: problem ?? "Please attach your CV." });
   const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-  const linkedinUrl = normalizeLinkedin(String(form.linkedin ?? ""));
+  const linkedinUrl = normalizeLinkedin(fields.linkedin ?? "");
   // Link to an existing candidate when we can.
   const [existing] = await db.select().from(schema.candidates).where(eq(schema.candidates.email, email)).limit(1);
   const [app] = await db.insert(schema.applications).values({
-    requestId: r.id, candidateId: existing?.id ?? null, name, email, linkedinUrl, note: String(form.note ?? "").slice(0, 2000),
+    requestId: r.id, candidateId: existing?.id ?? null, name, email, linkedinUrl, note: fields.note ?? "",
     cvFileName: file.name.slice(0, 200), cvMime: file.type, cvBase64: base64,
   }).returning();
   if (existing) {
