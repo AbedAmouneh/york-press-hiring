@@ -75,4 +75,5 @@ export type ExperienceItem = {
 };
 export type EducationItem = { school: string; degree?: string | null; field?: string | null; start?: string | null; end?: string | null };
 
-export type OutreachStatus = "queued" | "awaiting_approval" | "approved" | "sent" | "failed" | "cancelled" | "skipped";
+export const OUTREACH_STATUSES = ["queued", "awaiting_approval", "approved", "sent", "failed", "cancelled", "skipped"] as const;
+export type OutreachStatus = (typeof OUTREACH_STATUSES)[number];

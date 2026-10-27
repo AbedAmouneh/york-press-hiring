@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { EducationItem, ExperienceItem, Weights } from "../../shared/types.js";
+import type { CandidateStatus, EducationItem, ExperienceItem, HmDecision, OutreachStatus, RequestStatus, Role, Weights } from "../../shared/types.js";
 
 const id = () => uuid("id").primaryKey().default(sql`gen_random_uuid()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -23,7 +23,7 @@ export const users = pgTable("users", {
   email: text("email").notNull(),
   name: text("name").notNull(),
   passwordHash: text("password_hash"),
-  roles: text("roles").array().notNull().default(sql`'{}'::text[]`),
+  roles: text("roles").array().$type<Role[]>().notNull().default(sql`'{}'::text[]`),
   department: text("department"),
   active: boolean("active").notNull().default(true),
   isDemo: boolean("is_demo").notNull().default(false),
@@ -48,7 +48,7 @@ export const roleRequests = pgTable("role_requests", {
   seniority: text("seniority").notNull(),
   headcount: integer("headcount").notNull().default(1),
   startDate: text("start_date"),
-  kind: text("kind").notNull().default("new"), // new | backfill
+  kind: text("kind").$type<"new" | "backfill">().notNull().default("new"), // new | backfill
   jdText: text("jd_text").notNull().default(""),
   mustHaves: text("must_haves").array().notNull().default(sql`'{}'::text[]`),
   niceToHaves: text("nice_to_haves").array().notNull().default(sql`'{}'::text[]`),
@@ -62,14 +62,14 @@ export const roleRequests = pgTable("role_requests", {
   salaryMin: integer("salary_min"),
   salaryMax: integer("salary_max"),
   currency: text("currency"),
-  salaryPeriod: text("salary_period").notNull().default("year"),
+  salaryPeriod: text("salary_period").$type<"year" | "month">().notNull().default("year"),
   justification: text("justification").notNull().default(""),
   targetCompanies: text("target_companies").array().notNull().default(sql`'{}'::text[]`),
   avoidCompanies: text("avoid_companies").array().notNull().default(sql`'{}'::text[]`),
   requesterId: uuid("requester_id").notNull().references(() => users.id),
   hiringManagerId: uuid("hiring_manager_id").references(() => users.id),
   recruiterId: uuid("recruiter_id").references(() => users.id),
-  status: text("status").notNull().default("draft"),
+  status: text("status").$type<RequestStatus>().notNull().default("draft"),
   scorecardWeights: jsonb("scorecard_weights").$type<Weights>(),
   applyToken: text("apply_token").notNull(),
   submittedAt: ts("submitted_at"),
@@ -112,8 +112,8 @@ export type SearchBrief = {
 export const sourcingRuns = pgTable("sourcing_runs", {
   id: id(),
   requestId: uuid("request_id").notNull().references(() => roleRequests.id, { onDelete: "cascade" }),
-  kind: text("kind").notNull().default("initial"), // initial | weekly | manual
-  status: text("status").notNull().default("queued"), // queued | running | waiting | done | failed
+  kind: text("kind").$type<"initial" | "weekly" | "manual">().notNull().default("initial"), // initial | weekly | manual
+  status: text("status").$type<"queued" | "running" | "waiting" | "done" | "failed">().notNull().default("queued"), // queued | running | waiting | done | failed
   step: text("step").notNull().default("brief"),
   state: jsonb("state").$type<RunState>().notNull().default({ log: [] }),
   found: integer("found").notNull().default(0),
@@ -184,8 +184,8 @@ export const roleCandidates = pgTable("role_candidates", {
   relevantYears: real("relevant_years"),
   webFindings: jsonb("web_findings").$type<WebFinding[]>(),
   personalLine: text("personal_line"),
-  status: text("status").notNull().default("new"),
-  hmDecision: text("hm_decision"),
+  status: text("status").$type<CandidateStatus>().notNull().default("new"),
+  hmDecision: text("hm_decision").$type<HmDecision>(),
   hmComment: text("hm_comment"),
   dateContacted: text("date_contacted"),
   followUpDate: text("follow_up_date"),
@@ -212,7 +212,7 @@ export const outreachTemplates = pgTable("outreach_templates", {
   id: id(),
   name: text("name").notNull(),
   department: text("department"), // null = default for all
-  channel: text("channel").notNull(), // email | linkedin
+  channel: text("channel").$type<"email" | "linkedin">().notNull(), // email | linkedin
   subject: text("subject"),
   body: text("body").notNull(),
   active: boolean("active").notNull().default(true),
@@ -223,12 +223,12 @@ export const outreachMessages = pgTable("outreach_messages", {
   id: id(),
   roleCandidateId: uuid("role_candidate_id").notNull().references(() => roleCandidates.id, { onDelete: "cascade" }),
   templateId: uuid("template_id").references(() => outreachTemplates.id, { onDelete: "set null" }),
-  channel: text("channel").notNull(),
+  channel: text("channel").$type<"email" | "linkedin">().notNull(),
   senderId: uuid("sender_id").references(() => users.id),
   toAddress: text("to_address").notNull(), // email or LinkedIn URL
   subject: text("subject"),
   body: text("body").notNull(),
-  status: text("status").notNull(), // queued | awaiting_approval | approved | sent | failed | cancelled | skipped
+  status: text("status").$type<OutreachStatus>().notNull(), // queued | awaiting_approval | approved | sent | failed | cancelled | skipped
   providerMessageId: text("provider_message_id"),
   approvedById: uuid("approved_by_id").references(() => users.id),
   error: text("error"),

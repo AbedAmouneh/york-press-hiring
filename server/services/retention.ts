@@ -3,11 +3,12 @@
 import { and, eq, exists, gte, inArray, lt, not, or, sql } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
 import { deleteCv } from "./cv-store.js";
+import type { RequestStatus } from "../../shared/types.js";
 
 export const RETENTION_MONTHS = 24;
 /** Bound each daily run so it fits comfortably in one function call; the rest goes next day. */
 const BATCH = 500;
-const ACTIVE_ROLE = ["sourcing", "open"];
+const ACTIVE_ROLE: RequestStatus[] = ["sourcing", "open"];
 
 export function retentionCutoff(now = new Date()) {
   const d = new Date(now);
