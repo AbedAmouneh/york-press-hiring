@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { useMe } from "@/lib/auth";
 import type { RequestRow } from "@/lib/types";
 import { RequestForm as RequestFormSchema, type RequestFormValues } from "@/lib/forms";
@@ -38,8 +38,8 @@ export default function RequestForm() {
   const qc = useQueryClient();
   const toast = useToast();
   const me = useMe().data!.user!;
-  const existing = useQuery({ queryKey: ["request", id], queryFn: () => api<{ request: RequestRow }>(`/requests/${id}`), enabled: !!id });
-  const people = useQuery({ queryKey: ["hiring-managers"], queryFn: () => api<{ users: { id: string; name: string; department: string | null }[] }>("/people/hiring-managers") });
+  const existing = useQuery({ queryKey: ["request", id], queryFn: () => call(rpc.requests[":id"].$get({ param: { id: id! } })), enabled: !!id });
+  const people = useQuery({ queryKey: ["hiring-managers"], queryFn: () => call(rpc.people["hiring-managers"].$get()) });
   const form = useForm({ resolver: zodResolver(RequestFormSchema), defaultValues: EMPTY });
   const { errors, isSubmitting } = form.formState;
   const reg = (name: keyof RequestFormValues) => ({ ...form.register(name), "aria-invalid": !!errors[name] });
@@ -53,10 +53,10 @@ export default function RequestForm() {
     try {
       let rid = id;
       if (id) {
-        await api(`/requests/${id}`, { method: "PATCH", body });
-        if (submit) await api(`/requests/${id}/submit`, { method: "POST" });
+        await call(rpc.requests[":id"].$patch({ param: { id }, json: body }));
+        if (submit) await call(rpc.requests[":id"].submit.$post({ param: { id } }));
       } else {
-        rid = (await api<{ id: string }>(`/requests${submit ? "?submit=true" : ""}`, { body })).id;
+        rid = (await call(rpc.requests.$post({ query: submit ? { submit: "true" } : {}, json: body }))).id;
       }
       await qc.invalidateQueries({ queryKey: ["requests"] });
       await qc.invalidateQueries({ queryKey: ["request", rid] });
