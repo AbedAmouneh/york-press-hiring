@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
 import { api } from "@/lib/api";
@@ -6,7 +9,8 @@ import { fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { DEPARTMENTS, ROLES, ROLE_LABELS, type Role } from "../../shared/types";
-import { Badge, DataTable, Field, Modal, Select, Spinner, Td, Th, useToast } from "@/components/kit";
+import { UserInviteInput } from "../../shared/schemas";
+import { Badge, DataTable, Field, FormError, Modal, Select, Spinner, Td, Th, useToast } from "@/components/kit";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
@@ -29,24 +33,50 @@ function RolePicker({ value, onChange }: { value: Role[]; onChange: (r: Role[]) 
   );
 }
 
+const INVITE_DEFAULTS: z.input<typeof UserInviteInput> = { name: "", email: "", department: null, roles: ["manager", "hm"] };
+
+function InviteUserForm({ onDone, onCancel }: { onDone: (email: string, link: string | null) => void; onCancel: () => void }) {
+  const form = useForm({ resolver: zodResolver(UserInviteInput), defaultValues: INVITE_DEFAULTS });
+  const { errors, isSubmitting } = form.formState;
+  const submit = form.handleSubmit(async (values) => {
+    try {
+      const res = await api<{ inviteLink?: string }>("/users", { body: values });
+      form.reset(INVITE_DEFAULTS);
+      onDone(values.email, res.inviteLink ?? null);
+    } catch (err) {
+      form.setError("root", { message: (err as Error).message });
+    }
+  });
+  return (
+    <form onSubmit={submit} className="grid gap-3" noValidate>
+      <Field label="Name" htmlFor="un" error={errors.name?.message}><Input id="un" aria-invalid={!!errors.name} {...form.register("name")} /></Field>
+      <Field label="Email" htmlFor="ue" error={errors.email?.message}><Input id="ue" type="email" aria-invalid={!!errors.email} {...form.register("email")} /></Field>
+      <Field label="Department" htmlFor="ud">
+        <Select id="ud" {...form.register("department", { setValueAs: (v) => v || null })}>
+          <option value="">—</option>{[...DEPARTMENTS, "Leadership"].map((d) => <option key={d}>{d}</option>)}
+        </Select>
+      </Field>
+      <Field label="Roles" error={errors.roles?.message}>
+        <Controller control={form.control} name="roles" render={({ field }) => <RolePicker value={field.value} onChange={field.onChange} />} />
+      </Field>
+      <FormError>{errors.root?.message}</FormError>
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel}>Cancel</Button><Button type="submit" disabled={isSubmitting}>Send invite</Button></div>
+    </form>
+  );
+}
+
 export default function Users() {
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ["users"], queryFn: () => api<{ users: U[] }>("/users") });
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ name: "", email: "", department: "", roles: ["manager", "hm"] as Role[] });
   const [link, setLink] = useState<string | null>(null);
 
-  async function invite(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      const res = await api<{ inviteLink?: string }>("/users", { body: { ...f, department: f.department || null } });
-      setOpen(false);
-      setF({ name: "", email: "", department: "", roles: ["manager", "hm"] });
-      setLink(res.inviteLink ?? null);
-      toast(`Invite sent to ${f.email}.`);
-      qc.invalidateQueries({ queryKey: ["users"] });
-    } catch (err) { toast((err as Error).message, "error"); }
+  function invited(email: string, inviteLink: string | null) {
+    setOpen(false);
+    setLink(inviteLink);
+    toast(`Invite sent to ${email}.`);
+    qc.invalidateQueries({ queryKey: ["users"] });
   }
   async function update(u: U, body: Partial<U>) {
     try {
@@ -88,13 +118,7 @@ export default function Users() {
         </DataTable>
       )}
       <Modal open={open} onOpenChange={setOpen} title="Invite a user" description="They get an email with a link to set their password.">
-        <form onSubmit={invite} className="grid gap-3">
-          <Field label="Name" htmlFor="un"><Input id="un" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></Field>
-          <Field label="Email" htmlFor="ue"><Input id="ue" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required /></Field>
-          <Field label="Department" htmlFor="ud"><Select id="ud" value={f.department} onChange={(e) => setF({ ...f, department: e.target.value })}><option value="">—</option>{[...DEPARTMENTS, "Leadership"].map((d) => <option key={d}>{d}</option>)}</Select></Field>
-          <Field label="Roles"><RolePicker value={f.roles} onChange={(roles) => setF({ ...f, roles })} /></Field>
-          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" disabled={!f.roles.length}>Send invite</Button></div>
-        </form>
+        <InviteUserForm onDone={invited} onCancel={() => setOpen(false)} />
       </Modal>
     </>
   );
