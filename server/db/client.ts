@@ -21,10 +21,13 @@ async function connect(): Promise<DB> {
   if (env.databaseUrl) {
     const postgres = (await import("postgres")).default;
     const { drizzle } = await import("drizzle-orm/postgres-js");
-    const { migrate } = await import("drizzle-orm/postgres-js/migrator");
     const client = postgres(env.databaseUrl, { prepare: false, max: 3, idle_timeout: 20 });
     const db = drizzle(client, { schema });
-    await migrate(db, { migrationsFolder: folder });
+    // On Vercel the build already ran `npm run db:migrate`. Elsewhere (a Mac pointed at Neon) migrate here.
+    if (!env.onVercel) {
+      const { migrate } = await import("drizzle-orm/postgres-js/migrator");
+      await migrate(db, { migrationsFolder: folder });
+    }
     return db;
   }
   if (env.onVercel) {
