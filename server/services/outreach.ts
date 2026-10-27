@@ -81,7 +81,8 @@ export async function queueOutreach(requestId: string, roleCandidateIds: string[
       body: fillTemplate(template.body, vars).slice(0, channel === "linkedin" ? 300 : 5000),
       status: channel === "email" ? "queued" : "awaiting_approval",
     });
-    channel === "email" ? email++ : linkedin++;
+    if (channel === "email") email++;
+    else linkedin++;
   }
   return { email, linkedin, skipped };
 }

@@ -7,7 +7,7 @@ import { env, mock } from "../env.js";
 import { createSession, currentUser, destroySession, hashPassword, verifyPassword } from "../auth.js";
 import { runSetup, userCount, DEMO_PASSWORD } from "../services/setup.js";
 import { applyRevealResults, resumeWaitingRuns, runPipeline } from "../services/pipeline.js";
-import { parseCandidate } from "../services/providers/signalhire.js";
+import { parseCandidate, type SHCandidate } from "../services/providers/signalhire.js";
 import { runDaily } from "../services/cron.js";
 import { scoreCv } from "../services/claude.js";
 import { getSettings, weightsFor } from "../services/settings.js";
@@ -137,7 +137,7 @@ publicRoutes.post("/webhooks/signalhire/:secret", async (c) => {
   const payload = await c.req.json().catch(() => null);
   // Reply fast (SignalHire waits max 10 s); processing is quick DB work.
   if (Array.isArray(payload)) {
-    const results = payload.map((r: any) => parseCandidate(String(r.item), String(r.status), r.candidate));
+    const results = (payload as { item?: unknown; status?: unknown; candidate?: SHCandidate }[]).map((r) => parseCandidate(String(r.item), String(r.status), r.candidate));
     await applyRevealResults(results);
     await resumeWaitingRuns();
   }

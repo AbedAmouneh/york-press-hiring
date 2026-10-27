@@ -1,4 +1,5 @@
 // End-to-end check in mock mode against a throwaway database: `npm run smoke`
+/* eslint-disable @typescript-eslint/no-explicit-any -- test script reads untyped JSON responses */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

@@ -7,7 +7,15 @@ import App from "./App";
 import "./index.css";
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: (n, e: any) => e?.status !== 401 && e?.status !== 403 && n < 2, refetchOnWindowFocus: false } },
+  defaultOptions: {
+    queries: {
+      retry: (n, e) => {
+        const status = (e as { status?: number }).status;
+        return status !== 401 && status !== 403 && n < 2;
+      },
+      refetchOnWindowFocus: false,
+    },
+  },
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

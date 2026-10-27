@@ -1,5 +1,7 @@
 # York Press Hiring
 
+[![CI](https://github.com/AbedAmouneh/york-press-hiring/actions/workflows/ci.yml/badge.svg)](https://github.com/AbedAmouneh/york-press-hiring/actions/workflows/ci.yml)
+
 Managers request positions → Khalil (CEO) approves → the platform sources ~50 candidates from **People Data Labs + SignalHire**, scores them with **Claude** on a weighted 100-point scorecard, flags the **Top 10**, reveals their contacts through SignalHire, and sends templated outreach (email automatically within a daily cap; LinkedIn notes only after approval, sent from Abed's account via Claude in Chrome).
 
 Non-technical setup: see **[SETUP_GUIDE.md](SETUP_GUIDE.md)**. Click-through design prototype: `docs/prototype.html`.
@@ -45,7 +47,21 @@ npm run dev          # API on :3001, web on :5173 (proxied)
 npm run smoke        # full request → approval → sourcing → outreach run against a temp DB
 npm run build        # typecheck both sides + vite build
 npm run db:generate  # after editing server/db/schema.ts
+npm run check        # lint + typecheck + smoke — the same gates CI runs
 ```
+
+## CI (GitHub Actions)
+
+Every push to `main` and every pull request runs `.github/workflows/ci.yml`:
+
+1. **Lint** — ESLint (typescript-eslint + react-hooks), zero warnings allowed
+2. **Typecheck** — strict TypeScript for the React app and the server
+3. **Migrations match the schema** — fails if `server/db/schema.ts` changed without `npm run db:generate`
+4. **Build** — production Vite build
+5. **Smoke test** — the full request → approval → sourcing → outreach flow in mock mode
+6. **Dependency audit** — fails on high/critical advisories in production dependencies
+
+Dependabot opens weekly update PRs (`.github/dependabot.yml`). To block merges that fail CI, turn on branch protection for `main` (Settings → Branches → require the "Lint, typecheck, build, smoke test" check).
 
 ## Rules built into the code
 

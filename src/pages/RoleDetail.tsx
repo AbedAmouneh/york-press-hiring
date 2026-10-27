@@ -116,7 +116,7 @@ export default function RoleDetail() {
   const cands = useQuery({ queryKey: ["candidates", id], queryFn: () => api<{ candidates: CandidateRow[]; canEdit: boolean }>(`/requests/${id}/candidates`), refetchInterval: running ? 3000 : false });
   const apps = useQuery({ queryKey: ["applications", id], queryFn: () => api<{ applications: Application[] }>(`/requests/${id}/applications`), enabled: tab === "applications" });
 
-  const all = cands.data?.candidates ?? [];
+  const all = useMemo(() => cands.data?.candidates ?? [], [cands.data]);
   const top = all.filter((c) => c.isTop10);
   const filtered = useMemo(() => all.filter((c) =>
     (!filter.q || `${c.fullName} ${c.currentTitle} ${c.currentCompany} ${c.location}`.toLowerCase().includes(filter.q.toLowerCase())) &&

@@ -30,6 +30,8 @@ export function buildPdlQuery(brief: SearchBrief) {
   };
 }
 
+// PDL records are large and loosely typed; we read them defensively at this boundary only.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PdlRecord = Record<string, any>;
 
 const ym = (d?: string | null) => (d ? d.slice(0, 7) : null);

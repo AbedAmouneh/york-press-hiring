@@ -3,7 +3,13 @@ import { env, mock } from "../../env.js";
 import { mockContact, mockProfiles } from "./mock.js";
 import { countriesFrom } from "./pdl.js";
 import { normalizeLinkedin, type CandidateSearchProvider, type NormalizedProfile } from "./types.js";
-import type { SearchBrief } from "../../db/schema.js";
+
+/** Person API candidate object (only the fields we read). https://docs.signalhire.com/person-api/candidate-object */
+export type SHCandidate = {
+  contacts?: { type: string; value: string; rating?: number; subType?: string | null }[];
+  social?: { type: string; link: string }[];
+} | null | undefined;
+type SHItem = { item: string; status: string; candidate?: SHCandidate };
 
 const BASE = "https://www.signalhire.com/api/v1";
 
@@ -15,6 +21,8 @@ async function call(path: string, init: { method?: string; body?: unknown } = {}
   });
   const credits = res.headers.get("x-credits-left");
   const text = await res.text();
+  // Raw API response; each caller narrows it to the documented shape.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let json: any = null;
   try { json = text ? JSON.parse(text) : null; } catch { json = text; }
   if (!res.ok) {
@@ -80,12 +88,12 @@ export const signalhireProvider: CandidateSearchProvider = {
 
 export type RevealResult = { item: string; status: string; email: string | null; phone: string | null; linkedinUrl: string | null };
 
-export function parseCandidate(item: string, status: string, c: any): RevealResult {
+export function parseCandidate(item: string, status: string, c: SHCandidate): RevealResult {
   if (status !== "success" || !c) return { item, status, email: null, phone: null, linkedinUrl: null };
-  const contacts: { type: string; value: string; rating?: number; subType?: string | null }[] = c.contacts ?? [];
+  const contacts = c.contacts ?? [];
   const emails = contacts.filter((x) => x.type === "email").sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (a.subType === "work" ? -1 : 1));
   const phones = contacts.filter((x) => x.type === "phone").sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-  const li = (c.social ?? []).find((s: { type: string }) => s.type === "li")?.link ?? null;
+  const li = (c.social ?? []).find((s) => s.type === "li")?.link ?? null;
   return { item, status, email: emails[0]?.value ?? null, phone: phones[0]?.value ?? null, linkedinUrl: normalizeLinkedin(li) };
 }
 
@@ -108,7 +116,7 @@ export async function revealContacts(items: string[], callbackUrl: string | null
   }
   const { json, creditsLeft } = await call("/candidate/search", { body: { items, withoutWaterfall: true } });
   if (creditsLeft != null) lastCreditsLeft = creditsLeft;
-  const arr: any[] = Array.isArray(json) ? json : json?.items ?? [];
+  const arr: SHItem[] = Array.isArray(json) ? json : json?.items ?? [];
   return { requestId: null, results: arr.map((r) => parseCandidate(r.item, r.status, r.candidate)), creditsLeft, mock: false };
 }
 
