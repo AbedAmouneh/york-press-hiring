@@ -36,6 +36,30 @@ function SwitchRow({ id, label, hint, checked, onChange }: { id: string; label: 
   );
 }
 
+type RetentionData = { months: number; nextRun: { cutoff: string; candidates: number; applications: number; emailLog: number; notifications: number } };
+
+function Retention() {
+  const q = useQuery({ queryKey: ["retention"], queryFn: () => api<RetentionData>("/retention") });
+  const n = q.data?.nextRun;
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader><CardTitle>Automatic data deletion</CardTitle></CardHeader>
+      <CardContent className="grid gap-2 text-sm">
+        <p>
+          Every day, personal data that nobody has touched for {q.data?.months ?? 24} months is deleted: candidates who aren't in an open role,
+          CVs for roles that are no longer open, copies of sent emails and old notifications. The do-not-contact list is kept so people who
+          opted out are never contacted again.
+        </p>
+        {n ? (
+          <p className="text-muted-foreground">
+            Next run (anything older than {fmtDateTime(n.cutoff)}): {n.candidates} candidates, {n.applications} CVs, {n.emailLog} emails, {n.notifications} notifications.
+          </p>
+        ) : <Spinner />}
+      </CardContent>
+    </Card>
+  );
+}
+
 function General() {
   const qc = useQueryClient();
   const toast = useToast();
@@ -84,6 +108,7 @@ function General() {
           <p className="text-xs text-muted-foreground">Add API keys in Vercel → Project → Settings → Environment Variables, then redeploy. See SETUP_GUIDE.md.</p>
         </CardContent>
       </Card>
+      <Retention />
       <Card className="lg:col-span-2">
         <CardHeader><CardTitle>Default scorecard weights</CardTitle></CardHeader>
         <CardContent className="grid gap-3">
