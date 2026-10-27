@@ -16,7 +16,6 @@ export function fmtDateTime(d?: string | Date | null) {
   return date.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Beirut" });
 }
 
-export const lines = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 
 export function money(min?: number | null, max?: number | null, currency?: string | null, period?: string) {
   if (!min && !max) return "—";
