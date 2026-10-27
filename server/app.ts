@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { requireAuth, type AppEnv } from "./auth.js";
+import { env } from "./env.js";
 import { publicRoutes } from "./routes/public.js";
 import { requestRoutes } from "./routes/requests.js";
 import { candidateRoutes } from "./routes/candidates.js";
@@ -20,7 +21,8 @@ app.onError((err, c) => {
     return c.json({ error: `${first.path.join(".") || "Input"}: ${first.message}` }, 400);
   }
   console.error(err);
-  return c.json({ error: err instanceof Error ? err.message : "Something went wrong." }, 500);
+  // Internal messages can name tables, providers or keys; only show them during development.
+  return c.json({ error: !env.isProd && err instanceof Error ? err.message : "Something went wrong. Please try again." }, 500);
 });
 
 app.route("/", publicRoutes);
