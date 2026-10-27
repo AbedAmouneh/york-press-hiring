@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, randomToken, requireRole, type AppEnv, type SessionUser } from "../auth.js";
 import { CRITERIA, type Weights } from "../../shared/types.js";
-import { DecisionInput, RequestFields, RequestInput, WeightsInput } from "../../shared/schemas.js";
+import { DecisionInput, RequestInput, RequestPatch, WeightsInput } from "../../shared/schemas.js";
 import { isStaff, loadRequest } from "./access.js";
 import { notifyRoles, notifyUsers } from "../services/notify.js";
 import { startRun } from "../services/pipeline.js";
@@ -102,7 +102,7 @@ requestRoutes.patch("/requests/:id", async (c) => {
   const r = await loadRequest(c.req.param("id"), user);
   const editable = (r.requesterId === user.id && ["draft", "changes_requested"].includes(r.status)) || hasRole(user, "admin", "recruiter");
   if (!editable) throw new HTTPException(403, { message: "This request can't be edited now." });
-  const input = RequestFields.partial().parse(await c.req.json());
+  const input = RequestPatch.parse(await c.req.json());
   const db = await getDb();
   await db.update(schema.roleRequests).set({ ...input, updatedAt: new Date() }).where(eq(schema.roleRequests.id, r.id));
   await event(r.id, user, "edited");
