@@ -5,7 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import App from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { initMonitoring } from "./lib/monitoring";
 import "./index.css";
+
+initMonitoring();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,7 +28,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <BrowserRouter>
-          <App />
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
         </BrowserRouter>
         <Toaster position="bottom-center" />
       </TooltipProvider>
