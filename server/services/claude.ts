@@ -5,7 +5,7 @@ import type { SearchBrief, ScoreBreakdown, WebFinding } from "../db/schema.js";
 import { logUsage } from "./settings.js";
 import { rng } from "./providers/mock.js";
 
-type Req = {
+export type Req = {
   title: string;
   department: string;
   seniority: string;
