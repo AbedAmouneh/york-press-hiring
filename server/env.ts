@@ -17,6 +17,8 @@ export const env = {
   get emailFrom() { return v("EMAIL_FROM") || "York Press Hiring <hiring@york-press.com>"; },
   get demoMode() { return v("DEMO_MODE").toLowerCase() === "true"; },
   get onVercel() { return !!v("VERCEL"); },
+  get vercelEnv() { return v("VERCEL_ENV"); }, // production | preview | development
+  get sentryDsn() { return v("SENTRY_DSN"); },
   get isProd() { return v("NODE_ENV") === "production" || !!v("VERCEL"); },
 };
 
