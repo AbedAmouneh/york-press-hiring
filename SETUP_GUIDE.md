@@ -89,6 +89,8 @@ A sourcing run takes several minutes and is split into slices. QStash hands each
 
 Without it, runs still work the old way: each slice starts the next one directly, and the daily job restarts any run that got stuck.
 
+With QStash on, the Monday refresh also scores candidates through Claude's batch service at **half price**. Results arrive within the hour instead of minutes, which is fine for a weekly refresh. First runs and "Refresh now" still score straight away.
+
 ### Error alerts (Sentry, free plan is enough)
 
 1. Sign up at sentry.io and create a project of type **React** (it covers the browser; the server uses the same project).

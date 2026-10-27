@@ -51,6 +51,10 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   `/api/internal/queue/runs`, retried on failure); without QStash they run in the background.
   A locked run answers 503 so QStash retries after the lock expires.
 - `server/services/claude.ts`: every Claude call, with mock heuristics when no key is set.
+  Cost rules: anything shared across calls (request, scorecard, rules) goes in `cachedPrefix`
+  and must not contain per-candidate data, or the cache stops hitting. Weekly refreshes score via
+  the Message Batches API (half price) when QStash is on; first runs and manual refreshes score
+  directly so results come quickly. Usage logs record cache reads and writes.
 - `server/services/providers/`: PDL and SignalHire clients plus fictional mock data.
 - `server/routes/`: public (setup, auth, apply page, SignalHire webhook, cron), requests,
   candidates, outreach, admin. Permission checks live in `routes/access.ts`.
