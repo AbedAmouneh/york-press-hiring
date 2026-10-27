@@ -1,19 +1,18 @@
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { EmptyState, Spinner } from "@/components/kit";
 import { Card } from "@/components/ui/card";
 
-type N = { id: string; title: string; link: string | null; readAt: string | null; createdAt: string };
 
 export default function Notifications() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["notifications"], queryFn: () => api<{ notifications: N[]; unread: number }>("/notifications") });
+  const q = useQuery({ queryKey: ["notifications"], queryFn: () => call(rpc.notifications.$get()) });
   async function readAll() {
-    await api("/notifications/read", { body: {} });
+    await call(rpc.notifications.read.$post({ json: {} }));
     qc.invalidateQueries({ queryKey: ["notifications"] });
   }
   return (
@@ -32,7 +31,7 @@ export default function Notifications() {
               </div>
             );
             return n.link ? (
-              <Link key={n.id} to={n.link} className="block hover:bg-secondary/50" onClick={() => api("/notifications/read", { body: { ids: [n.id] } }).then(() => qc.invalidateQueries({ queryKey: ["notifications"] }))}>{inner}</Link>
+              <Link key={n.id} to={n.link} className="block hover:bg-secondary/50" onClick={() => call(rpc.notifications.read.$post({ json: { ids: [n.id] } })).then(() => qc.invalidateQueries({ queryKey: ["notifications"] }))}>{inner}</Link>
             ) : <div key={n.id}>{inner}</div>;
           })}
         </Card>
