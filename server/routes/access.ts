@@ -2,6 +2,7 @@ import { HTTPException } from "hono/http-exception";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, type SessionUser } from "../auth.js";
+import { needsTwoFactorSetup } from "../services/two-factor.js";
 
 type Request = typeof schema.roleRequests.$inferSelect;
 
@@ -34,4 +35,6 @@ export const publicUser = (u: SessionUser) => ({
   isDemo: u.isDemo,
   invited: !!u.inviteToken && !u.passwordHash,
   lastLoginAt: u.lastLoginAt,
+  twoFactorEnabled: !!u.totpEnabledAt,
+  twoFactorSetupRequired: needsTwoFactorSetup(u),
 });
