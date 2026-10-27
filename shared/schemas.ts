@@ -16,6 +16,9 @@ export const LoginInput = z.object({
 
 export const InvitePasswordInput = z.object({ password });
 
+/** A 6-digit authenticator code, or a recovery code like "abcd-efgh-ijkl". */
+export const TwoFactorCodeInput = z.object({ code: z.string().trim().min(6, "Enter the 6-digit code.").max(20) });
+
 export const ManagerInvite = z.object({ name: z.string().trim(), email: z.string().trim(), department: z.string().trim().optional() });
 
 export const SetupInput = z.object({
