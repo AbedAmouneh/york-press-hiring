@@ -6,6 +6,7 @@ import { notifyRoles } from "./notify.js";
 import { getSettings, updateSettings } from "./settings.js";
 import { localWeekday } from "./dates.js";
 import { signalhireCredits } from "./providers/signalhire.js";
+import { pruneRateLimits } from "./rate-limit.js";
 
 /** 48h reminder for requests waiting on Khalil. */
 export async function sendApprovalReminders() {
@@ -87,6 +88,7 @@ export async function runDaily(now = new Date()) {
     const credits = await signalhireCredits();
     if (credits != null) await updateSettings({ signalhireCreditsLeft: credits });
   } catch { /* ignore */ }
+  await pruneRateLimits(now);
   if (localWeekday(now) === 1) {
     out.weeklyRefresh = await weeklyRefresh();
     out.weeklySummary = await weeklySummary();
