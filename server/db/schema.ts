@@ -290,7 +290,9 @@ export const applications = pgTable("applications", {
   note: text("note"),
   cvFileName: text("cv_file_name").notNull(),
   cvMime: text("cv_mime").notNull(),
-  cvBase64: text("cv_base64").notNull(),
+  // Where the CV file lives: a private Vercel Blob pathname in production, or inline base64 locally.
+  cvBlobPath: text("cv_blob_path"),
+  cvBase64: text("cv_base64"),
   score: integer("score"),
   analysis: jsonb("analysis").$type<{ why?: string; gaps?: string; breakdown?: ScoreBreakdown }>(),
   createdAt: createdAt(),
