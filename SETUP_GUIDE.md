@@ -80,6 +80,15 @@ CVs that candidates upload are kept in a **private** Vercel Blob store, not in t
 
 Without the token (on your Mac), CVs stay in the local database.
 
+### Reliable sourcing runs (Upstash QStash, free plan is enough)
+
+A sourcing run takes several minutes and is split into slices. QStash hands each slice to the app and retries automatically if one fails or times out, so a run never silently stops halfway.
+
+1. In Vercel: **Storage → Create → Upstash → QStash** (or **Integrations → Upstash**), and connect it to this project. Vercel adds `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY` and `QSTASH_NEXT_SIGNING_KEY`.
+2. Make sure `APP_URL` is your live https address, then redeploy.
+
+Without it, runs still work the old way: each slice starts the next one directly, and the daily job restarts any run that got stuck.
+
 ### Error alerts (Sentry, free plan is enough)
 
 1. Sign up at sentry.io and create a project of type **React** (it covers the browser; the server uses the same project).

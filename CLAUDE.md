@@ -47,6 +47,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   backwards compatible: the old version keeps serving until the new build goes live.
 - `server/services/pipeline.ts`: resumable sourcing run (brief, search, enrich, score, rank,
   reveal, outreach). Each step is saved so a run can continue after Vercel's 300 s limit.
+  Slices are queued with QStash (`server/services/queue.ts`, signed calls to
+  `/api/internal/queue/runs`, retried on failure); without QStash they run in the background.
+  A locked run answers 503 so QStash retries after the lock expires.
 - `server/services/claude.ts`: every Claude call, with mock heuristics when no key is set.
 - `server/services/providers/`: PDL and SignalHire clients plus fictional mock data.
 - `server/routes/`: public (setup, auth, apply page, SignalHire webhook, cron), requests,
