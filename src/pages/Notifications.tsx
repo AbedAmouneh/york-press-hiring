@@ -4,7 +4,8 @@ import { api } from "@/lib/api";
 import { fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { Card, EmptyState, Spinner } from "@/components/ui/misc";
+import { EmptyState, Spinner } from "@/components/kit";
+import { Card } from "@/components/ui/card";
 
 type N = { id: string; title: string; link: string | null; readAt: string | null; createdAt: string };
 
