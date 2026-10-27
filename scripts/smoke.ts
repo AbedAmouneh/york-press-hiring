@@ -95,6 +95,12 @@ const download = await app.fetch(new Request(`http://localhost/api/applications/
 ok(download.ok && (await download.text()) === cvText, "the recruiter downloads the same CV file");
 ok((await app.fetch(new Request(`http://localhost/api/applications/${applications[0].id}/cv`))).status === 401, "CVs need a signed-in user");
 
+// ---------------------------------------------------------------- daily job and data retention
+const retention = await admin("GET", "/retention");
+ok(retention.months === 24 && retention.nextRun.candidates === 0, "retention preview: nothing is old enough to delete yet");
+const daily = await admin("GET", "/cron/daily");
+ok(daily.retention && daily.retention.candidates === 0, "the daily job runs the retention step");
+
 // ---------------------------------------------------------------- security
 const raw = (method: string, url: string, body?: unknown, headers: Record<string, string> = {}) =>
   app.fetch(new Request(`http://localhost/api${url}`, {
