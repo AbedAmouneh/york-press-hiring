@@ -2,7 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, Briefcase, CheckSquare, FileText, Inbox, Send, LogOut, Mail, Settings, Users } from "lucide-react";
 import { call, rpc } from "@/lib/rpc";
-import { can, useLogout } from "@/lib/auth";
+import { can, useLogout, useMe } from "@/lib/auth";
 import type { Me } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
@@ -12,6 +12,7 @@ type Item = { to: string; label: string; icon: typeof Bell; count?: number; show
 
 export function AppShell({ me }: { me: Me }) {
   const logout = useLogout();
+  const preview = useMe().data?.preview ?? false;
   const notes = useQuery({ queryKey: ["notifications"], queryFn: () => call(rpc.notifications.$get()), refetchInterval: 30_000 });
   const approvals = useQuery({
     queryKey: ["requests", "approvals"],
@@ -61,6 +62,11 @@ export function AppShell({ me }: { me: Me }) {
         </div>
       </aside>
       <main className="min-w-0 flex-1 px-4 py-6 md:px-8">
+        {preview && (
+          <div role="status" className="mx-auto mb-5 max-w-6xl rounded-md border border-warning bg-warning/10 px-3 py-2 text-sm">
+            <b>Test copy for a pull request.</b> Uses sample candidates and the mock outbox: nothing here emails anyone or spends credits.
+          </div>
+        )}
         <div className="mx-auto max-w-6xl">
           <Outlet />
         </div>
