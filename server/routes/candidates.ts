@@ -9,6 +9,7 @@ import { appIsPublic, env, mock } from "../env.js";
 import { revealContacts } from "../services/providers/signalhire.js";
 import { applyRevealResults } from "../services/pipeline.js";
 import { updateSettings } from "../services/settings.js";
+import { readCv } from "../services/cv-store.js";
 
 export const candidateRoutes = new Hono<AppEnv>();
 
@@ -160,7 +161,9 @@ candidateRoutes.get("/applications/:id/cv", async (c) => {
   if (!a) throw new HTTPException(404, { message: "CV not found." });
   const r = await loadRequest(a.requestId, c.get("user"));
   if (!canSeeContacts(c.get("user"), r)) throw new HTTPException(403, { message: "You don't have access to CVs for this role." });
-  return new Response(Buffer.from(a.cvBase64, "base64"), {
+  const bytes = await readCv(a);
+  if (!bytes) throw new HTTPException(404, { message: "This CV file is no longer stored." });
+  return new Response(bytes, {
     headers: { "Content-Type": a.cvMime, "Content-Disposition": `attachment; filename="${a.cvFileName.replace(/"/g, "")}"` },
   });
 });
