@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { useMe } from "@/lib/auth";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,7 @@ export default function Login() {
 
   async function signIn(creds: { email: string; password: string }) {
     try {
-      await api("/auth/login", { body: creds });
+      await call(rpc.auth.login.$post({ json: creds }));
       await qc.invalidateQueries();
       navigate(params.get("next") ?? "/", { replace: true });
     } catch (err) {
