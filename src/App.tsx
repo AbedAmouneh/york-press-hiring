@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
 import { homeFor, useMe } from "./lib/auth";
 import { AppShell } from "./components/AppShell";
-import { Spinner } from "./components/ui/misc";
+import { Spinner } from "./components/kit";
 import Login from "./pages/Login";
 import Setup from "./pages/Setup";
 import Invite from "./pages/Invite";
