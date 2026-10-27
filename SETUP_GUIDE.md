@@ -70,6 +70,15 @@ Your mailboxes stay on **Rackspace**; Resend only *sends*. Replies go to each re
 2. Resend shows a few DNS records (DKIM, plus SPF/MX on a `send.` sub-domain). Add exactly those records where york-press.com's DNS is managed (Rackspace Cloud DNS or your domain registrar). Your IT contact can do this in 5 minutes. They don't change the records your Rackspace mailboxes use.
 3. Wait until Resend shows the domain as **Verified**, then add `RESEND_API_KEY` in Vercel and redeploy.
 
+### Error alerts (Sentry, free plan is enough)
+
+1. Sign up at sentry.io and create a project of type **React** (it covers the browser; the server uses the same project).
+2. Copy the **DSN** from Project Settings → Client Keys.
+3. In Vercel add `SENTRY_DSN` and `VITE_SENTRY_DSN`, both set to that DSN, then redeploy.
+4. Optional, for readable stack traces: create an auth token under Settings → Auth Tokens and add `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT`.
+
+Sentry then emails you when a page crashes, an API call fails, or a sourcing run stops. It never receives candidate details, CVs, form contents or cookies.
+
 ### SignalHire contact results
 
 SignalHire sends contact results back to the app automatically. This only works once `APP_URL` is your real `https://…vercel.app` address. Nothing else to configure.
