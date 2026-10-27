@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { ApplyForm } from "@/lib/forms";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import { Field, Spinner } from "@/components/kit";
+import { Field, FormError, Spinner } from "@/components/kit";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,22 +22,24 @@ export default function Apply() {
     retry: false,
   });
   const [done, setDone] = useState(false);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const form = useForm({ resolver: zodResolver(ApplyForm), defaultValues: { name: "", email: "", linkedin: "", note: "" } });
+  const { errors, isSubmitting } = form.formState;
 
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
+  const submit = form.handleSubmit(async (values) => {
+    const data = new FormData();
+    data.set("name", values.name);
+    data.set("email", values.email);
+    if (values.linkedin) data.set("linkedin", values.linkedin);
+    if (values.note) data.set("note", values.note);
+    data.set("consent", "true");
+    data.set("cv", values.cv[0]);
     try {
-      await api(`/public/apply/${token}`, { form: new FormData(e.currentTarget) });
+      await api(`/public/apply/${token}`, { form: data });
       setDone(true);
     } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
+      form.setError("root", { message: (err as Error).message });
     }
-  }
+  });
 
   return (
     <div className="min-h-full bg-background">
@@ -45,7 +50,7 @@ export default function Apply() {
         ) : done ? (
           <Card className="p-8 text-center">
             <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-success" />
-            <h1 className="text-xl font-bold">Thank you — we've received your CV</h1>
+            <h1 className="text-xl font-bold">Thank you, we've received your CV</h1>
             <p className="mt-2 text-sm text-muted-foreground">Our talent team will review it and get back to you.</p>
           </Card>
         ) : (
@@ -54,20 +59,25 @@ export default function Apply() {
             <h1 className="mb-3 text-2xl font-bold">{role.data!.title}</h1>
             {role.data!.description && <p className="mb-6 whitespace-pre-line text-sm text-muted-foreground">{role.data!.description}</p>}
             <Card className="p-6">
-              <form onSubmit={submit} className="grid gap-4">
+              <form onSubmit={submit} className="grid gap-4" noValidate>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Full name" htmlFor="name"><Input id="name" name="name" required autoComplete="name" /></Field>
-                  <Field label="Email" htmlFor="email"><Input id="email" name="email" type="email" required autoComplete="email" /></Field>
+                  <Field label="Full name" htmlFor="name" error={errors.name?.message}><Input id="name" autoComplete="name" aria-invalid={!!errors.name} {...form.register("name")} /></Field>
+                  <Field label="Email" htmlFor="email" error={errors.email?.message}><Input id="email" type="email" autoComplete="email" aria-invalid={!!errors.email} {...form.register("email")} /></Field>
                 </div>
-                <Field label="LinkedIn profile (optional)" htmlFor="linkedin"><Input id="linkedin" name="linkedin" placeholder="https://www.linkedin.com/in/…" /></Field>
-                <Field label="CV" hint="PDF, Word or text, up to 4 MB." htmlFor="cv"><Input id="cv" name="cv" type="file" accept=".pdf,.doc,.docx,.txt" required className="h-auto py-1.5" /></Field>
-                <Field label="Anything you'd like to add (optional)" htmlFor="note"><Textarea id="note" name="note" /></Field>
-                <label className="flex items-start gap-2 text-sm">
-                  <input type="checkbox" name="consent" className="mt-1" required />
-                  <span>I agree that York Press may store my CV and contact details to assess me for this and similar roles, and that I can ask for them to be deleted at any time.</span>
-                </label>
-                {error && <p className="text-sm text-destructive">{error}</p>}
-                <Button type="submit" variant="brand" disabled={busy}>{busy ? "Sending…" : "Send my CV"}</Button>
+                <Field label="LinkedIn profile (optional)" htmlFor="linkedin"><Input id="linkedin" placeholder="https://www.linkedin.com/in/…" {...form.register("linkedin")} /></Field>
+                <Field label="CV" hint="PDF, Word or text, up to 4 MB." htmlFor="cv" error={errors.cv?.message}>
+                  <Input id="cv" type="file" accept=".pdf,.doc,.docx,.txt" className="h-auto py-1.5" aria-invalid={!!errors.cv} {...form.register("cv")} />
+                </Field>
+                <Field label="Anything you'd like to add (optional)" htmlFor="note" error={errors.note?.message}><Textarea id="note" {...form.register("note")} /></Field>
+                <div className="grid gap-1">
+                  <label className="flex items-start gap-2 text-sm">
+                    <input type="checkbox" className="mt-1" {...form.register("consent")} />
+                    <span>I agree that York Press may store my CV and contact details to assess me for this and similar roles, and that I can ask for them to be deleted at any time.</span>
+                  </label>
+                  {errors.consent && <p className="text-xs text-destructive">{errors.consent.message}</p>}
+                </div>
+                <FormError>{errors.root?.message}</FormError>
+                <Button type="submit" variant="brand" disabled={isSubmitting}>{isSubmitting ? "Sending…" : "Send my CV"}</Button>
               </form>
             </Card>
           </>
