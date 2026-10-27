@@ -9,21 +9,33 @@ process.env.DEMO_MODE = "true";
 for (const k of ["DATABASE_URL", "ANTHROPIC_API_KEY", "PDL_API_KEY", "SIGNALHIRE_API_KEY", "RESEND_API_KEY"]) delete process.env[k];
 
 const { default: app } = await import("../server/app.js");
+const { currentCode } = await import("../server/services/two-factor.js");
 
+/** A signed-in browser stand-in: keeps cookies between calls like a real browser. */
 function client() {
-  let cookie = "";
-  return async (method: string, url: string, body?: unknown) => {
+  const jar = new Map<string, string>();
+  const cookie = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+  const raw = async (method: string, url: string, body?: unknown) => {
     const res = await app.fetch(new Request(`http://localhost/api${url}`, {
       method,
-      headers: { "Content-Type": "application/json", ...(cookie ? { cookie } : {}) },
+      headers: { "Content-Type": "application/json", ...(jar.size ? { cookie: cookie() } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     }));
-    const set = res.headers.get("set-cookie");
-    if (set) cookie = set.split(";")[0];
+    for (const line of res.headers.getSetCookie()) {
+      const [pair, ...attrs] = line.split(";");
+      const [name, value] = pair.split("=");
+      const expired = attrs.some((a) => /max-age=0|expires=thu, 01 jan 1970/i.test(a.trim()));
+      if (expired || !value) jar.delete(name.trim()); else jar.set(name.trim(), value);
+    }
+    return res;
+  };
+  const call = async (method: string, url: string, body?: unknown) => {
+    const res = await raw(method, url, body);
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(`${method} ${url} → ${res.status} ${JSON.stringify(json)}`);
     return json as any;
   };
+  return Object.assign(call, { raw, cookie });
 }
 
 const ok = (cond: unknown, msg: string) => { if (!cond) throw new Error(`FAILED: ${msg}`); console.log(`✓ ${msg}`); };
@@ -35,6 +47,12 @@ await admin("POST", "/setup", {
   ceoName: "Khalil Sayegh", ceoEmail: "khalil.sayegh@york-press.com", managers: [],
 });
 ok((await admin("GET", "/auth/me")).user?.roles.includes("admin"), "admin signed in after setup");
+ok((await admin.raw("GET", "/requests")).status === 403, "admin must set up two-step login before using the app");
+const enrol = await admin("POST", "/auth/2fa/setup");
+ok(enrol.qrDataUrl.startsWith("data:image/png") && enrol.uri.startsWith("otpauth://totp/"), "two-step setup returns a QR code");
+const { recoveryCodes } = await admin("POST", "/auth/2fa/enable", { code: currentCode(enrol.secret) });
+ok(recoveryCodes.length === 8, "admin turned on two-step login and got 8 recovery codes");
+ok((await admin("GET", "/auth/me")).user.twoFactorEnabled, "admin can use the app once two-step login is on");
 
 const manager = client();
 await manager("POST", "/auth/login", { email: "demo.manager@york-press.test", password: "demo-york-2026" });
@@ -87,11 +105,7 @@ const applied = await app.fetch(new Request(`http://localhost/api/public/apply/$
 ok(applied.ok, "a candidate uploaded a CV on the apply page");
 const { applications } = await admin("GET", `/requests/${id}/applications`);
 ok(applications.length === 1 && applications[0].score != null, "the CV is listed and scored");
-const adminCookie = (await app.fetch(new Request("http://localhost/api/auth/login", {
-  method: "POST", headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ email: "abed.amouneh@york-press.com", password: "a-long-password-123" }),
-}))).headers.get("set-cookie")!.split(";")[0];
-const download = await app.fetch(new Request(`http://localhost/api/applications/${applications[0].id}/cv`, { headers: { cookie: adminCookie } }));
+const download = await admin.raw("GET", `/applications/${applications[0].id}/cv`);
 ok(download.ok && (await download.text()) === cvText, "the recruiter downloads the same CV file");
 ok((await app.fetch(new Request(`http://localhost/api/applications/${applications[0].id}/cv`))).status === 401, "CVs need a signed-in user");
 
@@ -118,5 +132,20 @@ ok(locked.status === 429, "sign-in locks after 5 failed attempts, even with the 
 ok((await raw("POST", "/auth/login", { email: "demo.recruiter@york-press.test", password: "demo-york-2026" })).status === 200, "other accounts can still sign in");
 ok((await raw("POST", "/internal/queue/runs", { runId: weekly.runId })).status === 401, "the job queue endpoint rejects unsigned calls");
 ok((await raw("POST", "/setup", { adminName: "X Y", adminEmail: "x@y.test", adminPassword: "a-long-password", ceoName: "C D", ceoEmail: "c@d.test" })).status === 409, "setup can't run twice");
+
+// ---------------------------------------------------------------- two-step sign-in
+const abed = { email: "abed.amouneh@york-press.com", password: "a-long-password-123" };
+const second = client();
+const step1 = await second("POST", "/auth/login", abed);
+ok(step1.mfaRequired && !step1.user, "a password alone doesn't sign the admin in");
+ok((await second("GET", "/auth/me")).user === null, "no session before the second step");
+ok((await second.raw("POST", "/auth/mfa", { code: "000000" })).status === 401, "a wrong code is refused");
+const step2 = await second("POST", "/auth/mfa", { code: recoveryCodes[0] });
+ok(step2.user.email === abed.email && step2.recoveryCodesLeft === 7, "a recovery code signs in once and is used up");
+const third = client();
+await third("POST", "/auth/login", abed);
+ok((await third.raw("POST", "/auth/mfa", { code: recoveryCodes[0] })).status === 401, "the same recovery code can't be used twice");
+ok((await client().raw("POST", "/auth/mfa", { code: currentCode(enrol.secret) })).status === 401, "the second step needs the password step first");
+
 console.log("\nAll smoke checks passed.");
 process.exit(0);
