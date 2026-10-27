@@ -3,9 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Users } from "lucide-react";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { can, useMe } from "@/lib/auth";
-import type { RequestRow } from "@/lib/types";
 import { fmtDate, fmtDateTime, money } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { RequestStatusBadge } from "@/components/Status";
@@ -14,8 +13,6 @@ import { Badge, Field, FormError, Spinner, useToast } from "@/components/kit";
 import { DecisionInput } from "../../shared/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-
-type Ev = { id: string; actorName: string; action: string; comment: string | null; createdAt: string };
 
 function Chips({ items }: { items: string[] }) {
   if (!items.length) return <span className="text-muted-foreground">None</span>;
@@ -48,7 +45,7 @@ function DecisionForm({ requestId }: { requestId: string }) {
     form.setValue("action", action);
     return form.handleSubmit(async (values) => {
       try {
-        await api(`/requests/${requestId}/decision`, { body: { ...values, comment: values.comment || undefined } });
+        await call(rpc.requests[":id"].decision.$post({ param: { id: requestId }, json: { ...values, comment: values.comment || undefined } }));
         await qc.invalidateQueries();
         toast(DONE[values.action]);
       } catch (e) {
@@ -76,11 +73,11 @@ function DecisionForm({ requestId }: { requestId: string }) {
 }
 
 export default function RequestDetail() {
-  const { id } = useParams();
+  const { id = "" } = useParams();
   const me = useMe().data!.user!;
   const qc = useQueryClient();
   const toast = useToast();
-  const q = useQuery({ queryKey: ["request", id], queryFn: () => api<{ request: RequestRow; events: Ev[] }>(`/requests/${id}`) });
+  const q = useQuery({ queryKey: ["request", id], queryFn: () => call(rpc.requests[":id"].$get({ param: { id } })) });
   if (q.isLoading) return <Spinner />;
   if (q.error) return <p className="text-destructive">{(q.error as Error).message}</p>;
   const { request: r, events } = q.data!;
@@ -90,7 +87,7 @@ export default function RequestDetail() {
 
   async function submitDraft() {
     try {
-      await api(`/requests/${r.id}/submit`, { method: "POST" });
+      await call(rpc.requests[":id"].submit.$post({ param: { id: r.id } }));
       await qc.invalidateQueries();
       toast("Submitted. Khalil has been notified.");
     } catch (e) {
