@@ -9,6 +9,7 @@ import { Spinner } from "./components/kit";
 import Login from "./pages/Login";
 import Setup from "./pages/Setup";
 import Invite from "./pages/Invite";
+import TwoFactorSetup from "./pages/TwoFactor";
 import Apply from "./pages/Apply";
 import Requests from "./pages/Requests";
 import RequestForm from "./pages/RequestForm";
@@ -46,6 +47,7 @@ export default function App() {
       </Routes>
     );
   }
+  if (user.twoFactorSetupRequired) return <TwoFactorSetup />;
   return (
     <Routes>
       <Route path="/login" element={<Navigate to={homeFor(user)} replace />} />
