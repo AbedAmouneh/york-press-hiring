@@ -70,6 +70,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   daily cap. Every email states where the contact details came from. LinkedIn is approval-gated.
 - **Contacts:** SignalHire reveals only for the Top 10 (or a recruiter's manual click). Store the
   source and retrieval date. Opt-outs and closed roles can delete emails and phones.
+- **Retention** (`server/services/retention.ts`, daily cron): data untouched for 24 months is
+  deleted. A new table holding personal data must be added there, with a test in
+  `tests/unit/retention.test.ts`. Never delete the do-not-contact list.
 - **Secrets** live only in Vercel environment variables or a local `.env` (gitignored).
 - Permissions are enforced on the server for every route, not only hidden in the UI.
 - **Security** (`server/security.ts`, `server/services/rate-limit.ts`): state-changing requests

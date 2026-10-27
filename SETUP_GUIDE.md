@@ -102,6 +102,7 @@ Vercel runs `/api/cron/daily` every day at 06:00 UTC (08:00–09:00 Beirut). It:
 - sends queued outreach emails within the daily cap (unless the kill switch is off),
 - reminds Khalil about requests waiting more than 48 hours,
 - resumes any sourcing run that was interrupted,
+- deletes personal data nobody has touched for 24 months (candidates not in an open role, CVs for closed roles, copies of sent emails, old notifications). The do-not-contact list is kept. **Settings** shows what the next run would delete,
 - on **Mondays**: re-runs sourcing for every open role (new profiles only, "New contender" flags) and emails Khalil the weekly summary.
 
 ## LinkedIn messages (candidates without an email)
