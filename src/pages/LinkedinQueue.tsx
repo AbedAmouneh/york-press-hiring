@@ -5,10 +5,10 @@ import { Check, Copy, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/form";
-import { Badge, Card, CardContent, EmptyState, Spinner } from "@/components/ui/misc";
-import { useToast } from "@/components/ui/toast";
 import type { OutreachData, Msg } from "./Outreach";
+import { Badge, EmptyState, Spinner, useToast } from "@/components/kit";
+import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 
 function MessageCard({ m, onDone }: { m: Msg; onDone: () => void }) {
   const toast = useToast();
