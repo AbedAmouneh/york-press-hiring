@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Briefcase, CheckSquare, FileText, Inbox, Linkedin, LogOut, Mail, Settings, Users } from "lucide-react";
+import { Bell, Briefcase, CheckSquare, FileText, Inbox, Send, LogOut, Mail, Settings, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { can, useLogout } from "@/lib/auth";
 import type { Me } from "@/lib/types";
@@ -24,7 +24,7 @@ export function AppShell({ me }: { me: Me }) {
     { to: "/roles", label: can(me, "recruiter", "admin", "ceo") ? "Open roles" : "My roles", icon: Briefcase, show: true },
     { to: "/requests", label: can(me, "recruiter", "admin", "ceo") ? "All requests" : "My requests", icon: FileText, show: true },
     { to: "/outreach", label: "Email outreach", icon: Mail, show: can(me, "recruiter", "admin") },
-    { to: "/linkedin", label: "LinkedIn queue", icon: Linkedin, show: can(me, "recruiter", "admin") },
+    { to: "/linkedin", label: "LinkedIn queue", icon: Send, show: can(me, "recruiter", "admin") },
     { to: "/outbox", label: "Sent emails", icon: Inbox, show: can(me, "recruiter", "admin") },
     { to: "/settings", label: "Settings", icon: Settings, show: can(me, "recruiter", "admin") },
     { to: "/admin/users", label: "Users", icon: Users, show: can(me, "admin") },
@@ -44,7 +44,7 @@ export function AppShell({ me }: { me: Me }) {
               to={i.to}
               className={({ isActive }) =>
                 cn("flex shrink-0 items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-white/75 transition-colors hover:bg-white/10 hover:text-white",
-                  isActive && "bg-white/10 font-semibold text-white shadow-[inset_3px_0_0_hsl(var(--brand))]")
+                  isActive && "bg-white/10 font-semibold text-white shadow-[inset_3px_0_0_var(--brand)]")
               }
             >
               <i.icon className="h-4 w-4" />
