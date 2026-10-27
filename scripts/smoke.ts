@@ -75,6 +75,26 @@ ok(weekly.runId, "manual refresh started");
 await new Promise((r) => setTimeout(r, 4000));
 ok((await admin("GET", "/outbox")).emails.length > 0, "emails captured in the mock outbox");
 
+// ---------------------------------------------------------------- CV upload and download
+const { applyToken } = (await admin("GET", `/requests/${id}`)).request;
+const cvText = "Rana Haddad\nSenior Product Designer, 9 years. Figma, design systems, user research.";
+const form = new FormData();
+form.set("name", "Rana Haddad");
+form.set("email", "rana.haddad@example.test");
+form.set("consent", "true");
+form.set("cv", new File([cvText], "rana-cv.txt", { type: "text/plain" }));
+const applied = await app.fetch(new Request(`http://localhost/api/public/apply/${applyToken}`, { method: "POST", body: form }));
+ok(applied.ok, "a candidate uploaded a CV on the apply page");
+const { applications } = await admin("GET", `/requests/${id}/applications`);
+ok(applications.length === 1 && applications[0].score != null, "the CV is listed and scored");
+const adminCookie = (await app.fetch(new Request("http://localhost/api/auth/login", {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: "abed.amouneh@york-press.com", password: "a-long-password-123" }),
+}))).headers.get("set-cookie")!.split(";")[0];
+const download = await app.fetch(new Request(`http://localhost/api/applications/${applications[0].id}/cv`, { headers: { cookie: adminCookie } }));
+ok(download.ok && (await download.text()) === cvText, "the recruiter downloads the same CV file");
+ok((await app.fetch(new Request(`http://localhost/api/applications/${applications[0].id}/cv`))).status === 401, "CVs need a signed-in user");
+
 // ---------------------------------------------------------------- security
 const raw = (method: string, url: string, body?: unknown, headers: Record<string, string> = {}) =>
   app.fetch(new Request(`http://localhost/api${url}`, {
