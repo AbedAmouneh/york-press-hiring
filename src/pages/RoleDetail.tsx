@@ -10,10 +10,12 @@ import { PageHeader } from "@/components/AppShell";
 import { CandidateStatusBadge, OutreachBadge, RequestStatusBadge } from "@/components/Status";
 import { CandidateSheet } from "@/components/CandidateSheet";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/form";
-import { Badge, Card, CardContent, CardHeader, CardTitle, Dialog, EmptyState, ScoreBar, Spinner, Table, Tabs, TabsContent, TabsList, TabsTrigger, Td, Th } from "@/components/ui/misc";
-import { useToast } from "@/components/ui/toast";
 import { CANDIDATE_STATUSES, CRITERIA, DEFAULT_WEIGHTS, type Weights } from "../../shared/types";
+import { Badge, DataTable, EmptyState, Modal, ScoreBar, Select, Spinner, Td, Th, useToast } from "@/components/kit";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Run = {
   id: string; kind: string; status: string; step: string; found: number; kept: number; newContenders: number; pdlRecords: number;
@@ -27,13 +29,13 @@ const DECISION_STYLE: Record<string, string> = { yes: "bg-emerald-100 text-emera
 function CandidateTable({ rows, onOpen, canEdit, onDecision, top }: { rows: CandidateRow[]; onOpen: (id: string) => void; canEdit: boolean; onDecision: (id: string, d: string | null) => void; top: boolean }) {
   if (!rows.length) return <EmptyState title="No candidates match">Try a different filter.</EmptyState>;
   return (
-    <Table>
-      <thead>
-        <tr><Th>#</Th><Th>Candidate</Th><Th>Current role</Th><Th>Score</Th><Th>Status</Th><Th>HM decision</Th><Th>{top ? "Outreach" : "Location"}</Th></tr>
-      </thead>
-      <tbody>
+    <DataTable>
+      <TableHeader>
+        <TableRow><Th>#</Th><Th>Candidate</Th><Th>Current role</Th><Th>Score</Th><Th>Status</Th><Th>HM decision</Th><Th>{top ? "Outreach" : "Location"}</Th></TableRow>
+      </TableHeader>
+      <TableBody>
         {rows.map((c) => (
-          <tr key={c.id} className={cn("cursor-pointer hover:bg-secondary/50", c.isTop10 && "shadow-[inset_3px_0_0_hsl(var(--brand))]")} onClick={() => onOpen(c.id)}>
+          <TableRow key={c.id} className={cn("cursor-pointer hover:bg-secondary/50", c.isTop10 && "shadow-[inset_3px_0_0_var(--brand)]")} onClick={() => onOpen(c.id)}>
             <Td className="num text-muted-foreground">{c.rank ?? "—"}</Td>
             <Td className="min-w-[220px]">
               <div className="font-medium">
@@ -60,10 +62,10 @@ function CandidateTable({ rows, onOpen, canEdit, onDecision, top }: { rows: Cand
               ) : c.hmDecision ? <Badge className={DECISION_STYLE[c.hmDecision]}>{c.hmDecision}</Badge> : <span className="text-muted-foreground">—</span>}
             </Td>
             <Td className="text-xs">{top ? <OutreachBadge outreach={c.outreach} /> : <span className="text-muted-foreground">{c.location}</span>}</Td>
-          </tr>
+          </TableRow>
         ))}
-      </tbody>
-    </Table>
+      </TableBody>
+    </DataTable>
   );
 }
 
@@ -211,20 +213,20 @@ export default function RoleDetail() {
         </TabsContent>
         <TabsContent value="applications">
           {apps.isLoading ? <Spinner /> : apps.data?.applications.length ? (
-            <Table>
-              <thead><tr><Th>Received</Th><Th>Name</Th><Th>Score</Th><Th>Assessment</Th><Th>CV</Th></tr></thead>
-              <tbody>
+            <DataTable>
+              <TableHeader><TableRow><Th>Received</Th><Th>Name</Th><Th>Score</Th><Th>Assessment</Th><Th>CV</Th></TableRow></TableHeader>
+              <TableBody>
                 {apps.data.applications.map((a) => (
-                  <tr key={a.id}>
+                  <TableRow key={a.id}>
                     <Td className="num whitespace-nowrap text-xs">{fmtDateTime(a.createdAt)}</Td>
                     <Td><div className="font-medium">{a.name}</div><div className="text-xs text-muted-foreground">{a.email}</div></Td>
                     <Td><ScoreBar value={a.score} /></Td>
                     <Td className="max-w-md text-xs">{a.analysis?.why}{a.analysis?.gaps && <div className="mt-1 text-muted-foreground">Gaps: {a.analysis.gaps}</div>}</Td>
                     <Td>{a.email ? <a className="text-sm underline" href={`/api/applications/${a.id}/cv`}>{a.cvFileName}</a> : "—"}</Td>
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </Table>
+              </TableBody>
+            </DataTable>
           ) : (
             <EmptyState title="No CVs yet">
               Candidates upload CVs at the apply link included in every outreach email:
@@ -290,7 +292,7 @@ export default function RoleDetail() {
 
       <CandidateSheet id={open} onClose={() => setOpen(null)} onChanged={() => qc.invalidateQueries({ queryKey: ["candidates", id] })} />
 
-      <Dialog open={closing} onOpenChange={setClosing} title={`Close ${r.title}?`} description="Closing stops the weekly refresh and cancels any outreach that hasn't been sent.">
+      <Modal open={closing} onOpenChange={setClosing} title={`Close ${r.title}?`} description="Closing stops the weekly refresh and cancels any outreach that hasn't been sent.">
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" checked={deleteContacts} onChange={(e) => setDeleteContacts(e.target.checked)} className="mt-1" />
           <span>Also delete the email and phone numbers we collected for this role's candidates.</span>
@@ -299,7 +301,7 @@ export default function RoleDetail() {
           <Button variant="outline" onClick={() => setClosing(false)}>Keep open</Button>
           <Button variant="destructive" onClick={closeRole}>Close role</Button>
         </div>
-      </Dialog>
+      </Modal>
     </>
   );
 }
