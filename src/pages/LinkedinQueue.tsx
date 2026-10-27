@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, ExternalLink } from "lucide-react";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import type { OutreachData, Msg } from "./Outreach";
+import type { OutreachMessage as Msg } from "@/lib/types";
 import { Badge, EmptyState, Spinner, useToast } from "@/components/kit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,8 +17,8 @@ function MessageCard({ m, onDone }: { m: Msg; onDone: () => void }) {
   const dirty = body !== m.body;
   async function act(action: "approve" | "cancel" | "sent") {
     try {
-      if (dirty) await api(`/outreach/${m.id}`, { method: "PATCH", body: { body } });
-      await api(`/outreach/${m.id}/${action}`, { method: "POST" });
+      if (dirty) await call(rpc.outreach[":id"].$patch({ param: { id: m.id }, json: { body } }));
+      await call(rpc.outreach[":id"][action].$post({ param: { id: m.id } }));
       onDone();
     } catch (e) { toast((e as Error).message, "error"); }
   }
@@ -54,8 +54,8 @@ function MessageCard({ m, onDone }: { m: Msg; onDone: () => void }) {
 
 export default function LinkedinQueue() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["outreach", "linkedin"], queryFn: () => api<OutreachData>("/outreach?channel=linkedin&status=awaiting_approval,approved") });
-  const sent = useQuery({ queryKey: ["outreach", "linkedin-sent"], queryFn: () => api<OutreachData>("/outreach?channel=linkedin&status=sent") });
+  const q = useQuery({ queryKey: ["outreach", "linkedin"], queryFn: () => call(rpc.outreach.$get({ query: { channel: "linkedin", status: "awaiting_approval,approved" } })) });
+  const sent = useQuery({ queryKey: ["outreach", "linkedin-sent"], queryFn: () => call(rpc.outreach.$get({ query: { channel: "linkedin", status: "sent" } })) });
   const msgs = q.data?.messages ?? [];
   const approved = msgs.filter((m) => m.status === "approved");
   const waiting = msgs.filter((m) => m.status === "awaiting_approval");
