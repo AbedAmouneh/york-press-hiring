@@ -2,7 +2,7 @@ import { useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { InviteForm } from "@/lib/forms";
 import { Button } from "@/components/ui/button";
 import { AuthLayout } from "./Login";
@@ -11,14 +11,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 export default function Invite() {
-  const { token } = useParams();
-  const info = useQuery({ queryKey: ["invite", token], queryFn: () => api<{ name: string; email: string }>(`/auth/invite/${token}`), retry: false });
+  const { token = "" } = useParams();
+  const info = useQuery({ queryKey: ["invite", token], queryFn: () => call(rpc.auth.invite[":token"].$get({ param: { token } })), retry: false });
   const form = useForm({ resolver: zodResolver(InviteForm), defaultValues: { password: "", confirm: "" } });
   const { errors, isSubmitting } = form.formState;
 
   const submit = form.handleSubmit(async ({ password }) => {
     try {
-      await api(`/auth/invite/${token}`, { body: { password } });
+      await call(rpc.auth.invite[":token"].$post({ param: { token }, json: { password } }));
       window.location.href = "/";
     } catch (err) {
       form.setError("root", { message: (err as Error).message });
