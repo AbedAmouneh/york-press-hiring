@@ -4,7 +4,8 @@ import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { requireRole, type AppEnv } from "../auth.js";
-import { CRITERIA, ROLES, type Weights } from "../../shared/types.js";
+import { ROLES, type Weights } from "../../shared/types.js";
+import { SettingsPatch, TemplateInput, TemplatePatch, UserInviteInput, UserPatch } from "../../shared/schemas.js";
 import { env, mock } from "../env.js";
 import { inviteUser } from "../services/setup.js";
 import { getSettings, updateSettings } from "../services/settings.js";
@@ -24,14 +25,14 @@ adminRoutes.get("/users", async (c) => {
 
 adminRoutes.post("/users", async (c) => {
   const admin = requireRole(c, "admin");
-  const body = z.object({ name: z.string().min(2), email: z.string().email(), roles: z.array(z.enum(ROLES)).min(1), department: z.string().nullable().optional() }).parse(await c.req.json());
+  const body = UserInviteInput.parse(await c.req.json());
   const { user, link } = await inviteUser(body, admin.name);
   return c.json({ user: publicUser(user), inviteLink: mock.email ? link : undefined });
 });
 
 adminRoutes.patch("/users/:id", async (c) => {
   const admin = requireRole(c, "admin");
-  const body = z.object({ name: z.string().min(2).optional(), email: z.string().email().optional(), roles: z.array(z.enum(ROLES)).optional(), department: z.string().nullable().optional(), active: z.boolean().optional() }).parse(await c.req.json());
+  const body = UserPatch.parse(await c.req.json());
   if (c.req.param("id") === admin.id && (body.active === false || (body.roles && !body.roles.includes("admin")))) {
     throw new HTTPException(400, { message: "You can't remove your own admin access." });
   }
@@ -68,22 +69,9 @@ adminRoutes.get("/settings", async (c) => {
   });
 });
 
-const WeightsSchema = z.object(Object.fromEntries(CRITERIA.map((k) => [k.key, z.number().int().min(0).max(100)])));
-
 adminRoutes.patch("/settings", async (c) => {
   requireRole(c, "recruiter", "admin");
-  const body = z.object({
-    autoSendEnabled: z.boolean().optional(),
-    dailySendCap: z.number().int().min(0).max(500).optional(),
-    signalhireRevealEnabled: z.boolean().optional(),
-    webSearchEnabled: z.boolean().optional(),
-    weeklySummaryEnabled: z.boolean().optional(),
-    defaultWeights: WeightsSchema.optional(),
-  }).parse(await c.req.json());
-  if (body.defaultWeights) {
-    const total = Object.values(body.defaultWeights).reduce((a, b) => a + b, 0);
-    if (total !== 100) throw new HTTPException(400, { message: `Weights must add up to 100 (now ${total}).` });
-  }
+  const body = SettingsPatch.parse(await c.req.json());
   return c.json({ settings: await updateSettings({ ...body, defaultWeights: body.defaultWeights as Weights | undefined }) });
 });
 
@@ -93,15 +81,6 @@ adminRoutes.get("/templates", async (c) => {
   const db = await getDb();
   const rows = await db.select().from(schema.outreachTemplates).orderBy(asc(schema.outreachTemplates.channel), asc(schema.outreachTemplates.name));
   return c.json({ templates: rows, placeholders: PLACEHOLDERS });
-});
-
-const TemplateInput = z.object({
-  name: z.string().min(2),
-  department: z.string().nullable().optional(),
-  channel: z.enum(["email", "linkedin"]),
-  subject: z.string().nullable().optional(),
-  body: z.string().min(10),
-  active: z.boolean().optional(),
 });
 
 adminRoutes.post("/templates", async (c) => {
@@ -114,7 +93,7 @@ adminRoutes.post("/templates", async (c) => {
 
 adminRoutes.patch("/templates/:id", async (c) => {
   requireRole(c, "recruiter", "admin");
-  const body = TemplateInput.partial().parse(await c.req.json());
+  const body = TemplatePatch.parse(await c.req.json());
   if (body.channel === "linkedin" && body.body && body.body.length > 300) throw new HTTPException(400, { message: "LinkedIn notes are limited to 300 characters (placeholders included)." });
   const db = await getDb();
   const [t] = await db.update(schema.outreachTemplates).set({ ...body, updatedAt: new Date() }).where(eq(schema.outreachTemplates.id, c.req.param("id"))).returning();
