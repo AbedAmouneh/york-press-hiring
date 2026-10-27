@@ -49,6 +49,8 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 - `server/routes/`: public (setup, auth, apply page, SignalHire webhook, cron), requests,
   candidates, outreach, admin. Permission checks live in `routes/access.ts`.
 - `server/services/merge.ts`: pure helpers that merge duplicate profiles and pre-rank them.
+- `server/services/cv-store.ts`: CV files in a private Vercel Blob store (inline base64 locally).
+  Never expose a Blob URL; CVs are served only by the authenticated `/api/applications/:id/cv`.
 - `shared/schemas.ts`: Zod rules used by both the API and the forms (`src/lib/forms.ts`).
 - `src/pages/`, `src/components/`: React screens. `scripts/smoke.ts`: API end-to-end test.
 - `tests/unit/`: Vitest. `tests/e2e/`: Playwright, signing in with the demo accounts.

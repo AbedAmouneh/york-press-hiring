@@ -70,6 +70,16 @@ Your mailboxes stay on **Rackspace**; Resend only *sends*. Replies go to each re
 2. Resend shows a few DNS records (DKIM, plus SPF/MX on a `send.` sub-domain). Add exactly those records where york-press.com's DNS is managed (Rackspace Cloud DNS or your domain registrar). Your IT contact can do this in 5 minutes. They don't change the records your Rackspace mailboxes use.
 3. Wait until Resend shows the domain as **Verified**, then add `RESEND_API_KEY` in Vercel and redeploy.
 
+### CV storage (Vercel Blob)
+
+CVs that candidates upload are kept in a **private** Vercel Blob store, not in the database. Only signed-in recruiters and the hiring manager can download them, through the app.
+
+1. In Vercel: **Storage → Create → Blob**, choose **Private** access, and connect it to this project. Vercel adds `BLOB_READ_WRITE_TOKEN` for you.
+2. Redeploy.
+3. If CVs were uploaded before this, move them once: run `npm run cvs:to-blob` with `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN` set (copy them from Vercel).
+
+Without the token (on your Mac), CVs stay in the local database.
+
 ### Error alerts (Sentry, free plan is enough)
 
 1. Sign up at sentry.io and create a project of type **React** (it covers the browser; the server uses the same project).
