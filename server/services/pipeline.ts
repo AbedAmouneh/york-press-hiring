@@ -13,6 +13,7 @@ import { toAI, toReq } from "./mappers.js";
 import { drainEmailQueue, isSuppressed, queueOutreach } from "./outreach.js";
 import { notifyRoles, notifyUsers } from "./notify.js";
 import { captureError } from "../monitoring.js";
+import { enqueueRun } from "./queue.js";
 
 const STEPS = ["brief", "search", "enrich", "score", "rank", "reveal", "outreach", "done"] as const;
 type Step = (typeof STEPS)[number];
@@ -41,26 +42,44 @@ export async function startRun(requestId: string, kind: "initial" | "weekly" | "
   return run.id;
 }
 
-/** Run in the background: on Vercel after the response is sent, locally on the next tick. */
-export function kick(runId: string) {
-  const p = runPipeline(runId).catch((e) => {
-    console.error("pipeline", e);
-    void captureError(e, { tags: { area: "pipeline" }, extra: { runId } });
-  });
-  if (env.onVercel) waitUntil(p);
+function reportBackgroundError(e: unknown, runId: string) {
+  console.error("pipeline", e);
+  void captureError(e, { tags: { area: "pipeline" }, extra: { runId } });
 }
 
+/** Queue the run with QStash (retries if a call fails). Returns false when the queue isn't set up or is down. */
+async function tryQueue(runId: string) {
+  try {
+    return await enqueueRun(runId);
+  } catch (e) {
+    reportBackgroundError(e, runId); // QStash unavailable: fall back below rather than losing the run
+    return false;
+  }
+}
+
+/** Start a run: through the queue when configured, otherwise in the background of this request. */
+export function kick(runId: string) {
+  const work = (async () => {
+    if (await tryQueue(runId)) return;
+    await runPipeline(runId);
+  })().catch((e) => reportBackgroundError(e, runId));
+  if (env.onVercel) waitUntil(work);
+}
+
+/** Continue a run that used up this call's time budget, in a fresh function call. */
 function continueLater(runId: string) {
-  if (env.onVercel) {
-    waitUntil(
-      fetch(`${env.appUrl}/api/internal/runs/${runId}/continue`, {
+  const work = (async () => {
+    if (await tryQueue(runId)) return;
+    if (env.onVercel) {
+      await fetch(`${env.appUrl}/api/internal/runs/${runId}/continue`, {
         method: "POST",
         headers: { "x-internal-secret": env.internalSecret },
-      }).catch((e) => console.error("continue", e)),
-    );
-  } else {
-    setTimeout(() => kick(runId), 50);
-  }
+      });
+    } else {
+      setTimeout(() => kick(runId), 50);
+    }
+  })().catch((e) => reportBackgroundError(e, runId));
+  if (env.onVercel) waitUntil(work);
 }
 
 // ------------------------------------------------------------------ runner
@@ -89,9 +108,21 @@ function log(state: RunState, msg: string) {
   state.log.push({ at: new Date().toISOString(), msg });
 }
 
-export async function runPipeline(runId: string) {
+/**
+ * "busy": another call holds the run's lock (it may have crashed; the lock expires after 6 minutes),
+ * so the queue should retry later. "skipped": nothing to do (finished, failed or unknown run).
+ */
+export type RunOutcome = "ran" | "busy" | "skipped";
+
+async function whyNotAcquired(runId: string): Promise<RunOutcome> {
+  const db = await getDb();
+  const [r] = await db.select({ status: schema.sourcingRuns.status, lockedUntil: schema.sourcingRuns.lockedUntil }).from(schema.sourcingRuns).where(eq(schema.sourcingRuns.id, runId));
+  return r && !["done", "failed"].includes(r.status) && r.lockedUntil && r.lockedUntil > new Date() ? "busy" : "skipped";
+}
+
+export async function runPipeline(runId: string): Promise<RunOutcome> {
   const run = await acquire(runId);
-  if (!run) return;
+  if (!run) return whyNotAcquired(runId);
   const db = await getDb();
   const [request] = await db.select().from(schema.roleRequests).where(eq(schema.roleRequests.id, run.requestId));
   const deadline = Date.now() + TIME_BUDGET_MS;
@@ -106,12 +137,12 @@ export async function runPipeline(runId: string) {
       if (Date.now() > deadline) {
         await save(runId, { step, state, ...counters, lockedUntil: null, status: "queued" });
         continueLater(runId);
-        return;
+        return "ran";
       }
       const result = await STEP_FNS[step]({ run, request, state, counters, deadline });
       if (result === "waiting") {
         await save(runId, { step, state, ...counters, lockedUntil: null, status: "waiting" });
-        return;
+        return "ran";
       }
       if (result === "again") continue;
       step = STEPS[STEPS.indexOf(step) + 1];
@@ -128,6 +159,7 @@ export async function runPipeline(runId: string) {
     }
     await notifyRoles(["recruiter"], { type: "run_failed", title: `Sourcing failed for ${request.title}`, link: `/roles/${request.id}`, emailBody: `The sourcing run stopped at "${step}": ${message}\nYou can re-run it from the role page.` });
   }
+  return "ran";
 }
 
 type Ctx = { run: Run; request: Request; state: RunState; counters: Record<string, number>; deadline: number };
