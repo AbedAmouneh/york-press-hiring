@@ -19,6 +19,7 @@ export const env = {
   get onVercel() { return !!v("VERCEL"); },
   get vercelEnv() { return v("VERCEL_ENV"); }, // production | preview | development
   get sentryDsn() { return v("SENTRY_DSN"); },
+  get blobToken() { return v("BLOB_READ_WRITE_TOKEN"); },
   get isProd() { return v("NODE_ENV") === "production" || !!v("VERCEL"); },
 };
 
