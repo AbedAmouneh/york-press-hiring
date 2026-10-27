@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Users } from "lucide-react";
 import { api } from "@/lib/api";
@@ -9,7 +10,8 @@ import { fmtDate, fmtDateTime, money } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { RequestStatusBadge } from "@/components/Status";
 import { Button } from "@/components/ui/button";
-import { Badge, Spinner, useToast } from "@/components/kit";
+import { Badge, Field, FormError, Spinner, useToast } from "@/components/kit";
+import { DecisionInput } from "../../shared/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -29,34 +31,62 @@ function Row({ k, children }: { k: string; children: React.ReactNode }) {
   );
 }
 
+type Action = "approve" | "reject" | "request_changes";
+const DONE: Record<Action, string> = {
+  approve: "Approved. Sourcing has started.",
+  reject: "Rejected. The manager has been notified.",
+  request_changes: "Sent back with your comment.",
+};
+
+/** Khalil's approve / request changes / reject panel. A comment is required unless approving. */
+function DecisionForm({ requestId }: { requestId: string }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const form = useForm({ resolver: zodResolver(DecisionInput), defaultValues: { action: "approve" as Action, comment: "" } });
+  const { errors, isSubmitting } = form.formState;
+  const decide = (action: Action) => {
+    form.setValue("action", action);
+    return form.handleSubmit(async (values) => {
+      try {
+        await api(`/requests/${requestId}/decision`, { body: { ...values, comment: values.comment || undefined } });
+        await qc.invalidateQueries();
+        toast(DONE[values.action]);
+      } catch (e) {
+        form.setError("root", { message: (e as Error).message });
+      }
+    })();
+  };
+  return (
+    <Card className="mb-5 border-2 border-brand">
+      <CardHeader><CardTitle>Your decision</CardTitle></CardHeader>
+      <CardContent className="grid gap-3">
+        <Field label="Comment" hint="Required to reject or request changes." htmlFor="dc" error={errors.comment?.message}>
+          <Textarea id="dc" aria-invalid={!!errors.comment} {...form.register("comment")} />
+        </Field>
+        <FormError>{errors.root?.message}</FormError>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="brand" disabled={isSubmitting} onClick={() => decide("approve")}>Approve and start sourcing</Button>
+          <Button variant="outline" disabled={isSubmitting} onClick={() => decide("request_changes")}>Request changes</Button>
+          <Button variant="outline" className="text-destructive" disabled={isSubmitting} onClick={() => decide("reject")}>Reject</Button>
+        </div>
+        <p className="text-xs text-muted-foreground">Approving starts sourcing straight away: about 50 candidates are found and scored, the Top 10 are flagged and contacted from the department template.</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function RequestDetail() {
   const { id } = useParams();
   const me = useMe().data!.user!;
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ["request", id], queryFn: () => api<{ request: RequestRow; events: Ev[] }>(`/requests/${id}`) });
-  const [comment, setComment] = useState("");
-  const [busy, setBusy] = useState(false);
   if (q.isLoading) return <Spinner />;
   if (q.error) return <p className="text-destructive">{(q.error as Error).message}</p>;
   const { request: r, events } = q.data!;
   const isCeo = can(me, "ceo");
   const canEdit = (r.requesterId === me.id && ["draft", "changes_requested"].includes(r.status)) || can(me, "admin", "recruiter");
   const canSeeRole = ["sourcing", "open", "closed"].includes(r.status);
-
-  async function decide(action: "approve" | "reject" | "request_changes") {
-    if (action !== "approve" && !comment.trim()) return toast("Add a comment so the manager knows why.", "error");
-    setBusy(true);
-    try {
-      await api(`/requests/${r.id}/decision`, { body: { action, comment: comment.trim() || undefined } });
-      await qc.invalidateQueries();
-      toast(action === "approve" ? "Approved. Sourcing has started." : action === "reject" ? "Rejected. The manager has been notified." : "Sent back with your comment.");
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function submitDraft() {
     try {
@@ -78,20 +108,7 @@ export default function RequestDetail() {
         {r.requesterId === me.id && r.status === "draft" && <Button onClick={submitDraft}>Submit to Khalil</Button>}
       </PageHeader>
 
-      {isCeo && r.status === "submitted" && (
-        <Card className="mb-5 border-2 border-brand">
-          <CardHeader><CardTitle>Your decision</CardTitle></CardHeader>
-          <CardContent className="grid gap-3">
-            <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Comment (required to reject or request changes)" aria-label="Comment" />
-            <div className="flex flex-wrap gap-2">
-              <Button variant="brand" disabled={busy} onClick={() => decide("approve")}>Approve and start sourcing</Button>
-              <Button variant="outline" disabled={busy} onClick={() => decide("request_changes")}>Request changes</Button>
-              <Button variant="outline" className="text-destructive" disabled={busy} onClick={() => decide("reject")}>Reject</Button>
-            </div>
-            <p className="text-xs text-muted-foreground">Approving starts sourcing straight away: about 50 candidates are found and scored, the Top 10 are flagged and contacted from the department template.</p>
-          </CardContent>
-        </Card>
-      )}
+      {isCeo && r.status === "submitted" && <DecisionForm requestId={r.id} />}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
