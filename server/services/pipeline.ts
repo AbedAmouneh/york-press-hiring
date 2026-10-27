@@ -3,7 +3,8 @@ import { waitUntil } from "@vercel/functions";
 import { getDb, schema } from "../db/client.js";
 import { appIsPublic, env, mock, POOL_SIZE, TOP_N } from "../env.js";
 import type { RunState } from "../db/schema.js";
-import { buildBrief, scoreBatch, totalScore, webFindings } from "./claude.js";
+import type { Weights } from "../../shared/types.js";
+import { buildBrief, collectScoreBatch, scoreBatch, submitScoreBatch, totalScore, webFindings, type ScoreResult } from "./claude.js";
 import { pdlProvider } from "./providers/pdl.js";
 import { lastCreditsLeft, revealContacts, signalhireProvider, type RevealResult } from "./providers/signalhire.js";
 import type { NormalizedProfile } from "./providers/types.js";
@@ -13,7 +14,7 @@ import { toAI, toReq } from "./mappers.js";
 import { drainEmailQueue, isSuppressed, queueOutreach } from "./outreach.js";
 import { notifyRoles, notifyUsers } from "./notify.js";
 import { captureError } from "../monitoring.js";
-import { enqueueRun } from "./queue.js";
+import { enqueueRun, queueEnabled } from "./queue.js";
 
 const STEPS = ["brief", "search", "enrich", "score", "rank", "reveal", "outreach", "done"] as const;
 type Step = (typeof STEPS)[number];
@@ -340,42 +341,105 @@ async function stepEnrich({ run, state, counters, deadline }: Ctx): Promise<Step
   log(state, `Web search checked the top ${rows.length} profiles.`);
 }
 
-async function stepScore({ run, request, state, deadline }: Ctx): Promise<StepResult> {
+const SCORE_CHUNK = 5;
+const BATCH_POLL_SECONDS = 300;
+const BATCH_GIVE_UP_MS = 24 * 3600_000;
+
+type ScoreRow = { rc: typeof schema.roleCandidates.$inferSelect; c: typeof schema.candidates.$inferSelect };
+
+async function unscored(ids: string[], limit?: number): Promise<ScoreRow[]> {
+  if (!ids.length) return [];
   const db = await getDb();
-  const settings = await getSettings();
-  const weights = weightsFor(request, settings);
+  const q = db
+    .select({ rc: schema.roleCandidates, c: schema.candidates })
+    .from(schema.roleCandidates)
+    .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
+    .where(and(inArray(schema.roleCandidates.id, ids), isNull(schema.roleCandidates.scoredAt)));
+  return limit ? q.limit(limit) : q;
+}
+
+async function saveScores(rows: ScoreRow[], results: ScoreResult[], weights: Weights) {
+  const db = await getDb();
+  const byKey = new Map(results.map((r) => [r.key, r]));
+  for (const { rc } of rows) {
+    const r = byKey.get(rc.id);
+    if (!r) {
+      await db.update(schema.roleCandidates).set({ scoredAt: new Date(), gaps: "Needs review: the scorer returned no result." }).where(eq(schema.roleCandidates.id, rc.id));
+      continue;
+    }
+    const { breakdown, score } = totalScore(r.breakdown, weights, r.dealBreakerMissing);
+    await db.update(schema.roleCandidates).set({
+      score,
+      scoreBreakdown: breakdown,
+      dealBreakerMissing: r.dealBreakerMissing,
+      whyRecommended: r.why,
+      gaps: r.dealBreakerMissing ? `Deal-breaker not met (score capped at 40). ${r.gaps}` : r.gaps,
+      redFlags: r.redFlags || null,
+      relevantYears: r.relevantYears,
+      scoredAt: new Date(),
+    }).where(eq(schema.roleCandidates.id, rc.id));
+  }
+}
+
+/**
+ * Weekly refreshes aren't urgent, so they score through the Message Batches API at half price.
+ * The run waits and the queue checks back every few minutes. Needs the queue (QStash) to poll.
+ */
+const useBatchScoring = (run: Run) => run.kind === "weekly" && !mock.claude && queueEnabled();
+
+/** Returns "waiting" while a batch is in flight; undefined once batch results (if any) are saved. */
+async function batchScore({ run, request, state }: Ctx, weights: Weights): Promise<StepResult> {
   const ids = state.newRoleCandidateIds ?? [];
+  if (!state.scoreBatch) {
+    const rows = await unscored(ids);
+    if (!rows.length) return;
+    const chunks: { id: string; items: ReturnType<typeof toAI>[] }[] = [];
+    const map: Record<string, string[]> = {};
+    for (let i = 0; i < rows.length; i += SCORE_CHUNK) {
+      const part = rows.slice(i, i + SCORE_CHUNK);
+      const id = `chunk-${i / SCORE_CHUNK}`;
+      chunks.push({ id, items: part.map(({ c, rc }) => toAI(c, rc)) });
+      map[id] = part.map(({ rc }) => rc.id);
+    }
+    const batchId = await submitScoreBatch(toReq(request), weights, chunks);
+    state.scoreBatch = { id: batchId, submittedAt: new Date().toISOString(), chunks: map };
+    log(state, `Sent ${rows.length} candidates for batch scoring (half price; usually under an hour).`);
+    await enqueueRun(run.id, { delaySeconds: BATCH_POLL_SECONDS });
+    return "waiting";
+  }
+  const { id, submittedAt, chunks } = state.scoreBatch;
+  const outcome = await collectScoreBatch(id, run.id);
+  if (outcome.status === "processing") {
+    if (Date.now() - Date.parse(submittedAt) < BATCH_GIVE_UP_MS) {
+      await enqueueRun(run.id, { delaySeconds: BATCH_POLL_SECONDS });
+      return "waiting";
+    }
+    log(state, "Batch scoring took over 24 hours; scoring the rest directly.");
+  } else {
+    let failed = 0;
+    for (const [chunkId, rcIds] of Object.entries(chunks)) {
+      const results = outcome.results.get(chunkId);
+      if (!results) { failed += rcIds.length; continue; }
+      await saveScores(await unscored(rcIds), results, weights);
+    }
+    log(state, failed ? `Batch scoring done; ${failed} candidates will be scored directly.` : "Batch scoring done.");
+  }
+  state.scoreBatch = undefined;
+}
+
+async function stepScore(ctx: Ctx): Promise<StepResult> {
+  const { run, request, state, deadline } = ctx;
+  const weights = weightsFor(request, await getSettings());
+  const ids = state.newRoleCandidateIds ?? [];
+  if (useBatchScoring(run) || state.scoreBatch) {
+    if ((await batchScore(ctx, weights)) === "waiting") return "waiting";
+  }
+  // Direct scoring, a few candidates per call; also picks up anything a batch couldn't score.
   while (true) {
     if (Date.now() > deadline) return "again";
-    const batch = ids.length
-      ? await db
-          .select({ rc: schema.roleCandidates, c: schema.candidates })
-          .from(schema.roleCandidates)
-          .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
-          .where(and(inArray(schema.roleCandidates.id, ids), isNull(schema.roleCandidates.scoredAt)))
-          .limit(5)
-      : [];
-    if (!batch.length) break;
-    const results = await scoreBatch(toReq(request), weights, batch.map(({ c, rc }) => toAI(c, rc)), run.id);
-    const byKey = new Map(results.map((r) => [r.key, r]));
-    for (const { rc } of batch) {
-      const r = byKey.get(rc.id);
-      if (!r) {
-        await db.update(schema.roleCandidates).set({ scoredAt: new Date(), gaps: "Needs review: the scorer returned no result." }).where(eq(schema.roleCandidates.id, rc.id));
-        continue;
-      }
-      const { breakdown, score } = totalScore(r.breakdown, weights, r.dealBreakerMissing);
-      await db.update(schema.roleCandidates).set({
-        score,
-        scoreBreakdown: breakdown,
-        dealBreakerMissing: r.dealBreakerMissing,
-        whyRecommended: r.why,
-        gaps: r.dealBreakerMissing ? `Deal-breaker not met (score capped at 40). ${r.gaps}` : r.gaps,
-        redFlags: r.redFlags || null,
-        relevantYears: r.relevantYears,
-        scoredAt: new Date(),
-      }).where(eq(schema.roleCandidates.id, rc.id));
-    }
+    const rows = await unscored(ids, SCORE_CHUNK);
+    if (!rows.length) break;
+    await saveScores(rows, await scoreBatch(toReq(request), weights, rows.map(({ c, rc }) => toAI(c, rc)), run.id), weights);
   }
   log(state, `Scored ${ids.length} candidates.`);
 }
