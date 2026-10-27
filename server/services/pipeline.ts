@@ -74,7 +74,11 @@ function continueLater(runId: string) {
     if (env.onVercel) {
       await fetch(`${env.appUrl}/api/internal/runs/${runId}/continue`, {
         method: "POST",
-        headers: { "x-internal-secret": env.internalSecret },
+        headers: {
+          "x-internal-secret": env.internalSecret,
+          // Lets the call through Vercel's login wall on protected preview deployments.
+          ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { "x-vercel-protection-bypass": process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {}),
+        },
       });
     } else {
       setTimeout(() => kick(runId), 50);
