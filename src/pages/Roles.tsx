@@ -1,8 +1,7 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { can, useMe } from "@/lib/auth";
-import type { RequestRow } from "@/lib/types";
 import { PageHeader } from "@/components/AppShell";
 import { RequestStatusBadge } from "@/components/Status";
 import { EmptyState, Spinner } from "@/components/kit";
@@ -12,7 +11,7 @@ export default function Roles() {
   const me = useMe().data!.user!;
   const q = useQuery({
     queryKey: ["requests", "roles"],
-    queryFn: () => api<{ requests: RequestRow[] }>("/requests?scope=roles"),
+    queryFn: () => call(rpc.requests.$get({ query: { scope: "roles" } })),
     refetchInterval: (query) => (query.state.data?.requests.some((r) => r.status === "sourcing") ? 4000 : false),
   });
   const rows = (q.data?.requests ?? []).sort((a, b) => Number(a.status === "closed") - Number(b.status === "closed"));

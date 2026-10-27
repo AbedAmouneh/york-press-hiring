@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { can, useMe } from "@/lib/auth";
 import type { RequestRow } from "@/lib/types";
 import { fmtDate, money } from "@/lib/utils";
@@ -43,13 +43,13 @@ export function RequestCard({ r }: { r: RequestRow }) {
 
 export default function Requests({ scope }: { scope: "all" | "approvals" }) {
   const me = useMe().data!.user!;
-  const q = useQuery({ queryKey: ["requests", scope], queryFn: () => api<{ requests: RequestRow[] }>(`/requests${scope === "approvals" ? "?scope=approvals" : ""}`) });
+  const q = useQuery({ queryKey: ["requests", scope], queryFn: () => call(rpc.requests.$get({ query: scope === "approvals" ? { scope: "approvals" } : {} })) });
   const staff = can(me, "admin", "recruiter", "ceo");
   const canCreate = can(me, "manager", "recruiter", "admin");
   const rows = q.data?.requests ?? [];
   const decided = useQuery({
     queryKey: ["requests", "all"],
-    queryFn: () => api<{ requests: RequestRow[] }>("/requests"),
+    queryFn: () => call(rpc.requests.$get({ query: {} })),
     enabled: scope === "approvals",
   });
 
