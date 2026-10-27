@@ -164,7 +164,12 @@ candidateRoutes.get("/applications/:id/cv", async (c) => {
   const bytes = await readCv(a);
   if (!bytes) throw new HTTPException(404, { message: "This CV file is no longer stored." });
   return new Response(bytes, {
-    headers: { "Content-Type": a.cvMime, "Content-Disposition": `attachment; filename="${a.cvFileName.replace(/"/g, "")}"` },
+    headers: {
+      "Content-Type": a.cvMime,
+      "Content-Disposition": `attachment; filename="${a.cvFileName.replace(/["\\\r\n]/g, "")}"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 });
 
