@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Download, RefreshCw, Sparkles } from "lucide-react";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { can, useMe } from "@/lib/auth";
 import type { CandidateRow, RequestRow } from "@/lib/types";
 import { cn, fmtDate, fmtDateTime } from "@/lib/utils";
@@ -10,23 +10,17 @@ import { PageHeader } from "@/components/AppShell";
 import { CandidateStatusBadge, OutreachBadge, RequestStatusBadge } from "@/components/Status";
 import { CandidateSheet } from "@/components/CandidateSheet";
 import { Button } from "@/components/ui/button";
-import { CANDIDATE_STATUSES, CRITERIA, DEFAULT_WEIGHTS, type Weights } from "../../shared/types";
+import { CANDIDATE_STATUSES, CRITERIA, DEFAULT_WEIGHTS, type HmDecision, type Weights } from "../../shared/types";
 import { Badge, DataTable, EmptyState, Modal, ScoreBar, Select, Spinner, Td, Th, useToast } from "@/components/kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type Run = {
-  id: string; kind: string; status: string; step: string; found: number; kept: number; newContenders: number; pdlRecords: number;
-  signalhireSearches: number; signalhireCredits: number; webSearches: number; error: string | null; createdAt: string; finishedAt: string | null;
-  state: { log: { at: string; msg: string }[]; brief?: { titles: string[]; skills: string[]; keywords: string[]; locations: string[]; summary: string } };
-};
-type Application = { id: string; name: string; email: string | null; linkedinUrl: string | null; note: string | null; cvFileName: string; score: number | null; analysis: { why?: string; gaps?: string } | null; createdAt: string };
 
 const DECISION_STYLE: Record<string, string> = { yes: "bg-emerald-100 text-emerald-800", maybe: "bg-amber-100 text-amber-800", no: "bg-red-100 text-red-800" };
 
-function CandidateTable({ rows, onOpen, canEdit, onDecision, top }: { rows: CandidateRow[]; onOpen: (id: string) => void; canEdit: boolean; onDecision: (id: string, d: string | null) => void; top: boolean }) {
+function CandidateTable({ rows, onOpen, canEdit, onDecision, top }: { rows: CandidateRow[]; onOpen: (id: string) => void; canEdit: boolean; onDecision: (id: string, d: HmDecision | null) => void; top: boolean }) {
   if (!rows.length) return <EmptyState title="No candidates match">Try a different filter.</EmptyState>;
   return (
     <DataTable>
@@ -75,7 +69,7 @@ function WeightsEditor({ request, onSaved }: { request: RequestRow; onSaved: () 
   const total = Object.values(w).reduce((a, b) => a + b, 0);
   async function save() {
     try {
-      await api(`/requests/${request.id}/weights`, { method: "PATCH", body: w });
+      await call(rpc.requests[":id"].weights.$patch({ param: { id: request.id }, json: w }));
       toast("Weights saved and candidates re-ranked.");
       onSaved();
     } catch (e) {
@@ -100,7 +94,7 @@ function WeightsEditor({ request, onSaved }: { request: RequestRow; onSaved: () 
 }
 
 export default function RoleDetail() {
-  const { id } = useParams();
+  const { id = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const me = useMe().data!.user!;
   const qc = useQueryClient();
@@ -112,11 +106,11 @@ export default function RoleDetail() {
   const [closing, setClosing] = useState(false);
   const [deleteContacts, setDeleteContacts] = useState(false);
 
-  const req = useQuery({ queryKey: ["request", id], queryFn: () => api<{ request: RequestRow }>(`/requests/${id}`), refetchInterval: (q) => (q.state.data?.request.status === "sourcing" ? 3000 : false) });
-  const runs = useQuery({ queryKey: ["runs", id], queryFn: () => api<{ runs: Run[] }>(`/requests/${id}/runs`), refetchInterval: (q) => (q.state.data?.runs.some((r) => ["queued", "running", "waiting"].includes(r.status)) ? 3000 : false) });
+  const req = useQuery({ queryKey: ["request", id], queryFn: () => call(rpc.requests[":id"].$get({ param: { id } })), refetchInterval: (q) => (q.state.data?.request.status === "sourcing" ? 3000 : false) });
+  const runs = useQuery({ queryKey: ["runs", id], queryFn: () => call(rpc.requests[":id"].runs.$get({ param: { id } })), refetchInterval: (q) => (q.state.data?.runs.some((r) => ["queued", "running", "waiting"].includes(r.status)) ? 3000 : false) });
   const running = runs.data?.runs.find((r) => ["queued", "running", "waiting"].includes(r.status));
-  const cands = useQuery({ queryKey: ["candidates", id], queryFn: () => api<{ candidates: CandidateRow[]; canEdit: boolean }>(`/requests/${id}/candidates`), refetchInterval: running ? 3000 : false });
-  const apps = useQuery({ queryKey: ["applications", id], queryFn: () => api<{ applications: Application[] }>(`/requests/${id}/applications`), enabled: tab === "applications" });
+  const cands = useQuery({ queryKey: ["candidates", id], queryFn: () => call(rpc.requests[":id"].candidates.$get({ param: { id } })), refetchInterval: running ? 3000 : false });
+  const apps = useQuery({ queryKey: ["applications", id], queryFn: () => call(rpc.requests[":id"].applications.$get({ param: { id } })), enabled: tab === "applications" });
 
   const all = useMemo(() => cands.data?.candidates ?? [], [cands.data]);
   const top = all.filter((c) => c.isTop10);
@@ -129,19 +123,19 @@ export default function RoleDetail() {
   const r = req.data!.request;
   const lastRun = runs.data?.runs[0];
 
-  async function decision(rcId: string, hmDecision: string | null) {
-    await api(`/role-candidates/${rcId}`, { method: "PATCH", body: { hmDecision } });
+  async function decision(rcId: string, hmDecision: HmDecision | null) {
+    await call(rpc["role-candidates"][":id"].$patch({ param: { id: rcId }, json: { hmDecision } }));
     qc.invalidateQueries({ queryKey: ["candidates", id] });
   }
   async function rerun() {
     try {
-      await api(`/requests/${id}/runs`, { method: "POST" });
+      await call(rpc.requests[":id"].runs.$post({ param: { id } }));
       toast("Refresh started. New profiles will appear as they're scored.");
       qc.invalidateQueries({ queryKey: ["runs", id] });
     } catch (e) { toast((e as Error).message, "error"); }
   }
   async function closeRole() {
-    await api(`/requests/${id}/close`, { body: { deleteContacts } });
+    await call(rpc.requests[":id"].close.$post({ param: { id }, json: { deleteContacts } }));
     setClosing(false);
     toast("Role closed. Weekly refresh stopped.");
     qc.invalidateQueries();
