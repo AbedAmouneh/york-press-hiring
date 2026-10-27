@@ -7,8 +7,11 @@ import { requestRoutes } from "./routes/requests.js";
 import { candidateRoutes } from "./routes/candidates.js";
 import { outreachRoutes } from "./routes/outreach.js";
 import { adminRoutes } from "./routes/admin.js";
+import { apiHeaders, noStore, sameOrigin } from "./security.js";
 
 const app = new Hono().basePath("/api");
+
+app.use("*", apiHeaders, noStore, sameOrigin);
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
