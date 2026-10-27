@@ -14,6 +14,7 @@ import { getSettings, weightsFor } from "../services/settings.js";
 import { toReq } from "../services/mappers.js";
 import { notifyRoles } from "../services/notify.js";
 import { normalizeLinkedin } from "../services/providers/types.js";
+import { saveCv } from "../services/cv-store.js";
 import { publicUser } from "./access.js";
 import { APPLY_LIMITS, assertWithinLimits, clearHits, clientIp, INVITE_LIMITS, LOGIN_LIMITS, recordHit } from "../services/rate-limit.js";
 
@@ -115,13 +116,15 @@ publicRoutes.post("/public/apply/:token", async (c) => {
   const file = form.cv;
   const problem = cvProblem(file instanceof File ? file : null);
   if (problem || !(file instanceof File)) throw new HTTPException(400, { message: problem ?? "Please attach your CV." });
-  const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const base64 = Buffer.from(bytes).toString("base64"); // for Claude only; storage is decided by saveCv
+  const stored = await saveCv({ name: file.name, type: file.type, bytes });
   const linkedinUrl = normalizeLinkedin(fields.linkedin ?? "");
   // Link to an existing candidate when we can.
   const [existing] = await db.select().from(schema.candidates).where(eq(schema.candidates.email, email)).limit(1);
   const [app] = await db.insert(schema.applications).values({
     requestId: r.id, candidateId: existing?.id ?? null, name, email, linkedinUrl, note: fields.note ?? "",
-    cvFileName: file.name.slice(0, 200), cvMime: file.type, cvBase64: base64,
+    cvFileName: file.name.slice(0, 200), cvMime: file.type, ...stored,
   }).returning();
   if (existing) {
     await db.update(schema.roleCandidates).set({ status: "replied" }).where(and(eq(schema.roleCandidates.candidateId, existing.id), eq(schema.roleCandidates.requestId, r.id)));
