@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { call, rpc } from "@/lib/rpc";
 import { SetupForm, type SetupFormValues } from "@/lib/forms";
 import { Button } from "@/components/ui/button";
 import { AuthLayout } from "./Login";
@@ -28,7 +28,7 @@ export default function Setup() {
 
   const submit = form.handleSubmit(async (values) => {
     try {
-      const res = await api<{ invites: { email: string; link?: string }[] }>("/setup", { body: values });
+      const res = await call(rpc.setup.$post({ json: values }));
       setLinks(res.invites);
     } catch (err) {
       form.setError("root", { message: (err as Error).message });
