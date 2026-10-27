@@ -7,6 +7,7 @@ import { HTTPException } from "hono/http-exception";
 import { getDb, schema } from "./db/client.js";
 import { env } from "./env.js";
 import type { Role } from "../shared/types.js";
+import { needsTwoFactorSetup } from "./services/two-factor.js";
 
 export type SessionUser = typeof schema.users.$inferSelect;
 export type AppEnv = { Variables: { user: SessionUser } };
@@ -59,9 +60,20 @@ export async function currentUser(c: Context): Promise<SessionUser | null> {
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   const user = await currentUser(c);
   if (!user) throw new HTTPException(401, { message: "Please sign in." });
+  // Admin and CEO accounts can't use the app until two-step login is on (setup routes are public).
+  if (needsTwoFactorSetup(user)) throw new HTTPException(403, { message: "Set up two-step login to continue." });
   c.set("user", user);
   await next();
 };
+
+// ---------------------------------------------------------------- two-step login challenge cookie
+const MFA_COOKIE = "yp_mfa";
+
+export function setMfaChallenge(c: Context, token: string) {
+  setCookie(c, MFA_COOKIE, token, { httpOnly: true, secure: env.isProd, sameSite: "Strict", path: "/api/auth", maxAge: 300 });
+}
+export const getMfaChallenge = (c: Context) => getCookie(c, MFA_COOKIE);
+export const clearMfaChallenge = (c: Context) => deleteCookie(c, MFA_COOKIE, { path: "/api/auth" });
 
 export const hasRole = (user: SessionUser, ...roles: Role[]) => roles.some((r) => user.roles.includes(r));
 
