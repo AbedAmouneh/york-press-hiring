@@ -1,4 +1,5 @@
 import { eq, sql } from "drizzle-orm";
+import { HTTPException } from "hono/http-exception";
 import { getDb, schema } from "../db/client.js";
 import { env } from "../env.js";
 import { hashPassword, randomToken } from "../auth.js";
@@ -50,7 +51,7 @@ export async function runSetup(input: {
   managers: { name: string; email: string; department?: string }[];
 }) {
   const db = await getDb();
-  if ((await userCount()) > 0) throw new Error("Setup has already been completed.");
+  if ((await userCount()) > 0) throw new HTTPException(409, { message: "Setup has already been completed." });
   await getSettings();
   await seedTemplates();
   const [admin] = await db
