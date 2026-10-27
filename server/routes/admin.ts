@@ -122,6 +122,8 @@ adminRoutes.get("/usage", async (c) => {
       units: sql<number>`coalesce(sum(${schema.usageLog.units}),0)::int`,
       inputTokens: sql<number>`coalesce(sum(${schema.usageLog.inputTokens}),0)::int`,
       outputTokens: sql<number>`coalesce(sum(${schema.usageLog.outputTokens}),0)::int`,
+      cacheReadTokens: sql<number>`coalesce(sum(${schema.usageLog.cacheReadTokens}),0)::int`,
+      batchCalls: sql<number>`count(*) filter (where ${schema.usageLog.action} = 'score_batch')::int`,
       calls: sql<number>`count(*)::int`,
     })
     .from(schema.usageLog)

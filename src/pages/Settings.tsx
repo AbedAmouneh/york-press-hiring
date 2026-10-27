@@ -240,8 +240,12 @@ function Suppression() {
   );
 }
 
+/** Share of input tokens served from the prompt cache (billed at about a tenth of the normal price). */
+const cacheShare = (p: { inputTokens: number; cacheReadTokens: number }) =>
+  Math.round((100 * p.cacheReadTokens) / Math.max(1, p.inputTokens + p.cacheReadTokens));
+
 function Usage() {
-  const q = useQuery({ queryKey: ["usage"], queryFn: () => api<{ byProvider: { provider: string; mock: boolean; units: number; inputTokens: number; outputTokens: number; calls: number }[]; runs: { id: string; title: string; kind: string; status: string; pdlRecords: number; signalhireCredits: number; webSearches: number; createdAt: string }[] }>("/usage") });
+  const q = useQuery({ queryKey: ["usage"], queryFn: () => api<{ byProvider: { provider: string; mock: boolean; units: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; batchCalls: number; calls: number }[]; runs: { id: string; title: string; kind: string; status: string; pdlRecords: number; signalhireCredits: number; webSearches: number; createdAt: string }[] }>("/usage") });
   if (!q.data) return <Spinner />;
   const label: Record<string, string> = { claude: "Claude", pdl: "People Data Labs", signalhire: "SignalHire", resend: "Resend" };
   return (
@@ -252,6 +256,11 @@ function Usage() {
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label[p.provider] ?? p.provider} · 30 days</div>
             <div className="num mt-1 text-xl font-semibold">{p.provider === "claude" ? `${(p.inputTokens / 1000).toFixed(0)}k / ${(p.outputTokens / 1000).toFixed(0)}k` : p.units}</div>
             <div className="text-xs text-muted-foreground">{p.provider === "claude" ? `tokens in / out · ${p.calls} calls` : p.provider === "pdl" ? "records" : p.provider === "signalhire" ? "searches + credits" : "emails"}</div>
+            {p.provider === "claude" && (p.cacheReadTokens > 0 || p.batchCalls > 0) && (
+              <div className="mt-1 text-xs text-success">
+                {cacheShare(p)}% of input read from cache{p.batchCalls ? ` · ${p.batchCalls} half-price batch calls` : ""}
+              </div>
+            )}
           </Card>
         ))}
         {!q.data.byProvider.some((p) => !p.mock) && <p className="text-sm text-muted-foreground sm:col-span-4">No paid usage yet. Everything so far ran in mock mode.</p>}
