@@ -1,45 +1,39 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { SetupForm, type SetupFormValues } from "@/lib/forms";
 import { Button } from "@/components/ui/button";
 import { AuthLayout } from "./Login";
-import { Field } from "@/components/kit";
+import { Field, FormError } from "@/components/kit";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
+const DEFAULTS: SetupFormValues = {
+  adminName: "Abed El-Fattah Amouneh",
+  adminEmail: "abed.amouneh@york-press.com",
+  adminPassword: "",
+  ceoName: "Khalil Sayegh",
+  ceoEmail: "khalil.sayegh@york-press.com",
+  managers: "",
+};
+
 export default function Setup() {
   const qc = useQueryClient();
-  const [f, setF] = useState({
-    adminName: "Abed El-Fattah Amouneh",
-    adminEmail: "abed.amouneh@york-press.com",
-    adminPassword: "",
-    ceoName: "Khalil Sayegh",
-    ceoEmail: "khalil.sayegh@york-press.com",
-    managers: "",
-  });
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
   const [links, setLinks] = useState<{ email: string; link?: string }[] | null>(null);
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
+  const form = useForm({ resolver: zodResolver(SetupForm), defaultValues: DEFAULTS });
+  const { errors, isSubmitting } = form.formState;
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
+  const submit = form.handleSubmit(async (values) => {
     try {
-      const managers = f.managers.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
-        const [name, email, department] = l.split(",").map((x) => x.trim());
-        return { name, email, department };
-      });
-      const res = await api<{ invites: { email: string; link?: string }[] }>("/setup", { body: { ...f, managers } });
+      const res = await api<{ invites: { email: string; link?: string }[] }>("/setup", { body: values });
       setLinks(res.invites);
     } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
+      form.setError("root", { message: (err as Error).message });
     }
-  }
+  });
 
   if (links) {
     return (
@@ -66,19 +60,29 @@ export default function Setup() {
       <Card className="w-full max-w-md p-6">
         <h1 className="text-xl font-bold">First-time setup</h1>
         <p className="mb-5 text-sm text-muted-foreground">Create your admin account and invite Khalil. You only do this once.</p>
-        <form onSubmit={submit} className="grid gap-4">
-          <Field label="Your name" htmlFor="an"><Input id="an" value={f.adminName} onChange={set("adminName")} required /></Field>
-          <Field label="Your email" htmlFor="ae"><Input id="ae" type="email" value={f.adminEmail} onChange={set("adminEmail")} required /></Field>
-          <Field label="Choose a password" hint="At least 10 characters." htmlFor="ap"><Input id="ap" type="password" autoComplete="new-password" value={f.adminPassword} onChange={set("adminPassword")} required minLength={10} /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="CEO name" htmlFor="cn"><Input id="cn" value={f.ceoName} onChange={set("ceoName")} required /></Field>
-            <Field label="CEO email" htmlFor="ce"><Input id="ce" type="email" value={f.ceoEmail} onChange={set("ceoEmail")} required /></Field>
-          </div>
-          <Field label="Department managers (optional)" hint="One per line: Name, email, Department" htmlFor="mg">
-            <Textarea id="mg" value={f.managers} onChange={set("managers")} placeholder={"Cath Russell, cath.russell@york-press.com, Editorial"} />
+        <form onSubmit={submit} className="grid gap-4" noValidate>
+          <Field label="Your name" htmlFor="an" error={errors.adminName?.message}>
+            <Input id="an" aria-invalid={!!errors.adminName} {...form.register("adminName")} />
           </Field>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={busy}>Create account and send invites</Button>
+          <Field label="Your email" htmlFor="ae" error={errors.adminEmail?.message}>
+            <Input id="ae" type="email" aria-invalid={!!errors.adminEmail} {...form.register("adminEmail")} />
+          </Field>
+          <Field label="Choose a password" hint="At least 10 characters." htmlFor="ap" error={errors.adminPassword?.message}>
+            <Input id="ap" type="password" autoComplete="new-password" aria-invalid={!!errors.adminPassword} {...form.register("adminPassword")} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="CEO name" htmlFor="cn" error={errors.ceoName?.message}>
+              <Input id="cn" aria-invalid={!!errors.ceoName} {...form.register("ceoName")} />
+            </Field>
+            <Field label="CEO email" htmlFor="ce" error={errors.ceoEmail?.message}>
+              <Input id="ce" type="email" aria-invalid={!!errors.ceoEmail} {...form.register("ceoEmail")} />
+            </Field>
+          </div>
+          <Field label="Department managers (optional)" hint="One per line: Name, email, Department" htmlFor="mg" error={errors.managers?.message}>
+            <Textarea id="mg" placeholder={"Cath Russell, cath.russell@york-press.com, Editorial"} aria-invalid={!!errors.managers} {...form.register("managers")} />
+          </Field>
+          <FormError>{errors.root?.message}</FormError>
+          <Button type="submit" disabled={isSubmitting}>Create account and send invites</Button>
         </form>
       </Card>
     </AuthLayout>
