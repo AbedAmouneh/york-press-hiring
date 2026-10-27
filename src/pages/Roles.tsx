@@ -5,7 +5,8 @@ import { can, useMe } from "@/lib/auth";
 import type { RequestRow } from "@/lib/types";
 import { PageHeader } from "@/components/AppShell";
 import { RequestStatusBadge } from "@/components/Status";
-import { Card, EmptyState, Spinner } from "@/components/ui/misc";
+import { EmptyState, Spinner } from "@/components/kit";
+import { Card } from "@/components/ui/card";
 
 export default function Roles() {
   const me = useMe().data!.user!;
