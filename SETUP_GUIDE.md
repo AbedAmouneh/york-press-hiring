@@ -80,6 +80,17 @@ CVs that candidates upload are kept in a **private** Vercel Blob store, not in t
 
 Without the token (on your Mac), CVs stay in the local database.
 
+### A test copy of the site for every pull request
+
+Every pull request on GitHub gets its own copy of the site with its own database, so a change can be clicked through before it reaches the real one. Vercel posts the link as a comment on the pull request.
+
+1. **Keep previews private:** Vercel → Settings → Deployment Protection → leave **Vercel Authentication** on for previews. Only your Vercel team can open them.
+2. **A database per preview:** Vercel → Storage → your Neon database → Settings → turn on **Preview** branching (the option to create a branch for each preview deployment). Each preview then gets its own copy of the database; the build applies any new migrations to that copy only, and the copy is deleted with the preview.
+3. **Environment variables:** set `APP_URL` for **Production** only, and add `DEMO_MODE=true` for **Preview** so you can sign in with the demo buttons.
+4. Optional: Settings → Deployment Protection → **Protection Bypass for Automation**, so long sourcing runs can continue themselves inside a preview.
+
+Previews show a yellow "Test copy" banner, use sample candidates and keep every email in the mock outbox, even though your API keys are present. Nothing in a preview emails a candidate or spends credits. (To test with the real services, set `PREVIEW_USE_REAL_SERVICES=true` for Preview.) Because a preview database starts as a copy of the live one, keep step 1 on.
+
 ### Scoring quality check (optional, a few cents a week)
 
 The repo has a test set of fictional candidates with the scores a good recruiter would expect. To have GitHub check Claude's scoring every Monday and whenever the scoring prompts change, add your Anthropic key as a secret: **GitHub repo → Settings → Secrets and variables → Actions → New repository secret**, name `ANTHROPIC_API_KEY`. Results appear under the **Actions** tab as "Scoring eval".

@@ -90,6 +90,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 - **Retention** (`server/services/retention.ts`, daily cron): data untouched for 24 months is
   deleted. A new table holding personal data must be added there, with a test in
   `tests/unit/retention.test.ts`. Never delete the do-not-contact list.
+- **Previews** (`VERCEL_ENV=preview`, one per pull request, own Neon branch): every provider is
+  forced into mock mode unless `PREVIEW_USE_REAL_SERVICES=true`, `appUrl` is the preview's own
+  URL, and the QStash queue is off. Keep it that way: a preview must never email a candidate.
 - **Secrets** live only in Vercel environment variables or a local `.env` (gitignored).
 - Permissions are enforced on the server for every route, not only hidden in the UI.
 - **Security** (`server/security.ts`, `server/services/rate-limit.ts`): state-changing requests
