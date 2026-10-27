@@ -1,12 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "./api";
+import { call, rpc } from "./rpc";
 import type { Me } from "./types";
 import type { Role } from "../../shared/types";
 
 export function useMe() {
   return useQuery({
     queryKey: ["me"],
-    queryFn: () => api<{ user: Me | null; demoMode: boolean; demoPassword?: string }>("/auth/me"),
+    queryFn: () => call(rpc.auth.me.$get()),
     staleTime: 60_000,
   });
 }
@@ -14,7 +14,7 @@ export function useMe() {
 export function useLogout() {
   const qc = useQueryClient();
   return async () => {
-    await api("/auth/logout", { method: "POST" });
+    await call(rpc.auth.logout.$post());
     qc.clear();
     window.location.href = "/login";
   };
