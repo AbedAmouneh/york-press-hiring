@@ -5,10 +5,11 @@ import { api } from "@/lib/api";
 import { fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/form";
-import { Badge, Dialog, Spinner, Switch, Table, Td, Th } from "@/components/ui/misc";
-import { useToast } from "@/components/ui/toast";
 import { DEPARTMENTS, ROLES, ROLE_LABELS, type Role } from "../../shared/types";
+import { Badge, DataTable, Field, Modal, Select, Spinner, Td, Th, useToast } from "@/components/kit";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 
 type U = { id: string; email: string; name: string; roles: Role[]; department: string | null; active: boolean; isDemo: boolean; invited: boolean; lastLoginAt: string | null };
 
@@ -66,11 +67,11 @@ export default function Users() {
       </PageHeader>
       {link && <p className="mb-4 break-all rounded-md border border-brand bg-accent p-3 text-sm">Email is in mock mode — share this invite link yourself: <span className="font-mono">{link}</span></p>}
       {q.isLoading ? <Spinner /> : (
-        <Table>
-          <thead><tr><Th>Name</Th><Th>Roles</Th><Th>Department</Th><Th>Last sign-in</Th><Th>Active</Th><Th /></tr></thead>
-          <tbody>
+        <DataTable>
+          <TableHeader><TableRow><Th>Name</Th><Th>Roles</Th><Th>Department</Th><Th>Last sign-in</Th><Th>Active</Th><Th /></TableRow></TableHeader>
+          <TableBody>
             {q.data?.users.map((u) => (
-              <tr key={u.id}>
+              <TableRow key={u.id}>
                 <Td><div className="font-medium">{u.name} {u.isDemo && <Badge tone="warn">demo</Badge>} {u.invited && <Badge tone="info">invited</Badge>}</div><div className="font-mono text-xs text-muted-foreground">{u.email}</div></Td>
                 <Td className="min-w-[260px]"><RolePicker value={u.roles} onChange={(roles) => update(u, { roles })} /></Td>
                 <Td>
@@ -81,12 +82,12 @@ export default function Users() {
                 <Td className="num text-xs">{fmtDateTime(u.lastLoginAt)}</Td>
                 <Td><Switch checked={u.active} onCheckedChange={(active) => update(u, { active })} aria-label="Active" /></Td>
                 <Td>{u.invited && <Button size="sm" variant="ghost" onClick={() => resend(u)}>Resend invite</Button>}</Td>
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
-        </Table>
+          </TableBody>
+        </DataTable>
       )}
-      <Dialog open={open} onOpenChange={setOpen} title="Invite a user" description="They get an email with a link to set their password.">
+      <Modal open={open} onOpenChange={setOpen} title="Invite a user" description="They get an email with a link to set their password.">
         <form onSubmit={invite} className="grid gap-3">
           <Field label="Name" htmlFor="un"><Input id="un" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></Field>
           <Field label="Email" htmlFor="ue"><Input id="ue" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required /></Field>
@@ -94,7 +95,7 @@ export default function Users() {
           <Field label="Roles"><RolePicker value={f.roles} onChange={(roles) => setF({ ...f, roles })} /></Field>
           <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" disabled={!f.roles.length}>Send invite</Button></div>
         </form>
-      </Dialog>
+      </Modal>
     </>
   );
 }
