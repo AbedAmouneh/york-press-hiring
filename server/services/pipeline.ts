@@ -6,7 +6,8 @@ import type { RunState } from "../db/schema.js";
 import { buildBrief, scoreBatch, totalScore, webFindings } from "./claude.js";
 import { pdlProvider } from "./providers/pdl.js";
 import { lastCreditsLeft, revealContacts, signalhireProvider, type RevealResult } from "./providers/signalhire.js";
-import { normalizeLinkedin, type NormalizedProfile } from "./providers/types.js";
+import type { NormalizedProfile } from "./providers/types.js";
+import { mergeProfiles, nameKey, prescore, type MergedProfile } from "./merge.js";
 import { getSettings, logUsage, updateSettings, weightsFor } from "./settings.js";
 import { toAI, toReq } from "./mappers.js";
 import { drainEmailQueue, isSuppressed, queueOutreach } from "./outreach.js";
@@ -158,19 +159,6 @@ async function stepBrief({ run, request, state }: Ctx) {
   log(state, `Search brief ready: ${state.brief.titles.join(", ")}.`);
 }
 
-function prescore(p: NormalizedProfile, titles: string[], skills: string[], minYears: number | null) {
-  const t = `${p.currentTitle ?? ""} ${p.headline ?? ""}`.toLowerCase();
-  const titleHit = titles.some((x) => t.includes(x.toLowerCase())) ? 1 : titles.some((x) => x.toLowerCase().split(/\s+/).some((w) => w.length > 3 && t.includes(w))) ? 0.5 : 0;
-  const sk = new Set(p.skills.map((s) => s.toLowerCase()));
-  const skillHit = skills.length ? skills.filter((s) => sk.has(s.toLowerCase()) || [...sk].some((x) => x.includes(s.toLowerCase()))).length / skills.length : 0.5;
-  const yrs = p.totalYears ?? 0;
-  const yearsHit = minYears ? Math.min(1, yrs / minYears) : 0.7;
-  return Math.round((titleHit * 50 + skillHit * 30 + yearsHit * 20) * 10) / 10;
-}
-
-const nameKey = (p: { fullName: string; currentCompany?: string | null }) =>
-  `${p.fullName.toLowerCase().replace(/\s+/g, " ").trim()}|${(p.currentCompany ?? "").toLowerCase().trim()}`;
-
 async function stepSearch({ run, request, state, counters }: Ctx) {
   const db = await getDb();
   const brief = state.brief!;
@@ -198,29 +186,7 @@ async function stepSearch({ run, request, state, counters }: Ctx) {
   counters.found += profiles.length;
 
   // Merge duplicates across sources.
-  const excluded = brief.excludeCompanies.map((c) => c.toLowerCase());
-  const merged = new Map<string, NormalizedProfile & { sources: string[] }>();
-  for (const p of profiles) {
-    if (p.currentCompany && excluded.some((x) => x && p.currentCompany!.toLowerCase().includes(x))) continue;
-    const li = normalizeLinkedin(p.linkedinUrl);
-    const key = li ?? nameKey(p);
-    const altKey = nameKey(p);
-    const existing = merged.get(key) ?? merged.get(altKey);
-    if (existing) {
-      if (!existing.sources.includes(p.source)) existing.sources.push(p.source);
-      existing.email ??= p.email; existing.phone ??= p.phone; existing.linkedinUrl ??= li;
-      if (p.experience.some((e) => e.start) && !existing.experience.some((e) => e.start)) existing.experience = p.experience;
-      if (!existing.education.length) existing.education = p.education;
-      existing.skills = [...new Set([...existing.skills, ...p.skills])];
-      (existing as Record<string, unknown>)[p.source === "PDL" ? "pdlId" : "signalhireUid"] = p.sourceId;
-    } else {
-      const rec = { ...p, linkedinUrl: li, sources: [p.source] } as NormalizedProfile & { sources: string[] } & Record<string, unknown>;
-      rec[p.source === "PDL" ? "pdlId" : "signalhireUid"] = p.sourceId;
-      merged.set(key, rec);
-      if (altKey !== key) merged.set(altKey, rec);
-    }
-  }
-  const unique = [...new Set(merged.values())];
+  const unique = mergeProfiles(profiles, brief.excludeCompanies);
 
   // Skip people already screened for this role.
   const already = await db
@@ -232,8 +198,7 @@ async function stepSearch({ run, request, state, counters }: Ctx) {
 
   const scored = unique
     .filter((p) => {
-      const x = p as unknown as Record<string, string | undefined>;
-      return ![p.linkedinUrl, x.pdlId, x.signalhireUid, nameKey(p)].some((k) => k && seenKeys.has(k));
+      return ![p.linkedinUrl, p.pdlId, p.signalhireUid, nameKey(p)].some((k) => k && seenKeys.has(k));
     })
     .map((p) => ({ p, pre: prescore(p, brief.titles, brief.skills, request.minYears) }))
     .sort((a, b) => b.pre - a.pre)
@@ -241,8 +206,7 @@ async function stepSearch({ run, request, state, counters }: Ctx) {
 
   const newIds: string[] = [];
   for (const { p, pre } of scored) {
-    const x = p as NormalizedProfile & { sources: string[]; pdlId?: string; signalhireUid?: string };
-    const candidateId = await upsertCandidate(x);
+    const candidateId = await upsertCandidate(p);
     const [cand] = await db.select().from(schema.candidates).where(eq(schema.candidates.id, candidateId));
     if (await isSuppressed(cand)) continue;
     const [rc] = await db
@@ -257,7 +221,7 @@ async function stepSearch({ run, request, state, counters }: Ctx) {
   log(state, `${unique.length} unique people after merging; ${newIds.length} new for this role.`);
 }
 
-async function upsertCandidate(p: NormalizedProfile & { sources: string[]; pdlId?: string; signalhireUid?: string }) {
+async function upsertCandidate(p: MergedProfile) {
   const db = await getDb();
   const c = schema.candidates;
   const conds = [];
