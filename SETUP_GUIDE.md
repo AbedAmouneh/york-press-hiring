@@ -2,17 +2,13 @@
 
 This guide gets the app online on Vercel in about 30 minutes, without writing code. Everything runs in **mock mode** (sample candidates, emails kept in the app) until you add the paid API keys, so you can demo it to Khalil straight away.
 
-You need: a **GitHub** account, a **Vercel** account, and this folder.
+You need: a **GitHub** account and a **Vercel** account.
 
 ---
 
-## Step 1 — Put the code on GitHub
+## Step 1 — The code on GitHub (done)
 
-1. Go to **github.com → New repository**. Name it `york-press-hiring`, choose **Private**, and click **Create repository**. Don't add a README.
-2. Install **GitHub Desktop** (desktop.github.com) if you don't have it, and sign in.
-3. In GitHub Desktop: **File → Add local repository…** → choose the `hiring-platform` folder inside *Linkedin Automation*.
-   - If it says "this directory does not appear to be a Git repository", click **create a repository** and keep the defaults.
-4. Click **Publish repository** (or **Push origin**) and pick the private `york-press-hiring` repo you created.
+The code lives at **https://github.com/AbedAmouneh/york-press-hiring**. The local copy is `~/Development/hiring-platform`. Every push to `main` runs CI and, once Vercel is connected, redeploys the site.
 
 ## Step 2 — Create the project on Vercel
 
@@ -102,10 +98,10 @@ Claude opens each profile in your Chrome, sends the note at a human pace, and cl
 Install Node.js 20+ from nodejs.org, then in Terminal:
 
 ```bash
-cd "~/Documents/Linkedin Automation /hiring-platform"
+cd ~/Development/hiring-platform
 cp .env.example .env
-npm install
-npm run dev
+npm install --include=dev
+NODE_ENV=development npm run dev
 ```
 
 Open http://localhost:5173. Data is stored in the `.data` folder.
