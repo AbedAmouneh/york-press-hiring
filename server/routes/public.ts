@@ -4,7 +4,7 @@ import { and, eq, gt } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
 import { ApplyFields, cvProblem, InvitePasswordInput, LoginInput, SetupInput } from "../../shared/schemas.js";
 import { env, mock } from "../env.js";
-import { createSession, currentUser, destroySession, hashPassword, verifyPassword } from "../auth.js";
+import { createSession, currentUser, destroySession, hashPassword, randomToken, verifyPassword } from "../auth.js";
 import { runSetup, userCount, DEMO_PASSWORD } from "../services/setup.js";
 import { applyRevealResults, resumeWaitingRuns, runPipeline } from "../services/pipeline.js";
 import { parseCandidate, type SHCandidate } from "../services/providers/signalhire.js";
@@ -17,6 +17,9 @@ import { normalizeLinkedin } from "../services/providers/types.js";
 import { publicUser } from "./access.js";
 import { APPLY_LIMITS, assertWithinLimits, clearHits, clientIp, INVITE_LIMITS, LOGIN_LIMITS, recordHit } from "../services/rate-limit.js";
 
+// A bcrypt hash of a random secret, compared against when the email doesn't exist.
+let dummyHash: Promise<string> | null = null;
+const getDummyHash = () => (dummyHash ??= hashPassword(randomToken()));
 
 export const publicRoutes = new Hono();
 
@@ -40,7 +43,9 @@ publicRoutes.post("/auth/login", async (c) => {
   await assertWithinLimits(limits, "Too many failed sign-in attempts. Please wait 15 minutes and try again.");
   const db = await getDb();
   const [u] = await db.select().from(schema.users).where(eq(schema.users.email, email));
-  if (!u || !u.active || !u.passwordHash || !(await verifyPassword(password, u.passwordHash))) {
+  // Always run bcrypt, so the response time doesn't reveal whether the email exists.
+  const valid = await verifyPassword(password, u?.passwordHash ?? (await getDummyHash()));
+  if (!u || !u.active || !u.passwordHash || !valid) {
     await recordHit(limits);
     throw new HTTPException(401, { message: "Email or password is incorrect." });
   }
