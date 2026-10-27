@@ -75,27 +75,54 @@ ${r.jdText.slice(0, 6000)}
 </job_request>`;
 }
 
-async function structured<T>(opts: {
-  runId?: string | null;
-  action: string;
+type ToolCall = {
   system: string;
+  /** Stable text shared by many calls (request, scorecard, rules). Cached by Anthropic for 5 minutes. */
+  cachedPrefix?: string;
   content: Anthropic.MessageParam["content"];
   toolName: string;
   schema: Record<string, unknown>;
   maxTokens?: number;
-}): Promise<T> {
-  const res = await ai().messages.create({
+};
+
+/**
+ * Build the request for a forced tool call. When `cachedPrefix` is given it goes first in the user
+ * message with a cache breakpoint, so the tools, system prompt and prefix are read from cache
+ * (about a tenth of the price) on every later call that shares them.
+ */
+export function toolParams(opts: ToolCall): Anthropic.MessageCreateParamsNonStreaming {
+  const rest: Anthropic.ContentBlockParam[] = typeof opts.content === "string" ? [{ type: "text", text: opts.content }] : opts.content;
+  const content: Anthropic.ContentBlockParam[] = opts.cachedPrefix
+    ? [{ type: "text", text: opts.cachedPrefix, cache_control: { type: "ephemeral" } }, ...rest]
+    : rest;
+  return {
     model: env.claudeModel,
     max_tokens: opts.maxTokens ?? 4000,
     system: opts.system,
-    messages: [{ role: "user", content: opts.content }],
+    messages: [{ role: "user", content }],
     tools: [{ name: opts.toolName, description: "Return the result.", input_schema: opts.schema as Anthropic.Tool.InputSchema }],
     tool_choice: { type: "tool", name: opts.toolName },
-  });
-  await logUsage({ runId: opts.runId ?? null, provider: "claude", action: opts.action, units: 1, inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens });
-  const block = res.content.find((b) => b.type === "tool_use");
-  if (!block || block.type !== "tool_use") throw new Error(`Claude returned no ${opts.toolName} result`);
+  };
+}
+
+export function readTool<T>(msg: Anthropic.Message, toolName: string): T {
+  const block = msg.content.find((b) => b.type === "tool_use");
+  if (!block || block.type !== "tool_use") throw new Error(`Claude returned no ${toolName} result`);
   return block.input as T;
+}
+
+/** Token counts for the usage log, including prompt-cache reads and writes. */
+export const usageOf = (u: Anthropic.Usage) => ({
+  inputTokens: u.input_tokens,
+  outputTokens: u.output_tokens,
+  cacheReadTokens: u.cache_read_input_tokens ?? 0,
+  cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+});
+
+async function structured<T>(opts: ToolCall & { runId?: string | null; action: string }): Promise<T> {
+  const res = await ai().messages.create(toolParams(opts));
+  await logUsage({ runId: opts.runId ?? null, provider: "claude", action: opts.action, units: 1, ...usageOf(res.usage) });
+  return readTool<T>(res, opts.toolName);
 }
 
 // ---------------------------------------------------------------- Search brief
@@ -155,15 +182,15 @@ function mockBrief(r: Req): SearchBrief {
 
 // ---------------------------------------------------------------- Scoring
 
-export async function scoreBatch(r: Req, weights: Weights, items: CandidateForAI[], runId?: string | null): Promise<ScoreResult[]> {
-  if (mock.claude) return items.map((c) => mockScore(r, weights, c));
+const SCORE_TOOL = "submit_scores";
+
+/** The scoring request for up to a handful of candidates. The request, scorecard and rules are cached. */
+export function scoreParams(r: Req, weights: Weights, items: CandidateForAI[]) {
   const scorecard = CRITERIA.map((c) => `- ${c.key} (${c.label}): 0-${weights[c.key]} points`).join("\n");
-  const out = await structured<{ results: ScoreResult[] }>({
-    runId,
-    action: "score",
+  return toolParams({
     maxTokens: 6000,
     system: `You screen candidates for York Press against a weighted 100-point scorecard. Be evidence-based: award points only for what the profile shows. ${FAIRNESS_RULE} ${DATA_RULE}`,
-    content: `${requestBlock(r)}
+    cachedPrefix: `${requestBlock(r)}
 
 Scorecard (points per criterion):
 ${scorecard}
@@ -174,14 +201,13 @@ Rules:
 - why: 1-2 sentences on why this person is worth contacting, citing specific evidence.
 - gaps: 1 sentence on what is missing versus the request.
 - redFlags: neutral facts only (very short tenures, unexplained gaps over 12 months, inconsistent dates). Empty string if none.
-- relevantYears: years in roles comparable to this one.
-
-<candidate_data>
+- relevantYears: years in roles comparable to this one.`,
+    content: `<candidate_data>
 ${JSON.stringify(items, null, 1)}
 </candidate_data>
 
 Return one result per candidate, using the same "key".`,
-    toolName: "submit_scores",
+    toolName: SCORE_TOOL,
     schema: {
       type: "object",
       properties: {
@@ -209,7 +235,15 @@ Return one result per candidate, using the same "key".`,
       required: ["results"],
     },
   });
-  return out.results;
+}
+
+export const readScores = (msg: Anthropic.Message) => readTool<{ results: ScoreResult[] }>(msg, SCORE_TOOL).results;
+
+export async function scoreBatch(r: Req, weights: Weights, items: CandidateForAI[], runId?: string | null): Promise<ScoreResult[]> {
+  if (mock.claude) return items.map((c) => mockScore(r, weights, c));
+  const res = await ai().messages.create(scoreParams(r, weights, items));
+  await logUsage({ runId: runId ?? null, provider: "claude", action: "score", units: 1, ...usageOf(res.usage) });
+  return readScores(res);
 }
 
 /** Sum the breakdown, clamp each criterion to its weight, cap at 40 when a deal-breaker is missing. */
@@ -294,7 +328,7 @@ export async function webFindings(c: CandidateForAI & { fullName: string }, runI
     }],
   });
   const searches = res.usage.server_tool_use?.web_search_requests ?? 0;
-  await logUsage({ runId: runId ?? null, provider: "claude", action: "web_search", units: searches, inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens });
+  await logUsage({ runId: runId ?? null, provider: "claude", action: "web_search", units: searches, ...usageOf(res.usage) });
   const text = res.content.filter((b) => b.type === "text").map((b) => (b as Anthropic.TextBlock).text).join("\n");
   const m = text.match(/\[[\s\S]*\]/);
   if (!m) return { findings: [], searches };
