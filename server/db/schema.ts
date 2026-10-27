@@ -307,3 +307,10 @@ export const usageLog = pgTable("usage_log", {
   mock: boolean("mock").notNull().default(false),
   createdAt: createdAt(),
 });
+
+/** One row per counted attempt (failed sign-ins, CV uploads). Shared by every serverless instance. */
+export const rateLimitHits = pgTable("rate_limit_hits", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull(), // e.g. "login:email:jane@x.com", "login:ip:1.2.3.4"
+  createdAt: createdAt(),
+}, (t) => [index("rate_limit_hits_key_idx").on(t.key, t.createdAt)]);
