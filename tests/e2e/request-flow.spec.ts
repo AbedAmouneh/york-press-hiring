@@ -7,11 +7,13 @@ test("a manager is told about every problem at once, then submits a request", as
   await page.getByRole("button", { name: "Submit to Khalil" }).click();
 
   await expect(page.getByText("Add a job title.")).toBeVisible();
+  await expect(page.getByText("Choose where this person will work.")).toBeVisible();
   await expect(page.getByText("Choose a currency.")).toBeVisible();
   await expect(page.getByText("Explain why this role is needed.")).toBeVisible();
   await expect(page).toHaveURL(/\/requests\/new$/);
 
   await page.getByLabel("Job title").fill("Commissioning Editor");
+  await page.getByLabel("Location", { exact: true }).selectOption({ label: "London, United Kingdom" });
   await page.getByLabel("Must-haves").fill("Commissioning\nCopy editing");
   await page.getByLabel("Salary from").fill("40000");
   await page.getByLabel("Salary to").fill("30000");
