@@ -8,6 +8,7 @@ import { CRITERIA, type Weights } from "../../shared/types.js";
 import { DecisionInput, RequestInput, RequestPatch, WeightsInput } from "../../shared/schemas.js";
 import { isStaff, loadRequest } from "./access.js";
 import { notifyRoles, notifyUsers } from "../services/notify.js";
+import { decisionNotice } from "../services/decision-notice.js";
 import { startRun } from "../services/pipeline.js";
 import { json, query } from "../validate.js";
 
@@ -147,12 +148,7 @@ export const requestRoutes = new Hono<AppEnv>()
     await db.update(schema.roleRequests).set({ status, decidedAt: new Date(), updatedAt: new Date() }).where(eq(schema.roleRequests.id, r.id));
     const label = action === "approve" ? "Approved" : action === "reject" ? "Rejected" : "Requested changes";
     await event(r.id, user, label, comment);
-    await notifyUsers([r.requesterId, r.hiringManagerId], {
-      type: "decision",
-      title: `${user.name} ${label.toLowerCase()} ${r.title}`,
-      link: `/requests/${r.id}`,
-      emailBody: `${user.name} ${label.toLowerCase()} your request for ${r.title}.${comment ? `\n\nComment: ${comment}` : ""}${action === "approve" ? "\n\nSourcing has started; you'll be notified when candidates are ready." : ""}`,
-    });
+    await notifyUsers([r.requesterId, r.hiringManagerId], { type: "decision", link: `/requests/${r.id}`, ...decisionNotice(action, user.name, r.title, comment) });
     if (action === "approve") {
       await notifyRoles(["recruiter"], { type: "approved", title: `${r.title} approved — sourcing started`, link: `/roles/${r.id}` });
       await startRun(r.id, "initial");
