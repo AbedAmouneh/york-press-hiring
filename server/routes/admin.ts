@@ -70,7 +70,7 @@ export const adminRoutes = new Hono<AppEnv>()
       settings: s,
       sentToday: await sentTodayCount(),
       integrations: {
-        claude: { live: !mock.claude, model: env.claudeModel },
+        claude: { live: !mock.claude, model: env.claudeModel, via: env.aiProvider === "opencode" ? "OpenCode" : env.aiProvider === "anthropic" ? "Anthropic" : null },
         // inUse = false when a source has no key while another is live, so runs skip it.
         pdl: { live: !mock.pdl, inUse: searchProviders().some((p) => p.name === "PDL") },
         signalhire: { live: !mock.signalhire, inUse: searchProviders().some((p) => p.name === "SignalHire"), creditsLeft: s.signalhireCreditsLeft },
