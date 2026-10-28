@@ -13,6 +13,8 @@ export const LOGIN_LIMITS = (email: string, ip: string): Limit[] => [
 export const MFA_LIMITS = (userId: string): Limit[] => [{ key: `mfa:user:${userId}`, max: 5, windowMs: 15 * 60_000 }];
 export const APPLY_LIMITS = (ip: string): Limit[] => [{ key: `apply:ip:${ip}`, max: 5, windowMs: 60 * 60_000 }];
 export const INVITE_LIMITS = (ip: string): Limit[] => [{ key: `invite:ip:${ip}`, max: 10, windowMs: 15 * 60_000 }];
+/** Each message emails the people on the request, so a burst of them is capped. */
+export const MESSAGE_LIMITS = (userId: string): Limit[] => [{ key: `message:user:${userId}`, max: 20, windowMs: 10 * 60_000 }];
 
 /** The caller's IP. On Vercel the platform sets x-real-ip / x-forwarded-for, so clients can't spoof them. */
 export function clientIp(c: Context) {
