@@ -64,7 +64,7 @@ export default function LinkedinQueue() {
   return (
     <>
       <PageHeader eyebrow="Top-10 candidates without an email" title="LinkedIn queue" />
-      <Card className="mb-6 border-brand bg-accent">
+      <Card className="mb-6 border-primary/20 bg-accent">
         <CardContent className="grid gap-1 pt-5 text-sm">
           <p><b>How sending works:</b> approve the messages below, then open Cowork and say <i>"Send the approved LinkedIn messages from the York Press Hiring queue."</i></p>
           <p className="text-muted-foreground">Claude opens each profile in your Chrome, sends the note at a human pace (15–45 seconds apart), marks it sent here, and stops at any LinkedIn warning. Nothing is sent from this page by itself.</p>

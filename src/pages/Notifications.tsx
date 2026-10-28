@@ -25,7 +25,7 @@ export default function Notifications() {
           {q.data.notifications.map((n) => {
             const inner = (
               <div className="flex items-start gap-3 px-4 py-3">
-                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.readAt ? "bg-transparent" : "bg-brand ring-2 ring-primary/10"}`} />
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.readAt ? "bg-transparent" : "bg-primary"}`} />
                 <span className={`flex-1 text-sm ${n.readAt ? "text-muted-foreground" : "font-medium"}`}>{n.title}</span>
                 <span className="num whitespace-nowrap text-xs text-muted-foreground">{fmtDateTime(n.createdAt)}</span>
               </div>

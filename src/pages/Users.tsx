@@ -106,7 +106,7 @@ export default function Users() {
       <PageHeader eyebrow="Admin" title="Users">
         <Button onClick={() => setOpen(true)}><UserPlus /> Invite user</Button>
       </PageHeader>
-      {link && <p className="mb-4 break-all rounded-md border border-brand bg-accent p-3 text-sm">Email is in mock mode — share this invite link yourself: <span className="font-mono">{link}</span></p>}
+      {link && <p className="mb-4 break-all rounded-md border border-primary/20 bg-accent p-3 text-sm">Email is in mock mode — share this invite link yourself: <span className="font-mono">{link}</span></p>}
       {q.isLoading ? <Spinner /> : (
         <DataTable>
           <TableHeader><TableRow><Th>Name</Th><Th>Roles</Th><Th>Department</Th><Th>Last sign-in</Th><Th>Active</Th><Th /></TableRow></TableHeader>

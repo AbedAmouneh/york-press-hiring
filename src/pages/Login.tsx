@@ -23,7 +23,7 @@ const DEMO = [
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-full lg:grid-cols-[1fr_minmax(0,520px)]">
-      <div className="hidden flex-col justify-between bg-primary p-10 text-primary-foreground lg:flex">
+      <div className="hidden flex-col justify-between bg-ink p-10 text-white lg:flex">
         <Logo dark />
         <div className="max-w-md">
           <p className="text-3xl font-bold leading-tight">Request a role. Get it approved. Meet the best candidates.</p>

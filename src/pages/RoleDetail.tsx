@@ -29,7 +29,7 @@ function CandidateTable({ rows, onOpen, canEdit, onDecision, top }: { rows: Cand
       </TableHeader>
       <TableBody>
         {rows.map((c) => (
-          <TableRow key={c.id} className={cn("cursor-pointer hover:bg-secondary/50", c.isTop10 && "shadow-[inset_3px_0_0_var(--brand)]")} onClick={() => onOpen(c.id)}>
+          <TableRow key={c.id} className={cn("cursor-pointer hover:bg-secondary/50", c.isTop10 && "shadow-[inset_3px_0_0_var(--primary)]")} onClick={() => onOpen(c.id)}>
             <Td className="num text-muted-foreground">{c.rank ?? "—"}</Td>
             <Td className="min-w-[220px]">
               <div className="font-medium">
@@ -162,7 +162,7 @@ export default function RoleDetail() {
       </PageHeader>
 
       {running && (
-        <Card className="mb-5 flex flex-row items-center gap-3 border-brand bg-accent px-4 py-3 text-sm">
+        <Card className="mb-5 flex flex-row items-center gap-3 border-primary/20 bg-accent px-4 py-3 text-sm">
           <Spinner />
           <div><b>Sourcing in progress</b> — {running.state.log.at(-1)?.msg ?? "starting…"}</div>
         </Card>

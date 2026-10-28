@@ -16,7 +16,7 @@ export default function Outbox() {
     <>
       <PageHeader eyebrow="Every email the platform sent" title="Sent emails" />
       {q.data?.mock && (
-        <Card className="mb-4 border-brand bg-accent px-4 py-3 text-sm">
+        <Card className="mb-4 border-primary/20 bg-accent px-4 py-3 text-sm">
           <b>Email is in mock mode.</b> Nothing leaves the app until a Resend API key is added; emails are kept here so you can read them.
         </Card>
       )}

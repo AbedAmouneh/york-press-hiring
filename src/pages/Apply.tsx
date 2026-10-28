@@ -39,7 +39,7 @@ export default function Apply() {
 
   return (
     <div className="min-h-full bg-background">
-      <header className="bg-primary px-4 py-4"><div className="mx-auto max-w-2xl"><Logo dark /></div></header>
+      <header className="bg-ink px-4 py-4"><div className="mx-auto max-w-2xl"><Logo dark /></div></header>
       <main className="mx-auto max-w-2xl px-4 py-8">
         {role.isLoading ? <Spinner /> : role.error ? (
           <Card className="p-6"><p>{(role.error as Error).message}</p></Card>
