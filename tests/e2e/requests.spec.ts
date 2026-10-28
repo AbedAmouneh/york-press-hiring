@@ -10,6 +10,35 @@ test("the request form counts what is still missing", async ({ page }) => {
   await expect(page.getByText("2/5")).toBeVisible();
 });
 
+test("the timeline reads oldest first and ends with the step it is waiting on", async ({ page }) => {
+  await signInAs(page, "Manager");
+  await page.goto("/requests/new");
+  await page.getByLabel("Job title").fill("Audit Editor");
+  await page.keyboard.press("Escape");
+  await page.getByLabel("Location", { exact: true }).selectOption({ label: "London, United Kingdom" });
+  await page.getByLabel("Currency").selectOption("GBP");
+  await page.getByLabel("Salary from").fill("30000");
+  await page.getByLabel("Business justification for Khalil").fill("The ELT list is growing.");
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page).toHaveURL(/\/requests\/[0-9a-f-]{36}$/);
+
+  await page.getByRole("button", { name: "Submit to Khalil" }).click();
+  const steps = page.getByRole("listitem").filter({ hasText: /Created draft|Submitted|Waiting for Khalil/ });
+  await expect(steps).toHaveText([/Created draft/, /Submitted/, /Waiting for Khalil/]);
+});
+
+test("editing a draft shows the saved location", async ({ page }) => {
+  await signInAs(page, "Manager");
+  await page.goto("/requests/new");
+  await page.getByLabel("Job title").fill("Audit Translator");
+  await page.keyboard.press("Escape");
+  await page.getByLabel("Location", { exact: true }).selectOption({ label: "Athens, Greece" });
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page).toHaveURL(/\/requests\/[0-9a-f-]{36}$/);
+  await page.getByRole("link", { name: "Edit" }).click();
+  await expect(page.getByLabel("Location", { exact: true }).locator("option:checked")).toHaveText("Athens, Greece");
+});
+
 test("a submitted request shows its timeline with the next step", async ({ page }) => {
   await signInAs(page, "CEO approver");
   await page.getByRole("link", { name: /^Review R-\d+ / }).first().click();
