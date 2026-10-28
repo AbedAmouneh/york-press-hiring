@@ -3,7 +3,7 @@ import { signInAs } from "./helpers";
 
 test("a recruiter sees the Top 10 for an open role and opens a candidate", async ({ page }) => {
   await signInAs(page, "Recruiter");
-  await expect(page).toHaveURL(/\/roles$/);
+  await expect(page).toHaveURL(/:\d+\/$/);
   await page.getByRole("link", { name: /Senior Product Designer/ }).click();
 
   await expect(page.getByRole("tab", { name: "Top 10" })).toHaveAttribute("aria-selected", "true");

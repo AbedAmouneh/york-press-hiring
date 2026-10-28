@@ -31,7 +31,7 @@ test("a manager is told about every problem at once, then submits a request", as
 
 test("the CEO needs a comment to send a request back", async ({ page }) => {
   await signInAs(page, "CEO approver");
-  await expect(page).toHaveURL(/\/approvals$/);
+  await expect(page).toHaveURL(/:\d+\/$/);
   await page.getByRole("link", { name: /Finance Manager/ }).click();
 
   await page.getByRole("button", { name: "Request changes" }).click();

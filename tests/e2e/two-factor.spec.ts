@@ -29,7 +29,7 @@ test("an admin must set up two-step login, then needs a code to sign in", async 
   const recovery = (await page.locator("ol li").allInnerTexts()).map((c) => c.trim());
   expect(recovery).toHaveLength(8);
   await page.getByRole("button", { name: "I've saved them, continue" }).click();
-  await expect(page).toHaveURL(/\/roles$/);
+  await expect(page).toHaveURL(/:\d+\/$/);
 
   // Next sign-in: password, then a code. A recovery code works once.
   await page.context().clearCookies();
@@ -40,6 +40,6 @@ test("an admin must set up two-step login, then needs a code to sign in", async 
   await expect(page.getByText("That code didn't work.")).toBeVisible();
   await page.getByLabel("Code").fill(recovery[0]);
   await page.getByRole("button", { name: "Verify" }).click();
-  await expect(page).toHaveURL(/\/roles$/);
-  await expect(page.getByRole("heading", { name: "Open roles" })).toBeVisible();
+  await expect(page).toHaveURL(/:\d+\/$/);
+  await expect(page.getByRole("heading", { name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 });
