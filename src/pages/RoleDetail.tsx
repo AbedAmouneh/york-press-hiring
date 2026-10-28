@@ -162,7 +162,7 @@ export default function RoleDetail() {
       </PageHeader>
 
       {running && (
-        <Card className="mb-5 flex items-center gap-3 border-brand bg-accent px-4 py-3 text-sm">
+        <Card className="mb-5 flex flex-row items-center gap-3 border-brand bg-accent px-4 py-3 text-sm">
           <Spinner />
           <div><b>Sourcing in progress</b> — {running.state.log.at(-1)?.msg ?? "starting…"}</div>
         </Card>
