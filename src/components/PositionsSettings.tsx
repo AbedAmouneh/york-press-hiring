@@ -13,15 +13,16 @@ import { Switch } from "@/components/ui/switch";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge, DataTable, Field, FormError, Select, Spinner, Td, Th, useToast } from "@/components/kit";
+import { Combobox } from "@/components/Combobox";
 import { DEPARTMENTS, SENIORITIES } from "../../shared/types";
 
 const EMPTY: PositionFormValues = {
-  title: "", department: DEPARTMENTS[0], seniority: "Mid", mustHaves: "", niceToHaves: "", languages: "English", minYears: "", idealYears: "", active: true,
+  title: "", department: DEPARTMENTS[0], seniority: "Mid", mustHaves: "", niceToHaves: "", languages: "English", minYears: "", idealYears: "", jdText: "", active: true,
 };
 
 const toForm = (p: Position): PositionFormValues => ({
   title: p.title, department: p.department, seniority: p.seniority, mustHaves: p.mustHaves.join("\n"), niceToHaves: p.niceToHaves.join("\n"),
-  languages: p.languages.join(", "), minYears: p.minYears?.toString() ?? "", idealYears: p.idealYears?.toString() ?? "", active: p.active,
+  languages: p.languages.join(", "), minYears: p.minYears?.toString() ?? "", idealYears: p.idealYears?.toString() ?? "", jdText: p.jdText, active: p.active,
 });
 
 const years = (p: Position) => (p.minYears == null && p.idealYears == null ? "—" : `${p.minYears ?? 0}–${p.idealYears ?? p.minYears}`);
@@ -35,8 +36,8 @@ export function PositionsSettings() {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Managers pick these on the request form, or type a new title. Picking one suggests its department, level, must-haves, nice-to-haves,
-          years and languages; the manager can change all of them.
+          Managers pick these on the request form, or type a new title. Picking one suggests its department, level, job description,
+          must-haves, nice-to-haves, years and languages; the manager can change all of them.
         </p>
         <Button onClick={() => setEditing("new")}><Plus className="h-4 w-4" /> Add position</Button>
       </div>
@@ -45,7 +46,7 @@ export function PositionsSettings() {
         <TableBody>
           {q.data.positions.map((p) => (
             <TableRow key={p.id}>
-              <Td className="font-medium">{p.title}</Td>
+              <Td className="font-medium">{p.title}{!p.jdText && <span className="ml-2 text-xs font-normal text-muted-foreground">no JD</span>}</Td>
               <Td>{p.department}</Td>
               <Td>{p.seniority}</Td>
               <Td className="max-w-xs truncate text-muted-foreground" title={p.mustHaves.join(", ")}>{p.mustHaves.join(", ") || "—"}</Td>
@@ -58,7 +59,7 @@ export function PositionsSettings() {
         </TableBody>
       </DataTable>
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
           {editing && <PositionEditor key={editing === "new" ? "new" : editing.id} position={editing === "new" ? null : editing} onDone={() => setEditing(null)} />}
         </DialogContent>
       </Dialog>
@@ -105,8 +106,13 @@ function PositionEditor({ position, onDone }: { position: Position | null; onDon
       </DialogHeader>
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Job title" htmlFor="p-title" className="sm:col-span-3" error={errors.title?.message}><Input id="p-title" {...reg("title")} /></Field>
-        <Field label="Department" htmlFor="p-dept" error={errors.department?.message}><Select id="p-dept" {...reg("department")}>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</Select></Field>
-        <Field label="Seniority" htmlFor="p-sen" error={errors.seniority?.message}><Select id="p-sen" {...reg("seniority")}>{SENIORITIES.map((d) => <option key={d}>{d}</option>)}</Select></Field>
+        <Field label="Department" htmlFor="p-dept" error={errors.department?.message}><Select id="p-dept" {...reg("department")}>{[...new Set([...DEPARTMENTS, form.watch("department")])].filter(Boolean).map((d) => <option key={d}>{d}</option>)}</Select></Field>
+        <Field label="Seniority" htmlFor="p-sen" error={errors.seniority?.message}>
+          <Controller control={form.control} name="seniority" render={({ field }) => (
+            <Combobox id="p-sen" value={field.value} onChange={field.onChange} onBlur={field.onBlur} invalid={!!errors.seniority}
+              listLabel="Levels" options={SENIORITIES.map((s) => ({ id: s, label: s }))} />
+          )} />
+        </Field>
         <Field label="Languages" hint="Comma-separated." htmlFor="p-lang" error={errors.languages?.message}><Input id="p-lang" {...reg("languages")} /></Field>
         <Field label="Must-haves" hint="One per line." htmlFor="p-must" error={errors.mustHaves?.message}><Textarea id="p-must" rows={4} {...reg("mustHaves")} /></Field>
         <Field label="Nice-to-haves" hint="One per line." htmlFor="p-nice" error={errors.niceToHaves?.message}><Textarea id="p-nice" rows={4} {...reg("niceToHaves")} /></Field>
@@ -114,6 +120,10 @@ function PositionEditor({ position, onDone }: { position: Position | null; onDon
           <Field label="Minimum years" htmlFor="p-miny" error={errors.minYears?.message}><Input id="p-miny" inputMode="numeric" {...reg("minYears")} /></Field>
           <Field label="Ideal years" htmlFor="p-idy" error={errors.idealYears?.message}><Input id="p-idy" inputMode="numeric" {...reg("idealYears")} /></Field>
         </div>
+        <Field label="Job description" hint="Suggested on the request form. Leave out working hours and location: those come from the location the manager picks."
+          htmlFor="p-jd" className="sm:col-span-3" error={errors.jdText?.message}>
+          <Textarea id="p-jd" rows={10} className="max-h-[40vh]" {...reg("jdText")} />
+        </Field>
       </div>
       <FormError>{errors.root?.message}</FormError>
       <div className="flex flex-wrap items-center justify-between gap-3">
