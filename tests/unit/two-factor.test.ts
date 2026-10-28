@@ -63,7 +63,9 @@ describe("authenticator codes", () => {
     expect(stored).not.toContain("JBSWY3DPEHPK3PXP");
     expect(decryptSecret(stored)).toBe("JBSWY3DPEHPK3PXP");
     const [iv, tag, data] = stored.split(".");
-    expect(() => decryptSecret([iv, tag, data.slice(0, -2) + "AA"].join("."))).toThrow();
+    const bytes = Buffer.from(data, "base64url");
+    bytes[0] ^= 0xff; // always a real change, unlike overwriting characters that may already match
+    expect(() => decryptSecret([iv, tag, bytes.toString("base64url")].join("."))).toThrow();
   });
 });
 
