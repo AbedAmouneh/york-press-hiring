@@ -44,6 +44,8 @@ The code lives at **https://github.com/AbedAmouneh/york-press-hiring**. The loca
 **Try the whole flow with the demo accounts** (password `demo-york-2026`, buttons on the sign-in page):
 Manager → *New request* → *Submit* · CEO → *Approvals* → *Approve* · Recruiter → *Open roles* → watch ~50 sample candidates get scored → Top 10 contacted.
 
+**Positions and locations:** Settings → **Positions** holds the jobs York Press hires for often, with a suggested job description and requirements; Settings → **Locations** holds the offices and countries York Press hires in, with their work arrangement and hours. Managers pick from both on every request and can change anything. Add, edit or hide entries as the company grows.
+
 When you go live, turn demo accounts off: set `DEMO_MODE` to `false` and deactivate the demo users under **Users**.
 
 ## Step 5 — Logo
