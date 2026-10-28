@@ -99,6 +99,16 @@ export const requestEvents = pgTable("request_events", {
   createdAt: createdAt(),
 });
 
+/** The discussion on a request: anyone who can open the request can read and post. */
+export const requestMessages = pgTable("request_messages", {
+  id: id(),
+  requestId: uuid("request_id").notNull().references(() => roleRequests.id, { onDelete: "cascade" }),
+  authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
+  authorName: text("author_name").notNull(),
+  body: text("body").notNull(),
+  createdAt: createdAt(),
+}, (t) => [index("request_messages_request_idx").on(t.requestId, t.createdAt)]);
+
 export type RunState = {
   brief?: SearchBrief;
   log: { at: string; msg: string }[];
