@@ -97,10 +97,10 @@ function LocationEditor({ location, onDone }: { location: HiringLocation | null;
         <DialogDescription>These details are suggested on requests for this location.</DialogDescription>
       </DialogHeader>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Name" hint="As managers will see it, e.g. Zouk Mosbeh, Lebanon." htmlFor="l-name" className="sm:col-span-2" error={errors.name?.message}><Input id="l-name" {...reg("name")} /></Field>
-        <Field label="Country" hint="Candidates are searched here by default." htmlFor="l-country" error={errors.country?.message}><Input id="l-country" {...reg("country")} /></Field>
+        <Field required label="Name" hint="As managers will see it, e.g. Zouk Mosbeh, Lebanon." htmlFor="l-name" className="sm:col-span-2" error={errors.name?.message}><Input id="l-name" {...reg("name")} /></Field>
+        <Field required label="Country" hint="Candidates are searched here by default." htmlFor="l-country" error={errors.country?.message}><Input id="l-country" {...reg("country")} /></Field>
         <Field label="City" htmlFor="l-city" error={errors.city?.message}><Input id="l-city" {...reg("city")} /></Field>
-        <Field label="Work arrangement" htmlFor="l-arr" error={errors.workArrangement?.message}>
+        <Field required label="Work arrangement" htmlFor="l-arr" error={errors.workArrangement?.message}>
           <Select id="l-arr" {...reg("workArrangement")}>{[...new Set([...WORK_ARRANGEMENTS, form.watch("workArrangement")])].map((a) => <option key={a}>{a}</option>)}</Select>
         </Field>
         <Field label="Working hours" htmlFor="l-hours" error={errors.workingHours?.message}><Input id="l-hours" placeholder="Mon–Fri 8:00–17:00" {...reg("workingHours")} /></Field>
