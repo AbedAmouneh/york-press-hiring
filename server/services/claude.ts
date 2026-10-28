@@ -333,7 +333,7 @@ function mockScore(r: Req, weights: Weights, c: CandidateForAI): ScoreResult {
 
 export async function personalLine(r: Req, c: CandidateForAI, runId?: string | null): Promise<string> {
   if (mock.claude) {
-    return `Your work as ${c.currentTitle ?? "a professional in your field"}${c.currentCompany ? ` at ${c.currentCompany}` : ""}, especially your experience with ${c.skills[0]?.toLowerCase() ?? "this area"}, stood out to me.`;
+    return `Your work as ${c.currentTitle ?? "a professional in your field"}${c.currentCompany ? ` at ${c.currentCompany}` : ""}, especially your experience with ${c.skills[0] ?? "this area"}, stood out to me.`;
   }
   const out = await structured<{ line: string }>({
     runId,
