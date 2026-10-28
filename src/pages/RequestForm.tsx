@@ -15,7 +15,10 @@ import { Field, FormError, Select, Spinner, useToast } from "@/components/kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Combobox, type ComboOption } from "@/components/Combobox";
+import { Combobox } from "@/components/Combobox";
+import { PositionPicker } from "@/components/PositionPicker";
+import { yearsLabel } from "@/lib/positions";
+import { Check, Undo2 } from "lucide-react";
 
 const EMPTY: RequestFormValues = {
   title: "", department: DEPARTMENTS[0], seniority: "Mid", headcount: "1", startDate: "", kind: "new", jdText: "",
@@ -69,7 +72,8 @@ export default function RequestForm() {
   const people = useQuery({ queryKey: ["hiring-managers"], queryFn: () => call(rpc.people["hiring-managers"].$get()) });
   const positions = useQuery({ queryKey: ["positions"], queryFn: () => call(rpc.positions.$get()) });
   const locations = useQuery({ queryKey: ["locations"], queryFn: () => call(rpc.locations.$get()) });
-  const [suggested, setSuggested] = useState<{ title: string; fields: string[] } | null>(null);
+  /** The last position picked: what it filled, and the values those fields had before, for Undo. */
+  const [suggested, setSuggested] = useState<{ position: Position; fields: string[]; before: Partial<Record<Suggestable, string>> } | null>(null);
   const autoFilled = useRef<Partial<Record<AutoField, string>>>({});
   const myDepartment = me.department && (DEPARTMENTS as readonly string[]).includes(me.department) ? me.department : EMPTY.department;
   const form = useForm({ resolver: zodResolver(RequestFormSchema), defaultValues: EMPTY });
@@ -97,14 +101,24 @@ export default function RequestForm() {
     return true;
   }
 
-  function suggest(o: ComboOption) {
-    const p = positions.data?.positions.find((x) => x.id === o.id);
-    if (!p) return;
+  function suggest(p: Position) {
     const filled: string[] = [];
+    const before: Partial<Record<Suggestable, string>> = {};
     for (const [name, value] of Object.entries(suggestionsFrom(p)) as [Suggestable, string][]) {
-      if (fillIfUntouched(name, value)) filled.push(SUGGESTION_LABELS[name]);
+      const previous = form.getValues(name);
+      if (fillIfUntouched(name, value)) { filled.push(SUGGESTION_LABELS[name]); before[name] = previous; }
     }
-    setSuggested({ title: p.title, fields: filled });
+    setSuggested({ position: p, fields: filled, before });
+  }
+
+  /** Put back what the fields held before the last pick; the title stays. */
+  function undoSuggestions() {
+    if (!suggested) return;
+    for (const [name, value] of Object.entries(suggested.before) as [Suggestable, string][]) {
+      form.setValue(name, value);
+      delete autoFilled.current[name];
+    }
+    setSuggested(null);
   }
 
   function pickLocation(locationId: string) {
@@ -146,18 +160,27 @@ export default function RequestForm() {
             <Field label="Job title" htmlFor="title" className="sm:col-span-2" error={errors.title?.message}
               hint={suggested ? undefined : "Pick a position York Press hires for often, or type a new title."}>
               <Controller control={form.control} name="title" render={({ field }) => (
-                <Combobox id="title" value={field.value} onBlur={field.onBlur} invalid={!!errors.title}
-                  placeholder="e.g. ELT Commissioning Editor" listLabel="Saved positions" emptyText="No saved positions yet."
-                  options={(positions.data?.positions ?? []).map((p) => ({ id: p.id, label: p.title, detail: p.seniority, group: p.department }))}
-                  onChange={(v) => { field.onChange(v); if (suggested && v !== suggested.title) setSuggested(null); }}
+                <PositionPicker id="title" value={field.value} onBlur={field.onBlur} invalid={!!errors.title}
+                  positions={positions.data?.positions ?? []}
+                  onChange={(v) => { field.onChange(v); if (suggested && v !== suggested.position.title) setSuggested(null); }}
                   onPick={suggest} />
               )} />
               {suggested && (
-                <p className="text-xs text-muted-foreground" role="status">
-                  {suggested.fields.length
-                    ? <>Suggested from the saved “{suggested.title}” position: {suggested.fields.join(", ")}. Change anything you like.</>
-                    : <>“{suggested.title}” is a saved position. Your own details were kept.</>}
-                </p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs" role="status">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-foreground/80">
+                    {[suggested.position.department, suggested.position.seniority, yearsLabel(suggested.position)].filter(Boolean).join(" · ")}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-muted-foreground" title={suggested.fields.length ? `Suggested: ${suggested.fields.join(", ")}` : undefined}>
+                    {suggested.fields.length
+                      ? <><Check className="h-3.5 w-3.5 text-success" /> {suggested.fields.length} {suggested.fields.length === 1 ? "detail" : "details"} suggested below. Change anything you like.</>
+                      : <>Saved position. Your own details were kept.</>}
+                  </span>
+                  {suggested.fields.length > 0 && (
+                    <button type="button" onClick={undoSuggestions} className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline">
+                      <Undo2 className="h-3.5 w-3.5" /> Undo suggestions
+                    </button>
+                  )}
+                </div>
               )}
             </Field>
             <Field label="Department" htmlFor="dept" error={errors.department?.message}><Select id="dept" {...reg("department")}>{withCurrent(DEPARTMENTS, form.watch("department")).map((d) => <option key={d}>{d}</option>)}</Select></Field>
