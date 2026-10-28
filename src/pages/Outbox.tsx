@@ -5,7 +5,6 @@ import type { OutboxEmail } from "@/lib/types";
 import { fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Badge, DataTable, EmptyState, Modal, Spinner, Td, Th } from "@/components/kit";
-import { Card } from "@/components/ui/card";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 
 
@@ -14,11 +13,11 @@ export default function Outbox() {
   const [open, setOpen] = useState<OutboxEmail | null>(null);
   return (
     <>
-      <PageHeader eyebrow="Every email the platform sent" title="Sent emails" />
+      <PageHeader title="Sent emails" />
       {q.data?.mock && (
-        <Card className="mb-4 border-primary/20 bg-accent px-4 py-3 text-sm">
-          <b>Email is in mock mode.</b> Nothing leaves the app until a Resend API key is added; emails are kept here so you can read them.
-        </Card>
+        <p role="status" className="mb-4 rounded-lg bg-chip-amber/15 px-4 py-2.5 text-sm">
+          <b>Mock mode.</b> Emails are kept here; nothing is sent.
+        </p>
       )}
       {q.isLoading ? <Spinner /> : q.data?.emails.length ? (
         <DataTable>
@@ -27,7 +26,7 @@ export default function Outbox() {
             {q.data.emails.map((e) => (
               <TableRow key={e.id} className="cursor-pointer hover:bg-secondary/50" onClick={() => setOpen(e)}>
                 <Td className="num whitespace-nowrap text-xs">{fmtDateTime(e.createdAt)}</Td>
-                <Td className="font-mono text-xs">{e.toAddress}</Td>
+                <Td className="text-xs text-muted-foreground">{e.toAddress}</Td>
                 <Td>{e.subject}</Td>
                 <Td><Badge>{e.kind}</Badge></Td>
                 <Td><Badge tone={e.status === "failed" ? "bad" : e.mock ? "warn" : "good"}>{e.mock ? "mock" : e.status}</Badge></Td>
