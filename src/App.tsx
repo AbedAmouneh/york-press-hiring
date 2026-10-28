@@ -1,9 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, type ReactElement } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { setMonitoringUser } from "./lib/monitoring";
 import { useQuery } from "@tanstack/react-query";
 import { call, rpc } from "./lib/rpc";
-import { homeFor, useMe } from "./lib/auth";
+import { can, homeFor, useMe } from "./lib/auth";
+import type { Me } from "./lib/types";
+import type { Role } from "../shared/types";
 import { AppShell } from "./components/AppShell";
 import { Spinner } from "./components/kit";
 import Login from "./pages/Login";
@@ -22,6 +24,11 @@ import Settings from "./pages/Settings";
 import Users from "./pages/Users";
 import Notifications from "./pages/Notifications";
 import Outbox from "./pages/Outbox";
+
+/** Sends people without one of these roles to their home page, matching what the sidebar shows them. */
+function Only({ user, roles, children }: { user: Me; roles: Role[]; children: ReactElement }) {
+  return can(user, ...roles) ? children : <Navigate to={homeFor(user)} replace />;
+}
 
 function Loading() {
   return <div className="grid h-full place-items-center text-muted-foreground"><Spinner /></div>;
@@ -53,18 +60,18 @@ export default function App() {
       <Route path="/login" element={<Navigate to={homeFor(user)} replace />} />
       <Route element={<AppShell me={user} />}>
         <Route path="/" element={<Navigate to={homeFor(user)} replace />} />
-        <Route path="/approvals" element={<Requests scope="approvals" />} />
+        <Route path="/approvals" element={<Only user={user} roles={["ceo"]}><Requests scope="approvals" /></Only>} />
         <Route path="/requests" element={<Requests scope="all" />} />
-        <Route path="/requests/new" element={<RequestForm />} />
+        <Route path="/requests/new" element={<Only user={user} roles={["manager", "recruiter", "admin"]}><RequestForm /></Only>} />
         <Route path="/requests/:id" element={<RequestDetail />} />
         <Route path="/requests/:id/edit" element={<RequestForm />} />
         <Route path="/roles" element={<Roles />} />
         <Route path="/roles/:id" element={<RoleDetail />} />
-        <Route path="/outreach" element={<Outreach />} />
-        <Route path="/linkedin" element={<LinkedinQueue />} />
-        <Route path="/outbox" element={<Outbox />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/admin/users" element={<Users />} />
+        <Route path="/outreach" element={<Only user={user} roles={["recruiter", "admin"]}><Outreach /></Only>} />
+        <Route path="/linkedin" element={<Only user={user} roles={["recruiter", "admin"]}><LinkedinQueue /></Only>} />
+        <Route path="/outbox" element={<Only user={user} roles={["recruiter", "admin"]}><Outbox /></Only>} />
+        <Route path="/settings" element={<Only user={user} roles={["recruiter", "admin"]}><Settings /></Only>} />
+        <Route path="/admin/users" element={<Only user={user} roles={["admin"]}><Users /></Only>} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="*" element={<Navigate to={homeFor(user)} replace />} />
       </Route>
