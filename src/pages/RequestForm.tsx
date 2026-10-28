@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { call, rpc } from "@/lib/rpc";
 import { useMe } from "@/lib/auth";
-import type { Position, RequestRow } from "@/lib/types";
+import type { HiringLocation, Position, RequestRow } from "@/lib/types";
 import { RequestForm as RequestFormSchema, type RequestFormValues } from "@/lib/forms";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,12 @@ import { Field, FormError, Select, Spinner, useToast } from "@/components/kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { TitleCombobox, type TitleOption } from "@/components/TitleCombobox";
+import { Combobox, type ComboOption } from "@/components/Combobox";
 
 const EMPTY: RequestFormValues = {
-  title: "", department: DEPARTMENTS[0], seniority: "Senior", headcount: "1", startDate: "", kind: "new", jdText: "",
+  title: "", department: DEPARTMENTS[0], seniority: "Mid", headcount: "1", startDate: "", kind: "new", jdText: "",
   mustHaves: "", niceToHaves: "", dealBreakers: "", minYears: "", idealYears: "", languages: "English",
-  locationPolicy: "Remote, global", searchLocations: "", timeZone: "", salaryMin: "", salaryMax: "", currency: "", salaryPeriod: "year",
+  locationPolicy: "", searchLocations: "", timeZone: "", locationId: "", workingHours: "", salaryMin: "", salaryMax: "", currency: "", salaryPeriod: "year",
   justification: "", targetCompanies: "", avoidCompanies: "", hiringManagerId: "",
 };
 
@@ -31,22 +31,33 @@ const toForm = (r: RequestRow): RequestFormValues => ({
   locationPolicy: r.locationPolicy, searchLocations: r.searchLocations.join(", "), timeZone: r.timeZone ?? "",
   salaryMin: r.salaryMin?.toString() ?? "", salaryMax: r.salaryMax?.toString() ?? "", currency: r.currency ?? "", salaryPeriod: r.salaryPeriod,
   justification: r.justification, targetCompanies: r.targetCompanies.join(", "), avoidCompanies: r.avoidCompanies.join(", "), hiringManagerId: r.hiringManagerId ?? "",
+  locationId: r.locationId ?? "", workingHours: r.workingHours ?? "",
 });
 
-type Suggestable = "department" | "seniority" | "mustHaves" | "niceToHaves" | "minYears" | "idealYears" | "languages";
+type Suggestable = "department" | "seniority" | "jdText" | "mustHaves" | "niceToHaves" | "minYears" | "idealYears" | "languages";
 const SUGGESTION_LABELS: Record<Suggestable, string> = {
-  department: "department", seniority: "seniority", mustHaves: "must-haves", niceToHaves: "nice-to-haves",
+  department: "department", seniority: "level", jdText: "job description", mustHaves: "must-haves", niceToHaves: "nice-to-haves",
   minYears: "minimum years", idealYears: "ideal years", languages: "languages",
 };
+type LocationField = "locationPolicy" | "searchLocations" | "workingHours";
+type AutoField = Suggestable | LocationField;
+
+/** What picking a location fills in: arrangement and place, the country to search, and the hours. */
+const fromLocation = (l: HiringLocation): Record<LocationField, string> => ({
+  locationPolicy: `${l.workArrangement}, ${l.name}`, searchLocations: l.country, workingHours: l.workingHours,
+});
 
 /** A saved position's details in the form's text shape. Empty values are left out so they never clear a field. */
 function suggestionsFrom(p: Position): Partial<Record<Suggestable, string>> {
   const out: Partial<Record<Suggestable, string>> = {
-    department: p.department, seniority: p.seniority, mustHaves: p.mustHaves.join("\n"), niceToHaves: p.niceToHaves.join("\n"),
+    department: p.department, seniority: p.seniority, jdText: p.jdText, mustHaves: p.mustHaves.join("\n"), niceToHaves: p.niceToHaves.join("\n"),
     minYears: p.minYears?.toString() ?? "", idealYears: p.idealYears?.toString() ?? "", languages: p.languages.join(", "),
   };
   return Object.fromEntries(Object.entries(out).filter(([, v]) => v)) as Partial<Record<Suggestable, string>>;
 }
+
+/** The fixed list plus a value saved earlier that is no longer in it, so editing an old request doesn't change it. */
+const withCurrent = (list: readonly string[], current: string) => (current && !list.includes(current) ? [...list, current] : [...list]);
 
 export default function RequestForm() {
   const { id } = useParams();
@@ -57,8 +68,9 @@ export default function RequestForm() {
   const existing = useQuery({ queryKey: ["request", id], queryFn: () => call(rpc.requests[":id"].$get({ param: { id: id! } })), enabled: !!id });
   const people = useQuery({ queryKey: ["hiring-managers"], queryFn: () => call(rpc.people["hiring-managers"].$get()) });
   const positions = useQuery({ queryKey: ["positions"], queryFn: () => call(rpc.positions.$get()) });
+  const locations = useQuery({ queryKey: ["locations"], queryFn: () => call(rpc.locations.$get()) });
   const [suggested, setSuggested] = useState<{ title: string; fields: string[] } | null>(null);
-  const autoFilled = useRef<Partial<Record<Suggestable, string>>>({});
+  const autoFilled = useRef<Partial<Record<AutoField, string>>>({});
   const myDepartment = me.department && (DEPARTMENTS as readonly string[]).includes(me.department) ? me.department : EMPTY.department;
   const form = useForm({ resolver: zodResolver(RequestFormSchema), defaultValues: EMPTY });
   const { errors, isSubmitting } = form.formState;
@@ -74,20 +86,31 @@ export default function RequestForm() {
    * its starting value (new requests only) or still holds the previous suggestion, so nothing the manager
    * typed is ever overwritten.
    */
-  function suggest(o: TitleOption) {
+  /** Set a field unless the manager has typed in it. Returns whether it was set. */
+  function fillIfUntouched(name: AutoField, value: string) {
+    const current = form.getValues(name);
+    const start = name === "department" ? myDepartment : EMPTY[name];
+    const untouched = current.trim() === "" || current === autoFilled.current[name] || (!id && current === start);
+    if (!untouched || current === value) return false;
+    form.setValue(name, value, { shouldValidate: form.formState.isSubmitted });
+    autoFilled.current[name] = value;
+    return true;
+  }
+
+  function suggest(o: ComboOption) {
     const p = positions.data?.positions.find((x) => x.id === o.id);
     if (!p) return;
     const filled: string[] = [];
     for (const [name, value] of Object.entries(suggestionsFrom(p)) as [Suggestable, string][]) {
-      const current = form.getValues(name);
-      const start = name === "department" ? myDepartment : EMPTY[name];
-      const untouched = current.trim() === "" || current === autoFilled.current[name] || (!id && current === start);
-      if (!untouched || current === value) continue;
-      form.setValue(name, value, { shouldValidate: form.formState.isSubmitted });
-      autoFilled.current[name] = value;
-      filled.push(SUGGESTION_LABELS[name]);
+      if (fillIfUntouched(name, value)) filled.push(SUGGESTION_LABELS[name]);
     }
     setSuggested({ title: p.title, fields: filled });
+  }
+
+  function pickLocation(locationId: string) {
+    const l = locations.data?.locations.find((x) => x.id === locationId);
+    if (!l) return;
+    for (const [name, value] of Object.entries(fromLocation(l)) as [LocationField, string][]) fillIfUntouched(name, value);
   }
 
   async function save(body: RequestInputT, submit: boolean) {
@@ -123,9 +146,9 @@ export default function RequestForm() {
             <Field label="Job title" htmlFor="title" className="sm:col-span-2" error={errors.title?.message}
               hint={suggested ? undefined : "Pick a position York Press hires for often, or type a new title."}>
               <Controller control={form.control} name="title" render={({ field }) => (
-                <TitleCombobox id="title" value={field.value} onBlur={field.onBlur} invalid={!!errors.title}
-                  placeholder="e.g. Senior Commissioning Editor"
-                  options={positions.data?.positions ?? []}
+                <Combobox id="title" value={field.value} onBlur={field.onBlur} invalid={!!errors.title}
+                  placeholder="e.g. ELT Commissioning Editor" listLabel="Saved positions" emptyText="No saved positions yet."
+                  options={(positions.data?.positions ?? []).map((p) => ({ id: p.id, label: p.title, detail: p.seniority, group: p.department }))}
                   onChange={(v) => { field.onChange(v); if (suggested && v !== suggested.title) setSuggested(null); }}
                   onPick={suggest} />
               )} />
@@ -137,8 +160,19 @@ export default function RequestForm() {
                 </p>
               )}
             </Field>
-            <Field label="Department" htmlFor="dept" error={errors.department?.message}><Select id="dept" {...reg("department")}>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</Select></Field>
-            <Field label="Seniority" htmlFor="sen" error={errors.seniority?.message}><Select id="sen" {...reg("seniority")}>{SENIORITIES.map((d) => <option key={d}>{d}</option>)}</Select></Field>
+            <Field label="Department" htmlFor="dept" error={errors.department?.message}><Select id="dept" {...reg("department")}>{withCurrent(DEPARTMENTS, form.watch("department")).map((d) => <option key={d}>{d}</option>)}</Select></Field>
+            <Field label="Location" htmlFor="loc-id" error={errors.locationId?.message} hint="Where this person will work. Ask a recruiter to add a missing one.">
+              <Select id="loc-id" aria-invalid={!!errors.locationId} {...form.register("locationId", { onChange: (e) => pickLocation(e.target.value) })}>
+                <option value="">Choose…</option>
+                {locations.data?.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Seniority" htmlFor="sen" error={errors.seniority?.message}>
+              <Controller control={form.control} name="seniority" render={({ field }) => (
+                <Combobox id="sen" value={field.value} onChange={field.onChange} onBlur={field.onBlur} invalid={!!errors.seniority}
+                  listLabel="Levels" options={SENIORITIES.map((s) => ({ id: s, label: s }))} />
+              )} />
+            </Field>
             <Field label="Headcount" htmlFor="hc" error={errors.headcount?.message}><Input id="hc" type="number" min={1} {...reg("headcount")} /></Field>
             <Field label="Target start date" htmlFor="sd" error={errors.startDate?.message}><Input id="sd" type="date" {...reg("startDate")} /></Field>
             <Field label="Type" htmlFor="kind"><Select id="kind" {...reg("kind")}><option value="new">New role</option><option value="backfill">Backfill</option></Select></Field>
@@ -163,9 +197,10 @@ export default function RequestForm() {
             <Field label="Minimum years" htmlFor="miny" error={errors.minYears?.message}><Input id="miny" inputMode="numeric" {...reg("minYears")} /></Field>
             <Field label="Ideal years" htmlFor="idy" error={errors.idealYears?.message}><Input id="idy" inputMode="numeric" {...reg("idealYears")} /></Field>
             <Field label="Languages" hint="Comma-separated." htmlFor="lang" error={errors.languages?.message}><Input id="lang" {...reg("languages")} /></Field>
-            <Field label="Location policy" htmlFor="loc" error={errors.locationPolicy?.message}><Input id="loc" placeholder="Remote, global" {...reg("locationPolicy")} /></Field>
+            <Field label="Location policy" htmlFor="loc" error={errors.locationPolicy?.message}><Input id="loc" placeholder="On-site, Zouk Mosbeh, Lebanon" {...reg("locationPolicy")} /></Field>
             <Field label="Search in countries" hint="Comma-separated, e.g. Lebanon, Jordan. Empty = global." htmlFor="sl" error={errors.searchLocations?.message}><Input id="sl" {...reg("searchLocations")} /></Field>
             <Field label="Time-zone overlap" htmlFor="tz" error={errors.timeZone?.message}><Input id="tz" placeholder="At least 4 hours with GMT+2" {...reg("timeZone")} /></Field>
+            <Field label="Working hours" htmlFor="wh" error={errors.workingHours?.message}><Input id="wh" placeholder="Mon–Fri 8:00–17:00" {...reg("workingHours")} /></Field>
             <Field label="Target companies" hint="Comma-separated." htmlFor="tc" error={errors.targetCompanies?.message}><Input id="tc" {...reg("targetCompanies")} /></Field>
             <Field label="Companies to avoid" hint="York Press is always excluded." htmlFor="ac" className="sm:col-span-2" error={errors.avoidCompanies?.message}><Input id="ac" {...reg("avoidCompanies")} /></Field>
           </CardContent>
