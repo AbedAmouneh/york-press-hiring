@@ -51,14 +51,14 @@ function InviteUserForm({ onDone, onCancel }: { onDone: (email: string, link: st
   });
   return (
     <form onSubmit={submit} className="grid gap-3" noValidate>
-      <Field label="Name" htmlFor="un" error={errors.name?.message}><Input id="un" aria-invalid={!!errors.name} {...form.register("name")} /></Field>
-      <Field label="Email" htmlFor="ue" error={errors.email?.message}><Input id="ue" type="email" aria-invalid={!!errors.email} {...form.register("email")} /></Field>
+      <Field required label="Name" htmlFor="un" error={errors.name?.message}><Input id="un" aria-invalid={!!errors.name} {...form.register("name")} /></Field>
+      <Field required label="Email" htmlFor="ue" error={errors.email?.message}><Input id="ue" type="email" aria-invalid={!!errors.email} {...form.register("email")} /></Field>
       <Field label="Department" htmlFor="ud">
         <Select id="ud" {...form.register("department", { setValueAs: (v) => v || null })}>
           <option value="">—</option>{[...DEPARTMENTS, "Leadership"].map((d) => <option key={d}>{d}</option>)}
         </Select>
       </Field>
-      <Field label="Roles" error={errors.roles?.message}>
+      <Field required label="Roles" error={errors.roles?.message}>
         <Controller control={form.control} name="roles" render={({ field }) => <RolePicker value={field.value} onChange={field.onChange} />} />
       </Field>
       <FormError>{errors.root?.message}</FormError>
