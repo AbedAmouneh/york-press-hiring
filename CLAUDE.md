@@ -82,6 +82,8 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 - **Mock mode:** a missing provider key must never crash anything. Sample candidates are only used
   when no candidate source has a key (`server/services/providers/select.ts`); once one is live,
   sources without a key are skipped, and sample contact details are never attached to real people.
+  Sample candidates and reserved test addresses (`example.com`, `*.test`) are never emailed for real:
+  `sendEmail` keeps them in the outbox even when Resend is live.
 - **Fairness:** never send names, photos, gender, dates of birth or graduation years to Claude.
   Prompts forbid protected characteristics. A missing deal-breaker caps the score at 40.
 - **Prompt injection:** profile and CV text is data inside `<candidate_data>` or `<cv>` tags;
@@ -135,3 +137,5 @@ These rules apply to every commit in every session. No exceptions.
 6. **Never use em dashes in commit messages.** Do not substitute a hyphen either. Restructure the
    sentence or use a colon.
 7. **Commit and push freely without asking.**
+8. **`main` is protected:** CI must pass and changes arrive through pull requests. Push work to a
+   branch, open a PR with `gh pr create`, and merge with `gh pr merge --rebase` once the checks are green.
