@@ -106,8 +106,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   Sign-in, invite and CV upload are rate limited in Postgres. Page headers and the CSP live in
   `vercel.json`: a new third-party script or API host must be added to the CSP there.
   500 errors never show internal messages in production.
-- **Two-step login** (`server/services/two-factor.ts`): required for admin and CEO (not demo
-  accounts). `requireAuth` blocks them until it's on; the setup and code routes are public and
+- **Two-step login** (`server/services/two-factor.ts`): off by default. With `REQUIRE_TWO_FACTOR=true`
+  it is required for admin and CEO (not demo accounts); anyone who has turned it on is always asked
+  for a code. Smoke and browser tests run with it on. `requireAuth` blocks them until it's on; the setup and code routes are public and
   check the session or the signed `yp_mfa` challenge themselves. TOTP secrets are AES-GCM
   encrypted with `SESSION_SECRET`, codes can't be reused, recovery codes are stored hashed and
   work once, wrong codes are rate limited.
