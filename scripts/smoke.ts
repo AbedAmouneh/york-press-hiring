@@ -57,6 +57,22 @@ ok((await admin("GET", "/auth/me")).user.twoFactorEnabled, "admin can use the ap
 
 const manager = client();
 await manager("POST", "/auth/login", { email: "demo.manager@york-press.test", password: "demo-york-2026" });
+
+// ---------------------------------------------------------------- saved positions
+const starter = (await manager("GET", "/positions")).positions;
+ok(starter.some((p: any) => p.title === "Junior Editor" && p.department === "Editorial" && p.mustHaves.length === 3), `managers see ${starter.length} saved positions with suggested details`);
+ok((await manager.raw("POST", "/positions", { title: "Sneaky", department: "Editorial", seniority: "Mid" })).status === 403, "managers can't change the list");
+const recruiter = client();
+await recruiter("POST", "/auth/login", { email: "demo.recruiter@york-press.test", password: "demo-york-2026" });
+const { position } = await recruiter("POST", "/positions", { title: "Audio Producer", department: "Product & Technology", seniority: "Mid", mustHaves: ["Audio editing"], minYears: 2, idealYears: 4 });
+ok(position.languages.length === 0 && position.active, "a recruiter added a position");
+ok((await recruiter.raw("POST", "/positions", { title: "audio producer", department: "Editorial", seniority: "Mid" })).status === 409, "the same title can't be added twice");
+ok((await recruiter.raw("PATCH", `/positions/${position.id}`, { minYears: 6 })).status === 400, "ideal years can't drop below the minimum");
+const renamed = (await recruiter("PATCH", `/positions/${position.id}`, { title: "Audio & Video Producer", active: false })).position;
+ok(renamed.mustHaves[0] === "Audio editing", "renaming keeps the suggested details");
+ok(!(await manager("GET", "/positions")).positions.some((p: any) => p.id === position.id), "hidden positions aren't offered to managers");
+await recruiter("DELETE", `/positions/${position.id}`);
+ok(!(await recruiter("GET", "/positions")).positions.some((p: any) => p.id === position.id), "a recruiter deleted it");
 const { id } = await manager("POST", "/requests?submit=true", {
   title: "Senior Product Designer", department: "Product & Technology", seniority: "Senior", headcount: 1,
   jdText: "Design York-E.", mustHaves: ["Figma", "Design systems", "User research"], niceToHaves: ["Edtech"], dealBreakers: [],
