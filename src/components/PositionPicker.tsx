@@ -174,7 +174,7 @@ export function PositionPicker({ id, value, positions, onChange, onPick, onBlur,
                     className={cn(
                       "relative flex cursor-pointer items-start gap-3 rounded-lg px-2.5 py-2",
                       i === active && "bg-accent",
-                      selected && "before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-brand",
+                      selected && "before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary",
                     )}
                     onMouseDown={(e) => { e.preventDefault(); pick(p); }}
                     onMouseMove={() => active !== i && setActive(i)}

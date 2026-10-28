@@ -136,7 +136,7 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
                 return (
                   <div key={c.key} className="grid grid-cols-[1fr_120px_48px] items-center gap-3 text-sm">
                     <span>{c.label}</span>
-                    <span className="h-1.5 overflow-hidden rounded-full bg-secondary"><span className={cn("block h-full rounded-full", v / max >= 0.6 ? "bg-primary" : "bg-amber-500")} style={{ width: `${Math.round((v / max) * 100)}%` }} /></span>
+                    <span className="h-1.5 overflow-hidden rounded-full bg-secondary"><span className={cn("block h-full rounded-full", v / max >= 0.6 ? "bg-success" : "bg-chip-amber")} style={{ width: `${Math.round((v / max) * 100)}%` }} /></span>
                     <span className="num text-right">{v}/{weights[c.key]}</span>
                   </div>
                 );

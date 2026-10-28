@@ -54,7 +54,7 @@ function DecisionForm({ requestId }: { requestId: string }) {
     })();
   };
   return (
-    <Card className="mb-5 border-2 border-brand">
+    <Card className="mb-5 border-2 border-primary/30">
       <CardHeader><CardTitle>Your decision</CardTitle></CardHeader>
       <CardContent className="grid gap-3">
         <Field label="Comment" hint="Required to reject or request changes." htmlFor="dc" error={errors.comment?.message}>
