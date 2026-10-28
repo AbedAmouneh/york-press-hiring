@@ -22,9 +22,7 @@ export function useLogout() {
 
 export const can = (user: Me | null | undefined, ...roles: Role[]) => !!user && roles.some((r) => user.roles.includes(r));
 
-export function homeFor(user: Me) {
-  if (can(user, "recruiter", "admin")) return "/roles";
-  if (can(user, "ceo")) return "/approvals";
-  if (can(user, "manager")) return "/requests";
-  return "/roles";
+/** Everyone lands on Home, which adapts to their roles. */
+export function homeFor(_user: Me) {
+  return "/";
 }
