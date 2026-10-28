@@ -3,25 +3,30 @@ import { Check, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-export type TitleOption = { id: string; title: string; department: string; seniority: string };
+/** `group` puts options under a heading; `detail` is shown greyed after the label. */
+export type ComboOption = { id: string; label: string; detail?: string; group?: string };
 
 type Props = {
   id: string;
   value: string;
-  options: TitleOption[];
-  onChange: (title: string) => void;
-  /** Called when a saved position is chosen from the list (not when a title is typed). */
-  onPick: (option: TitleOption) => void;
+  options: ComboOption[];
+  onChange: (value: string) => void;
+  /** Called when an option is chosen from the list (not when text is typed). */
+  onPick?: (option: ComboOption) => void;
   onBlur?: () => void;
   placeholder?: string;
   invalid?: boolean;
+  /** Accessible name of the list, e.g. "Saved positions". */
+  listLabel: string;
+  /** Shown when nothing is saved yet. */
+  emptyText?: string;
 };
 
 /**
- * Pick a saved position or type any title (WAI-ARIA combobox with a list popup).
- * Typing filters the list by title or department; the typed text is always kept as the title.
+ * Pick from a list or type anything (WAI-ARIA combobox with a list popup).
+ * Typing filters the list by label, detail or group; the typed text is always kept as the value.
  */
-export function TitleCombobox({ id, value, options, onChange, onPick, onBlur, placeholder, invalid }: Props) {
+export function Combobox({ id, value, options, onChange, onPick, onBlur, placeholder, invalid, listLabel, emptyText = "Nothing saved yet." }: Props) {
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -31,12 +36,12 @@ export function TitleCombobox({ id, value, options, onChange, onPick, onBlur, pl
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return options;
-    return options.filter((o) => o.title.toLowerCase().includes(q) || o.department.toLowerCase().includes(q));
+    return options.filter((o) => [o.label, o.detail, o.group].some((x) => x?.toLowerCase().includes(q)));
   }, [filter, options]);
-  const exact = options.some((o) => o.title.toLowerCase() === value.trim().toLowerCase());
+  const exact = options.some((o) => o.label.toLowerCase() === value.trim().toLowerCase());
 
   const show = (q = "") => { setFilter(q); setActive(-1); setOpen(true); };
-  const pick = (o: TitleOption) => { onChange(o.title); onPick(o); setOpen(false); setActive(-1); };
+  const pick = (o: ComboOption) => { onChange(o.label); onPick?.(o); setOpen(false); setActive(-1); };
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
@@ -55,7 +60,7 @@ export function TitleCombobox({ id, value, options, onChange, onPick, onBlur, pl
     }
   }
 
-  let lastDept = "";
+  let lastGroup = "";
   return (
     <div className="relative">
       <Input
@@ -80,7 +85,7 @@ export function TitleCombobox({ id, value, options, onChange, onPick, onBlur, pl
       <button
         type="button"
         tabIndex={-1}
-        aria-label={open ? "Hide saved positions" : "Show saved positions"}
+        aria-label={open ? `Hide ${listLabel.toLowerCase()}` : `Show ${listLabel.toLowerCase()}`}
         className="absolute inset-y-0 right-0 grid w-9 place-items-center text-muted-foreground hover:text-foreground"
         onMouseDown={(e) => { e.preventDefault(); if (open) setOpen(false); else { inputRef.current?.focus(); show(); } }}
       >
@@ -90,13 +95,13 @@ export function TitleCombobox({ id, value, options, onChange, onPick, onBlur, pl
         <ul
           id={listId}
           role="listbox"
-          aria-label="Saved positions"
+          aria-label={listLabel}
           className="absolute z-50 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-popover p-1 text-sm shadow-md"
         >
           {shown.map((o, i) => {
-            const header = o.department !== lastDept ? o.department : null;
-            lastDept = o.department;
-            const selected = o.title.toLowerCase() === value.trim().toLowerCase();
+            const header = o.group && o.group !== lastGroup ? o.group : null;
+            lastGroup = o.group ?? "";
+            const selected = o.label.toLowerCase() === value.trim().toLowerCase();
             return (
               <li key={o.id} role="presentation">
                 {header && <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground" aria-hidden>{header}</div>}
@@ -108,7 +113,7 @@ export function TitleCombobox({ id, value, options, onChange, onPick, onBlur, pl
                   onMouseDown={(e) => { e.preventDefault(); pick(o); }}
                   onMouseEnter={() => setActive(i)}
                 >
-                  <span>{o.title} <span className="text-muted-foreground">· {o.seniority}</span></span>
+                  <span>{o.label}{o.detail && <span className="text-muted-foreground"> · {o.detail}</span>}</span>
                   {selected && <Check className="h-4 w-4 shrink-0" />}
                 </div>
               </li>
@@ -116,12 +121,12 @@ export function TitleCombobox({ id, value, options, onChange, onPick, onBlur, pl
           })}
           {!shown.length && (
             <li role="presentation" className="px-2 py-2 text-muted-foreground">
-              {value.trim() ? <>No saved position matches. “{value.trim()}” will be used as a new title.</> : "No saved positions yet."}
+              {value.trim() ? <>Nothing in the list matches. “{value.trim()}” will be used as typed.</> : emptyText}
             </li>
           )}
           {!!shown.length && value.trim() && !exact && (
             <li role="presentation" className="border-t px-2 pb-1 pt-2 text-xs text-muted-foreground">
-              Or keep typing: “{value.trim()}” will be used as a new title.
+              Or keep typing: “{value.trim()}” will be used as typed.
             </li>
           )}
         </ul>
