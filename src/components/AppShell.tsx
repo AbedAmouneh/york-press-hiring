@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Briefcase, CheckSquare, FileText, Inbox, LogOut, Mail, Menu, Plus, Send, Settings, Users } from "lucide-react";
+import { Bell, Briefcase, CheckSquare, FileText, House, Inbox, LogOut, Mail, Menu, Plus, Send, Settings, Users } from "lucide-react";
 import { call, rpc } from "@/lib/rpc";
 import { can, useLogout, useMe } from "@/lib/auth";
 import type { Me } from "@/lib/types";
@@ -26,6 +26,7 @@ function useNavItems(me: Me): Item[][] {
   // Grouped: everyday work, then sending, then admin. Empty groups are dropped.
   return [
     [
+      { to: "/", label: "Home", icon: House, show: true },
       { to: "/approvals", label: "Approvals", icon: CheckSquare, count: approvals.data?.requests.length, show: can(me, "ceo") },
       { to: "/roles", label: "Roles", icon: Briefcase, show: true },
       { to: "/requests", label: "Requests", icon: FileText, show: true },
@@ -55,6 +56,7 @@ function Sidebar({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
               <NavLink
                 key={i.to}
                 to={i.to}
+                end={i.to === "/"}
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cn("flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white",
