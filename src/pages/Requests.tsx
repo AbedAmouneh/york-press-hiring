@@ -24,7 +24,7 @@ function RequestRowItem({ r, showBudget }: { r: RequestRow; showBudget: boolean 
             {r.headcount > 1 && <><span aria-hidden>·</span><span>{r.headcount} hires</span></>}
             {showBudget && <><span aria-hidden>·</span><span>{money(r.salaryMin, r.salaryMax, r.currency, r.salaryPeriod)}</span></>}
           </span>
-          {comment && <span className="mt-1.5 block rounded-md bg-chip-amber/15 px-2.5 py-1 text-xs"><b>{comment.actorName}:</b> {comment.comment}</span>}
+          {comment && <span dir="auto" className="mt-1.5 line-clamp-2 whitespace-pre-line break-words rounded-md bg-chip-amber/15 px-2.5 py-1 text-xs" title={comment.comment ?? undefined}><b>{comment.actorName}:</b> {comment.comment}</span>}
         </span>
         <span className="flex flex-col items-end gap-1">
           <RequestStatusBadge status={r.status} />
