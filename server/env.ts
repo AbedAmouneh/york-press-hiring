@@ -26,6 +26,8 @@ export const env = {
   get isPreview() { return v("VERCEL_ENV") === "preview"; },
   /** Previews never email candidates or spend paid credits unless this is explicitly turned on. */
   get previewUsesRealServices() { return v("PREVIEW_USE_REAL_SERVICES").toLowerCase() === "true"; },
+  /** Off by default: when true, admin and CEO accounts must set up two-step login before using the app. */
+  get requireTwoFactor() { return v("REQUIRE_TWO_FACTOR").toLowerCase() === "true"; },
   get sentryDsn() { return v("SENTRY_DSN"); },
   get blobToken() { return v("BLOB_READ_WRITE_TOKEN"); },
   get qstashToken() { return v("QSTASH_TOKEN"); },
