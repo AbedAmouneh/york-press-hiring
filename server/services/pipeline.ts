@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { waitUntil } from "@vercel/functions";
 import { getDb, schema } from "../db/client.js";
-import { appIsPublic, env, mock, POOL_SIZE, TOP_N } from "../env.js";
+import { aiFeatures, appIsPublic, env, mock, POOL_SIZE, TOP_N } from "../env.js";
 import type { RunState } from "../db/schema.js";
 import type { Weights } from "../../shared/types.js";
 import { buildBrief, collectScoreBatch, scoreBatch, submitScoreBatch, totalScore, webFindings, type ScoreResult } from "./claude.js";
@@ -323,8 +323,9 @@ async function upsertCandidate(p: MergedProfile) {
 
 async function stepEnrich({ run, state, counters, deadline }: Ctx): Promise<StepResult> {
   const settings = await getSettings();
-  if (mock.claude || !settings.webSearchEnabled) {
+  if (mock.claude || !settings.webSearchEnabled || !aiFeatures.webSearch) {
     if (mock.claude) log(state, "Web search skipped (mock mode).");
+    else if (settings.webSearchEnabled && !aiFeatures.webSearch) log(state, "Web search skipped (not available through OpenCode).");
     return;
   }
   const db = await getDb();
@@ -391,7 +392,7 @@ async function saveScores(rows: ScoreRow[], results: ScoreResult[], weights: Wei
  * Weekly refreshes aren't urgent, so they score through the Message Batches API at half price.
  * The run waits and the queue checks back every few minutes. Needs the queue (QStash) to poll.
  */
-const useBatchScoring = (run: Run) => run.kind === "weekly" && !mock.claude && queueEnabled();
+const useBatchScoring = (run: Run) => run.kind === "weekly" && !mock.claude && aiFeatures.batches && queueEnabled();
 
 /** Returns "waiting" while a batch is in flight; undefined once batch results (if any) are saved. */
 async function batchScore({ run, request, state }: Ctx, weights: Weights): Promise<StepResult> {
