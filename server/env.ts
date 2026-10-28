@@ -15,6 +15,13 @@ export const env = {
   get webhookSecret() { return v("SIGNALHIRE_WEBHOOK_SECRET") || "dev-webhook-secret"; },
   get cronSecret() { return v("CRON_SECRET"); },
   get anthropicKey() { return v("ANTHROPIC_API_KEY"); },
+  /** OpenCode Console key (oc_sk_…). When set, Claude is reached through OpenCode instead of Anthropic directly. */
+  get opencodeKey() { return v("OPENCODE_API_KEY"); },
+  get opencodeBaseUrl() { return (v("OPENCODE_BASE_URL") || "https://opencode.ai/inference/anthropic").replace(/\/$/, ""); },
+  /** Which service answers the Claude calls: OpenCode wins when both keys are set. */
+  get aiProvider(): "opencode" | "anthropic" | null {
+    return v("OPENCODE_API_KEY") ? "opencode" : v("ANTHROPIC_API_KEY") ? "anthropic" : null;
+  },
   get claudeModel() { return v("CLAUDE_MODEL") || "claude-sonnet-5-5"; },
   get pdlKey() { return v("PDL_API_KEY"); },
   get signalhireKey() { return v("SIGNALHIRE_API_KEY"); },
@@ -40,10 +47,19 @@ export const env = {
 const previewSafe = () => env.isPreview && !env.previewUsesRealServices;
 
 export const mock = {
-  get claude() { return !env.anthropicKey || previewSafe(); },
+  get claude() { return !env.aiProvider || previewSafe(); },
   get pdl() { return !env.pdlKey || previewSafe(); },
   get signalhire() { return !env.signalhireKey || previewSafe(); },
   get email() { return !env.resendKey || previewSafe(); },
+};
+
+/**
+ * Features only Anthropic's own API offers. OpenCode serves the Messages API (with prompt caching) but not
+ * Message Batches or the server-side web search tool, so those steps fall back or are skipped.
+ */
+export const aiFeatures = {
+  get batches() { return env.aiProvider === "anthropic"; },
+  get webSearch() { return env.aiProvider === "anthropic"; },
 };
 
 /** True when SignalHire can reach our webhook (a public https URL). */
