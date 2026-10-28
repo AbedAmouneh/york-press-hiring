@@ -3,6 +3,7 @@ import * as React from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { colorIndex, initials } from "@/lib/people";
 import { Badge as UiBadge } from "@/components/ui/badge";
 import { Field as UiField, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -47,8 +48,8 @@ const tones = {
   warn: "bg-amber-100 text-amber-800",
   good: "bg-emerald-100 text-emerald-800",
   bad: "bg-red-100 text-red-800",
-  brand: "bg-brand text-brand-foreground",
-  dark: "bg-primary text-primary-foreground",
+  brand: "bg-accent text-primary",
+  dark: "bg-ink text-white",
 } as const;
 export type Tone = keyof typeof tones;
 
@@ -137,8 +138,32 @@ export function ScoreBar({ value, max = 100 }: { value: number | null | undefine
     <div className="flex min-w-[96px] items-center gap-2">
       <span className="num w-7 text-right font-semibold">{value}</span>
       <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
-        <span className={cn("block h-full rounded-full", pct >= 75 ? "bg-primary" : pct >= 55 ? "bg-brand" : "bg-amber-500")} style={{ width: `${pct}%` }} />
+        <span className={cn("block h-full rounded-full", scoreColor(pct))} style={{ width: `${pct}%` }} />
       </span>
     </div>
+  );
+}
+
+/** Green for strong, amber for middling, grey for weak. */
+export function scoreColor(pct: number) {
+  return pct >= 75 ? "bg-success" : pct >= 55 ? "bg-chip-amber" : "bg-muted-foreground/40";
+}
+
+const AVATAR_COLORS = ["bg-chip-purple", "bg-chip-teal", "bg-chip-blue", "bg-chip-amber", "bg-chip-pink", "bg-chip-green"];
+
+/** Round initials avatar (never a photo). */
+export function Avatar({ name, size = "md", className }: { name: string; size?: "sm" | "md"; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "inline-grid shrink-0 place-items-center rounded-full font-semibold text-white",
+        size === "sm" ? "size-6 text-[10px]" : "size-8 text-xs",
+        AVATAR_COLORS[colorIndex(name, AVATAR_COLORS.length)],
+        className,
+      )}
+    >
+      {initials(name)}
+    </span>
   );
 }
