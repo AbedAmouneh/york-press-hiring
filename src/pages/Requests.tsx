@@ -15,7 +15,7 @@ export function RequestCard({ r }: { r: RequestRow }) {
   const comment = r.lastEvent?.comment && ["Requested changes", "Rejected"].includes(r.lastEvent.action) ? r.lastEvent : null;
   return (
     <Link to={`/requests/${r.id}`} className="block">
-      <Card className="flex flex-wrap items-start justify-between gap-3 p-4 transition-colors hover:border-foreground/30">
+      <Card className="flex flex-row flex-wrap items-start justify-between gap-3 p-4 transition-colors hover:border-foreground/30">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="font-mono text-xs text-muted-foreground">{r.code}</span>
