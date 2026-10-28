@@ -1,11 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { call, rpc } from "@/lib/rpc";
 import { useMe } from "@/lib/auth";
-import type { RequestRow } from "@/lib/types";
+import type { Position, RequestRow } from "@/lib/types";
 import { RequestForm as RequestFormSchema, type RequestFormValues } from "@/lib/forms";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Field, FormError, Select, Spinner, useToast } from "@/components/kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { TitleCombobox, type TitleOption } from "@/components/TitleCombobox";
 
 const EMPTY: RequestFormValues = {
   title: "", department: DEPARTMENTS[0], seniority: "Senior", headcount: "1", startDate: "", kind: "new", jdText: "",
@@ -32,6 +33,21 @@ const toForm = (r: RequestRow): RequestFormValues => ({
   justification: r.justification, targetCompanies: r.targetCompanies.join(", "), avoidCompanies: r.avoidCompanies.join(", "), hiringManagerId: r.hiringManagerId ?? "",
 });
 
+type Suggestable = "department" | "seniority" | "mustHaves" | "niceToHaves" | "minYears" | "idealYears" | "languages";
+const SUGGESTION_LABELS: Record<Suggestable, string> = {
+  department: "department", seniority: "seniority", mustHaves: "must-haves", niceToHaves: "nice-to-haves",
+  minYears: "minimum years", idealYears: "ideal years", languages: "languages",
+};
+
+/** A saved position's details in the form's text shape. Empty values are left out so they never clear a field. */
+function suggestionsFrom(p: Position): Partial<Record<Suggestable, string>> {
+  const out: Partial<Record<Suggestable, string>> = {
+    department: p.department, seniority: p.seniority, mustHaves: p.mustHaves.join("\n"), niceToHaves: p.niceToHaves.join("\n"),
+    minYears: p.minYears?.toString() ?? "", idealYears: p.idealYears?.toString() ?? "", languages: p.languages.join(", "),
+  };
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v)) as Partial<Record<Suggestable, string>>;
+}
+
 export default function RequestForm() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -40,6 +56,10 @@ export default function RequestForm() {
   const me = useMe().data!.user!;
   const existing = useQuery({ queryKey: ["request", id], queryFn: () => call(rpc.requests[":id"].$get({ param: { id: id! } })), enabled: !!id });
   const people = useQuery({ queryKey: ["hiring-managers"], queryFn: () => call(rpc.people["hiring-managers"].$get()) });
+  const positions = useQuery({ queryKey: ["positions"], queryFn: () => call(rpc.positions.$get()) });
+  const [suggested, setSuggested] = useState<{ title: string; fields: string[] } | null>(null);
+  const autoFilled = useRef<Partial<Record<Suggestable, string>>>({});
+  const myDepartment = me.department && (DEPARTMENTS as readonly string[]).includes(me.department) ? me.department : EMPTY.department;
   const form = useForm({ resolver: zodResolver(RequestFormSchema), defaultValues: EMPTY });
   const { errors, isSubmitting } = form.formState;
   const reg = (name: keyof RequestFormValues) => ({ ...form.register(name), "aria-invalid": !!errors[name] });
@@ -48,6 +68,27 @@ export default function RequestForm() {
   useEffect(() => {
     if (!id && me.department && (DEPARTMENTS as readonly string[]).includes(me.department)) form.setValue("department", me.department);
   }, [id, me.department, form]);
+
+  /**
+   * Fill in a saved position's details as suggestions. A field is only replaced while it is empty, still holds
+   * its starting value (new requests only) or still holds the previous suggestion, so nothing the manager
+   * typed is ever overwritten.
+   */
+  function suggest(o: TitleOption) {
+    const p = positions.data?.positions.find((x) => x.id === o.id);
+    if (!p) return;
+    const filled: string[] = [];
+    for (const [name, value] of Object.entries(suggestionsFrom(p)) as [Suggestable, string][]) {
+      const current = form.getValues(name);
+      const start = name === "department" ? myDepartment : EMPTY[name];
+      const untouched = current.trim() === "" || current === autoFilled.current[name] || (!id && current === start);
+      if (!untouched || current === value) continue;
+      form.setValue(name, value, { shouldValidate: form.formState.isSubmitted });
+      autoFilled.current[name] = value;
+      filled.push(SUGGESTION_LABELS[name]);
+    }
+    setSuggested({ title: p.title, fields: filled });
+  }
 
   async function save(body: RequestInputT, submit: boolean) {
     try {
@@ -75,10 +116,27 @@ export default function RequestForm() {
       <PageHeader eyebrow={id ? existing.data?.request.code : "New position"} title={id ? "Edit request" : "Request a new position"} />
       {returned?.comment && <p className="mb-4 rounded-r border-l-[3px] border-warning bg-amber-50 px-3 py-2 text-sm"><b>{returned.actorName}:</b> {returned.comment}</p>}
       <form className="grid gap-5" onSubmit={form.handleSubmit((v) => save(v, true))} noValidate>
-        <Card>
+        {/* overflow-visible so the job title list can open past the card's edge */}
+        <Card className="overflow-visible">
           <CardHeader><CardTitle>Basics</CardTitle></CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-3">
-            <Field label="Job title" htmlFor="title" className="sm:col-span-2" error={errors.title?.message}><Input id="title" placeholder="e.g. Senior Commissioning Editor" {...reg("title")} /></Field>
+            <Field label="Job title" htmlFor="title" className="sm:col-span-2" error={errors.title?.message}
+              hint={suggested ? undefined : "Pick a position York Press hires for often, or type a new title."}>
+              <Controller control={form.control} name="title" render={({ field }) => (
+                <TitleCombobox id="title" value={field.value} onBlur={field.onBlur} invalid={!!errors.title}
+                  placeholder="e.g. Senior Commissioning Editor"
+                  options={positions.data?.positions ?? []}
+                  onChange={(v) => { field.onChange(v); if (suggested && v !== suggested.title) setSuggested(null); }}
+                  onPick={suggest} />
+              )} />
+              {suggested && (
+                <p className="text-xs text-muted-foreground" role="status">
+                  {suggested.fields.length
+                    ? <>Suggested from the saved “{suggested.title}” position: {suggested.fields.join(", ")}. Change anything you like.</>
+                    : <>“{suggested.title}” is a saved position. Your own details were kept.</>}
+                </p>
+              )}
+            </Field>
             <Field label="Department" htmlFor="dept" error={errors.department?.message}><Select id="dept" {...reg("department")}>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</Select></Field>
             <Field label="Seniority" htmlFor="sen" error={errors.seniority?.message}><Select id="sen" {...reg("seniority")}>{SENIORITIES.map((d) => <option key={d}>{d}</option>)}</Select></Field>
             <Field label="Headcount" htmlFor="hc" error={errors.headcount?.message}><Input id="hc" type="number" min={1} {...reg("headcount")} /></Field>
