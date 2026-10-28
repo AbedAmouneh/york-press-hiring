@@ -2,7 +2,7 @@
 // Uses PGLITE_DIR (default .data/pglite). Mock mode only; never run against production.
 /* eslint-disable @typescript-eslint/no-explicit-any -- script reads untyped JSON responses */
 process.env.DEMO_MODE = "true";
-for (const k of ["DATABASE_URL", "ANTHROPIC_API_KEY", "PDL_API_KEY", "SIGNALHIRE_API_KEY", "RESEND_API_KEY"]) delete process.env[k];
+for (const k of ["DATABASE_URL", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY", "PDL_API_KEY", "SIGNALHIRE_API_KEY", "RESEND_API_KEY"]) delete process.env[k];
 
 const { default: app } = await import("../server/app.js");
 

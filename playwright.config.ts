@@ -33,6 +33,7 @@ export default defineConfig({
       // Empty values win over .env, so the tests always run in mock mode.
       DATABASE_URL: "",
       ANTHROPIC_API_KEY: "",
+      OPENCODE_API_KEY: "",
       PDL_API_KEY: "",
       SIGNALHIRE_API_KEY: "",
       RESEND_API_KEY: "",
