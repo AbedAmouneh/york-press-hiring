@@ -11,7 +11,7 @@ Non-technical setup: see **[SETUP_GUIDE.md](SETUP_GUIDE.md)**. Click-through des
 | Layer | Choice |
 |---|---|
 | Frontend | React 19 + Vite 6 + TypeScript, Tailwind CSS 4, official shadcn/ui (Radix), react-hook-form, TanStack Query 5, React Router 7 |
-| API | Hono on a single Vercel Function (`api/[[...route]].ts`), Node runtime; Hono RPC gives the browser the exact route types |
+| API | Hono on a single Vercel Function (`api/index.ts`, reached through a `/api/(.*)` rewrite), Node runtime; Hono RPC gives the browser the exact route types |
 | Validation | Zod 4 rules in `shared/schemas.ts`, used by both the API and the forms |
 | DB | Postgres (Neon) via Drizzle ORM; embedded PGlite locally. Migrations run in the Vercel build |
 | Jobs | Resumable pipeline in Postgres, sliced and retried through Upstash QStash (background fallback); daily Vercel Cron |
@@ -24,7 +24,7 @@ Non-technical setup: see **[SETUP_GUIDE.md](SETUP_GUIDE.md)**. Click-through des
 
 ```
 src/                       FRONTEND: pages/, components/ (ui/ = shadcn), lib/ (rpc client, forms, types)
-api/[[...route]].ts        Vercel entry → server/app.ts
+api/index.ts        Vercel entry → server/app.ts
 server/                    BACKEND
   app.ts                   Hono app, security middleware, error handling, exports AppType
   auth.ts                  passwords, DB sessions (httpOnly cookie), role guards, two-step lock
