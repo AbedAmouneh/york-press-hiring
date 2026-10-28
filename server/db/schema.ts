@@ -302,6 +302,8 @@ export const settings = pgTable("settings", {
   webSearchEnabled: boolean("web_search_enabled").notNull().default(true),
   defaultWeights: jsonb("default_weights").$type<Weights>(),
   signalhireCreditsLeft: integer("signalhire_credits_left"),
+  // Most SignalHire credits the app may spend in a calendar month. Null means no limit.
+  signalhireMonthlyLimit: integer("signalhire_monthly_limit"),
   weeklySummaryEnabled: boolean("weekly_summary_enabled").notNull().default(true),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 });
