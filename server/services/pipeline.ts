@@ -10,6 +10,7 @@ import { providerLabel, revealAvailable, searchProviders, skippedProviders } fro
 import type { NormalizedProfile } from "./providers/types.js";
 import { mergeProfiles, nameKey, prescore, type MergedProfile } from "./merge.js";
 import { getSettings, logUsage, updateSettings, weightsFor } from "./settings.js";
+import { signalhireBudget } from "./credit-budget.js";
 import { toAI, toReq } from "./mappers.js";
 import { drainEmailQueue, isSuppressed, queueOutreach } from "./outreach.js";
 import { notifyRoles, notifyUsers } from "./notify.js";
@@ -491,8 +492,14 @@ async function stepReveal({ run, request, state, counters }: Ctx) {
     ? await db.select({ rcId: schema.contactReveals.roleCandidateId }).from(schema.contactReveals).where(inArray(schema.contactReveals.roleCandidateId, targets.map((t) => t.rc.id)))
     : [];
   const done = new Set(existing.map((e) => e.rcId));
-  const todo = targets.filter(({ rc, c }) => !done.has(rc.id) && (c.linkedinUrl || c.signalhireUid));
-  if (!todo.length) { log(state, "No contacts to reveal."); return; }
+  const wanted = targets.filter(({ rc, c }) => !done.has(rc.id) && (c.linkedinUrl || c.signalhireUid));
+  if (!wanted.length) { log(state, "No contacts to reveal."); return; }
+  const budget = await signalhireBudget();
+  const todo = wanted.slice(0, budget.allowed);
+  if (todo.length < wanted.length) {
+    log(state, `This month's SignalHire limit (${budget.limit} credits) leaves room for ${todo.length} of ${wanted.length} contacts; the rest weren't looked up.`);
+  }
+  if (!todo.length) return;
   const items = todo.map(({ c }) => (c.linkedinUrl ?? c.signalhireUid)!);
   const callback = appIsPublic() && !mock.signalhire ? `${env.appUrl}/api/webhooks/signalhire/${env.webhookSecret}` : null;
   const res = await revealContacts(items, callback);
