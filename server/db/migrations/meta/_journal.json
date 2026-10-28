@@ -71,6 +71,13 @@
       "when": 1793212711633,
       "tag": "0009_salary-per-month-default",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793214659874,
+      "tag": "0010_signalhire-monthly-limit",
+      "breakpoints": true
     }
   ]
 }

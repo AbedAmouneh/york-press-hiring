@@ -1,0 +1,1 @@
+ALTER TABLE "settings" ADD COLUMN "signalhire_monthly_limit" integer;
