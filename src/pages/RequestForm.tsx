@@ -191,7 +191,7 @@ export default function RequestForm() {
           <Card className="overflow-visible">
             <CardHeader><CardTitle><Step n={1} /> Basics</CardTitle></CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
-              <Field label="Job title" htmlFor="title" className="sm:col-span-2" error={errors.title?.message}>
+              <Field required label="Job title" htmlFor="title" className="sm:col-span-2" error={errors.title?.message}>
                 <Controller control={form.control} name="title" render={({ field }) => (
                   <PositionPicker id="title" value={field.value} onBlur={field.onBlur} invalid={!!errors.title}
                     positions={positions.data?.positions ?? []}
@@ -216,21 +216,21 @@ export default function RequestForm() {
                   </div>
                 )}
               </Field>
-              <Field label="Department" htmlFor="dept" error={errors.department?.message}><Select id="dept" {...reg("department")}>{withCurrent(DEPARTMENTS, form.watch("department")).map((d) => <option key={d}>{d}</option>)}</Select></Field>
-              <Field label="Location" htmlFor="loc-id" error={errors.locationId?.message} hint={location ? v.workingHours || undefined : undefined}>
+              <Field required label="Department" htmlFor="dept" error={errors.department?.message}><Select id="dept" {...reg("department")}>{withCurrent(DEPARTMENTS, form.watch("department")).map((d) => <option key={d}>{d}</option>)}</Select></Field>
+              <Field required label="Location" htmlFor="loc-id" error={errors.locationId?.message} hint={location ? v.workingHours || undefined : undefined}>
                 <Select id="loc-id" aria-invalid={!!errors.locationId} {...form.register("locationId", { onChange: (e) => pickLocation(e.target.value) })}>
                   <option value="">Choose…</option>
                   {locations.data?.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </Select>
               </Field>
-              <Field label="Seniority" htmlFor="sen" error={errors.seniority?.message}>
+              <Field required label="Seniority" htmlFor="sen" error={errors.seniority?.message}>
                 <Controller control={form.control} name="seniority" render={({ field }) => (
                   <Combobox id="sen" value={field.value} onChange={field.onChange} onBlur={field.onBlur} invalid={!!errors.seniority}
                     listLabel="Levels" options={SENIORITIES.map((s) => ({ id: s, label: s }))} />
                 )} />
               </Field>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Headcount" htmlFor="hc" error={errors.headcount?.message}><Input id="hc" type="number" min={1} {...reg("headcount")} /></Field>
+                <Field required label="Headcount" htmlFor="hc" error={errors.headcount?.message}><Input id="hc" type="number" min={1} {...reg("headcount")} /></Field>
                 <Field label="Type" htmlFor="kind"><Select id="kind" {...reg("kind")}><option value="new">New role</option><option value="backfill">Backfill</option></Select></Field>
               </div>
               <Field label="Target start date" htmlFor="sd" error={errors.startDate?.message}><Input id="sd" type="date" {...reg("startDate")} /></Field>
@@ -271,11 +271,11 @@ export default function RequestForm() {
           <Card>
             <CardHeader><CardTitle><Step n={4} /> Budget and reason</CardTitle></CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-4">
-              <Field label="Currency" htmlFor="cur" error={errors.currency?.message}><Select id="cur" {...reg("currency")}><option value="">Choose…</option>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
+              <Field required label="Currency" htmlFor="cur" error={errors.currency?.message}><Select id="cur" {...reg("currency")}><option value="">Choose…</option>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
               <Field label="Salary from" htmlFor="smin" error={errors.salaryMin?.message}><Input id="smin" inputMode="numeric" {...reg("salaryMin")} /></Field>
               <Field label="Salary to" htmlFor="smax" error={errors.salaryMax?.message}><Input id="smax" inputMode="numeric" {...reg("salaryMax")} /></Field>
               <Field label="Per" htmlFor="per"><Select id="per" {...reg("salaryPeriod")}><option value="month">Month</option><option value="year">Year</option></Select></Field>
-              <Field label="Business justification for Khalil" htmlFor="just" className="sm:col-span-4" error={errors.justification?.message}><Textarea id="just" {...reg("justification")} /></Field>
+              <Field required label="Business justification for Khalil" htmlFor="just" className="sm:col-span-4" error={errors.justification?.message}><Textarea id="just" {...reg("justification")} /></Field>
             </CardContent>
           </Card>
         </div>
