@@ -1,7 +1,7 @@
 // Form schemas for react-hook-form. Each one keeps the browser's field shape (text inputs, one item
 // per line) and pipes into the shared API schema, so the browser enforces the same rules as the server.
 import { z } from "zod";
-import { ApplyFields, cvProblem, InvitePasswordInput, ManagerInvite, PositionInput, RequestInput, SetupInput } from "../../shared/schemas";
+import { ApplyFields, cvProblem, InvitePasswordInput, LocationInput, ManagerInvite, PositionInput, RequestInput, SetupInput } from "../../shared/schemas";
 
 /** "a\nb\n\nc" → ["a", "b", "c"] */
 export const lines = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
@@ -44,6 +44,8 @@ export const RequestFormFields = z.object({
   targetCompanies: z.string(),
   avoidCompanies: z.string(),
   hiringManagerId: z.string(),
+  locationId: z.string(),
+  workingHours: z.string(),
 });
 export type RequestFormValues = z.input<typeof RequestFormFields>;
 
@@ -72,10 +74,13 @@ const toRequestInput = (f: RequestFormValues) => ({
   targetCompanies: csv(f.targetCompanies),
   avoidCompanies: csv(f.avoidCompanies),
   hiringManagerId: f.hiringManagerId || null,
+  locationId: f.locationId || null,
+  workingHours: f.workingHours.trim() || null,
 });
 
-/** All rules run in one pass so every error shows at once: two form-only rules, then the API's. */
+/** All rules run in one pass so every error shows at once: three form-only rules, then the API's. */
 export const RequestForm = RequestFormFields.superRefine((f, ctx) => {
+  if (!f.locationId) ctx.addIssue({ code: "custom", path: ["locationId"], message: "Choose where this person will work." });
   if (!f.currency) ctx.addIssue({ code: "custom", path: ["currency"], message: "Choose a currency." });
   if (!f.justification.trim()) ctx.addIssue({ code: "custom", path: ["justification"], message: "Explain why this role is needed." });
   validateWith(RequestInput, toRequestInput(f), ctx);
@@ -128,6 +133,7 @@ export const PositionFormFields = z.object({
   languages: z.string(),
   minYears: z.string(),
   idealYears: z.string(),
+  jdText: z.string(),
   active: z.boolean(),
 });
 export type PositionFormValues = z.input<typeof PositionFormFields>;
@@ -141,9 +147,28 @@ const toPositionInput = (f: PositionFormValues) => ({
   languages: csv(f.languages),
   minYears: num(f.minYears),
   idealYears: num(f.idealYears),
+  jdText: f.jdText,
   active: f.active,
 });
 
 export const PositionForm = PositionFormFields.superRefine((f, ctx) => {
   validateWith(PositionInput, toPositionInput(f), ctx);
 }).transform((f) => PositionInput.parse(toPositionInput(f)));
+
+// ---------------------------------------------------------------- hiring locations (Settings)
+
+export const LocationFormFields = z.object({
+  name: z.string(),
+  country: z.string(),
+  city: z.string(),
+  workArrangement: z.string(),
+  workingHours: z.string(),
+  active: z.boolean(),
+});
+export type LocationFormValues = z.input<typeof LocationFormFields>;
+
+const toLocationInput = (f: LocationFormValues) => ({ ...f, city: f.city.trim() || null });
+
+export const LocationForm = LocationFormFields.superRefine((f, ctx) => {
+  validateWith(LocationInput, toLocationInput(f), ctx);
+}).transform((f) => LocationInput.parse(toLocationInput(f)));
