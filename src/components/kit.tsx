@@ -73,7 +73,7 @@ export function DataTable({ className, ...props }: React.ComponentProps<typeof T
   );
 }
 export const Th = ({ className, ...p }: React.ComponentProps<typeof TableHead>) => (
-  <TableHead className={cn("bg-muted/60 text-xs font-semibold uppercase tracking-wide text-muted-foreground", className)} {...p} />
+  <TableHead className={cn("text-xs font-medium text-muted-foreground", className)} {...p} />
 );
 export const Td = ({ className, ...p }: React.ComponentProps<typeof TableCell>) => (
   <TableCell className={cn("py-2.5 align-top whitespace-normal", className)} {...p} />
@@ -150,6 +150,28 @@ export function scoreColor(pct: number) {
 }
 
 const AVATAR_COLORS = ["bg-chip-purple", "bg-chip-teal", "bg-chip-blue", "bg-chip-amber", "bg-chip-pink", "bg-chip-green"];
+
+const DOT_COLORS = AVATAR_COLORS;
+
+/** A department name with a small colored dot; the same department always gets the same color. */
+export function DeptDot({ name, className }: { name: string; className?: string }) {
+  return (
+    <span className={cn("inline-flex items-center gap-1.5", className)}>
+      <span aria-hidden className={cn("size-2 shrink-0 rounded-full", DOT_COLORS[colorIndex(name, DOT_COLORS.length)])} />
+      {name}
+    </span>
+  );
+}
+
+/** Small label + big number, used in metric strips. */
+export function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="num text-xl font-semibold">{value}</div>
+    </div>
+  );
+}
 
 /** Round initials avatar (never a photo). */
 export function Avatar({ name, size = "md", className }: { name: string; size?: "sm" | "md"; className?: string }) {
