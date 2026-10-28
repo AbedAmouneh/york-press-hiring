@@ -1,13 +1,20 @@
 import { expect, test } from "@playwright/test";
 import { signInAs } from "./helpers";
 
-test("the request form counts what is still missing", async ({ page }) => {
+test("the request form marks what's required and counts only that", async ({ page }) => {
   await signInAs(page, "Manager");
   await page.goto("/requests/new");
-  await expect(page.getByText("0/5")).toBeVisible();
+  // Required fields carry an asterisk; optional ones don't.
+  const marked = (text: string) => page.locator("label", { hasText: new RegExp(`^${text}$`) }).locator("xpath=following-sibling::span[1]");
+  for (const name of ["Job title", "Location", "Currency", "Business justification for Khalil"]) await expect(marked(name)).toHaveText("*");
+  for (const name of ["Must-haves", "Target start date", "Salary from"]) await expect(marked(name)).toHaveCount(0);
+  await expect(page.getByLabel("Location", { exact: true })).toHaveAttribute("aria-required", "true");
+
+  await expect(page.getByText("0/4")).toBeVisible();
   await page.getByLabel("Job title").fill("Commissioning Editor");
   await page.getByLabel("Must-haves").fill("Commissioning");
-  await expect(page.getByText("2/5")).toBeVisible();
+  await expect(page.getByText("1/4")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Recommended" })).toContainText("Must-haves");
 });
 
 test("the timeline reads oldest first and ends with the step it is waiting on", async ({ page }) => {
