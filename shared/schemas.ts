@@ -57,6 +57,8 @@ export const RequestFields = z.object({
   targetCompanies: list,
   avoidCompanies: list,
   hiringManagerId: z.uuid().nullable().optional(),
+  locationId: z.uuid().nullable().optional(),
+  workingHours: z.string().trim().max(200).nullable().optional(),
 });
 
 export const RequestInput = RequestFields.refine((r) => r.salaryMin == null || r.salaryMax == null || r.salaryMax >= r.salaryMin, {
@@ -181,14 +183,34 @@ const PositionFields = z.object({
   languages: items,
   minYears: optionalInt(40),
   idealYears: optionalInt(40),
+  jdText: z.string().max(20000, "Keep the job description under 20,000 characters."),
   active: z.boolean(),
 });
 export const PositionInput = PositionFields.extend({
   mustHaves: items.default([]),
   niceToHaves: items.default([]),
   languages: items.default([]),
+  jdText: PositionFields.shape.jdText.default(""),
   active: z.boolean().default(true),
 }).refine(yearsRule, yearsMessage);
 /** Only the fields sent are changed (no defaults, so a rename doesn't clear the lists). */
 export const PositionPatch = PositionFields.partial();
 export type PositionInputT = z.output<typeof PositionInput>;
+
+// ---------------------------------------------------------------- hiring locations
+
+const LocationFields = z.object({
+  name: z.string().trim().min(2, "Add a name, e.g. Zouk Mosbeh, Lebanon.").max(80),
+  country: z.string().trim().min(2, "Add the country."),
+  city: z.string().trim().nullable(),
+  workArrangement: z.string().trim().min(1, "Choose on-site, hybrid or remote."),
+  workingHours: z.string().trim().max(200),
+  active: z.boolean(),
+});
+export const LocationInput = LocationFields.extend({
+  city: LocationFields.shape.city.optional().default(null),
+  workArrangement: LocationFields.shape.workArrangement.default("On-site"),
+  workingHours: LocationFields.shape.workingHours.default(""),
+  active: z.boolean().default(true),
+});
+export const LocationPatch = LocationFields.partial();
