@@ -13,6 +13,7 @@ import Setup from "./pages/Setup";
 import Invite from "./pages/Invite";
 import TwoFactorSetup from "./pages/TwoFactor";
 import Apply from "./pages/Apply";
+import Home from "./pages/Home";
 import Requests from "./pages/Requests";
 import RequestForm from "./pages/RequestForm";
 import RequestDetail from "./pages/RequestDetail";
@@ -59,7 +60,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Navigate to={homeFor(user)} replace />} />
       <Route element={<AppShell me={user} />}>
-        <Route path="/" element={<Navigate to={homeFor(user)} replace />} />
+        <Route path="/" element={<Home />} />
         <Route path="/approvals" element={<Only user={user} roles={["ceo"]}><Requests scope="approvals" /></Only>} />
         <Route path="/requests" element={<Requests scope="all" />} />
         <Route path="/requests/new" element={<Only user={user} roles={["manager", "recruiter", "admin"]}><RequestForm /></Only>} />
