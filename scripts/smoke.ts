@@ -125,6 +125,35 @@ const together = await Promise.all([decide(ceo, "reject", "No budget."), decide(
 const decided = (await admin("GET", `/requests/${commentReq}`)).events.filter((e: any) => ["Rejected", "Requested changes"].includes(e.action));
 ok(together.filter((r) => r.status === 200).length === 1 && decided.length === 2, "two decisions sent at once only apply once");
 
+// The discussion on a request.
+const say = (who: typeof ceo, body: string, reqId = commentReq) => who.raw("POST", `/requests/${reqId}/messages`, { body });
+ok((await say(outsider, "Hello?")).status === 403, "someone who can't open a request can't post on it");
+ok((await outsider.raw("GET", `/requests/${commentReq}/messages`)).status === 403, "or read its discussion");
+ok((await say(ceo, "   ")).status === 400, "an empty message is refused");
+const posted = await say(ceo, "Is the budget owner Finance?\n<b>not bold</b>");
+const { message: ceoMessage } = await posted.json();
+ok(posted.status === 200 && ceoMessage.canDelete, "the CEO posted a message");
+const thread = (await admin("GET", `/requests/${commentReq}/messages`)).messages;
+ok(thread.length === 1 && thread[0].body === "Is the budget owner Finance?\n<b>not bold</b>" && !thread[0].canDelete, "the requester reads it exactly as written and can't delete it");
+const messageMail = (await admin("GET", "/outbox")).emails.find((e: any) => e.subject === "Demo CEO wrote on Comment check");
+ok(messageMail?.body.includes("Is the budget owner Finance?"), "the requester is emailed the message");
+ok((await admin("GET", "/notifications")).notifications.some((n: any) => n.link === `/requests/${commentReq}#discussion`), "and notified in the app");
+ok((await admin.raw("DELETE", `/requests/${commentReq}/messages/${ceoMessage.id}`)).status === 403, "only the author can delete a message");
+ok((await ceo.raw("DELETE", `/requests/${commentReq}/messages/${ceoMessage.id}`)).status === 200, "the author can delete it straight after");
+ok((await admin("GET", `/requests/${commentReq}/messages`)).messages.length === 0, "and it's gone for everyone");
+// Someone who took part but has since lost access is not sent new messages.
+const hmUser = (await outsider("GET", "/auth/me")).user;
+const { id: talkReq } = await admin("POST", "/requests", { title: "Access check", department: "Editorial", seniority: "Mid", hiringManagerId: hmUser.id });
+ok((await say(outsider, "Happy to interview for this.", talkReq)).status === 200, "the hiring manager joins the discussion");
+await admin("PATCH", `/requests/${talkReq}`, { hiringManagerId: null });
+ok((await say(outsider, "Still here?", talkReq)).status === 403, "once removed, they can't post");
+await say(ceo, "Budget confirmed.", talkReq);
+const leaked = (await outsider("GET", "/notifications")).notifications.some((n: any) => n.link === `/requests/${talkReq}#discussion` && n.title.startsWith("Demo CEO"));
+ok(!leaked, "and they aren't sent later messages");
+const burst = [];
+for (let i = 0; i < 21; i++) burst.push((await say(admin, `Note ${i}`)).status);
+ok(burst.slice(0, 20).every((s) => s === 200) && burst[20] === 429, "a burst of messages is capped at 20 in 10 minutes");
+
 await ceo("POST", `/requests/${id}/decision`, { action: "approve" });
 
 let status = "";
