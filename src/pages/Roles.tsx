@@ -1,49 +1,77 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { call, rpc } from "@/lib/rpc";
-import { can, useMe } from "@/lib/auth";
+import { stageOf } from "@/lib/home";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { RequestStatusBadge } from "@/components/Status";
-import { EmptyState, Spinner } from "@/components/kit";
+import { StageBar } from "@/components/StageBar";
+import { DeptDot, EmptyState } from "@/components/kit";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const FILTERS = [
+  ["all", "All"],
+  ["sourcing", "Sourcing"],
+  ["open", "Open"],
+  ["closed", "Closed"],
+] as const;
 
 export default function Roles() {
-  const me = useMe().data!.user!;
+  const [filter, setFilter] = useState<(typeof FILTERS)[number][0]>("all");
   const q = useQuery({
     queryKey: ["requests", "roles"],
     queryFn: () => call(rpc.requests.$get({ query: { scope: "roles" } })),
     refetchInterval: (query) => (query.state.data?.requests.some((r) => r.status === "sourcing") ? 4000 : false),
   });
-  const rows = (q.data?.requests ?? []).sort((a, b) => Number(a.status === "closed") - Number(b.status === "closed"));
+  const all = (q.data?.requests ?? []).sort((a, b) => Number(a.status === "closed") - Number(b.status === "closed"));
+  const rows = filter === "all" ? all : all.filter((r) => r.status === filter);
+  const count = (f: string) => (f === "all" ? all.length : all.filter((r) => r.status === f).length);
+
   return (
     <>
-      <PageHeader eyebrow={can(me, "recruiter", "admin", "ceo") ? "Approved positions" : "Roles you're involved in"} title={can(me, "recruiter", "admin", "ceo") ? "Open roles" : "My roles"} />
-      {q.isLoading ? <Spinner /> : rows.length ? (
-        <div className="grid gap-3 md:grid-cols-2">
-          {rows.map((r) => (
-            <Link key={r.id} to={`/roles/${r.id}`}>
-              <Card className="h-full p-4 transition-colors hover:border-foreground/30">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-mono text-xs text-muted-foreground">{r.code} · {r.department}</div>
-                    <h3 className="font-semibold">{r.title}</h3>
-                  </div>
-                  <RequestStatusBadge status={r.status} />
-                </div>
-                <div className="mt-4 grid grid-cols-4 gap-2 text-center">
-                  {[["Screened", r.stats.screened], ["Top 10 avg", r.stats.topAvg || "—"], ["Contacted", r.stats.contacted], ["HM yes", r.stats.hmYes]].map(([k, v]) => (
-                    <div key={k as string} className="rounded-md bg-secondary/60 px-1 py-2">
-                      <div className="num text-lg font-semibold">{v}</div>
-                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{k}</div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
+      <PageHeader title="Roles" />
+      <div role="group" aria-label="Filter roles" className="mb-4 flex flex-wrap gap-1.5">
+        {FILTERS.map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setFilter(key)}
+            aria-pressed={filter === key}
+            className={cn("rounded-full border px-3 py-1 text-sm transition-colors", filter === key ? "border-ink bg-ink text-white" : "bg-card hover:bg-secondary")}
+          >
+            {label} <span className={cn("num", filter === key ? "text-white/70" : "text-muted-foreground")}>{count(key)}</span>
+          </button>
+        ))}
+      </div>
+      {q.isLoading ? (
+        <div className="grid gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+      ) : rows.length ? (
+        <Card className="gap-0 p-0">
+          <div className="hidden grid-cols-[64px_1fr_160px_repeat(3,72px)_96px] gap-4 border-b px-5 py-2.5 text-xs font-medium text-muted-foreground md:grid">
+            <span>Code</span><span>Role</span><span>Stage</span><span className="text-right">Screened</span><span className="text-right">Top 10</span><span className="text-right">HM yes</span><span />
+          </div>
+          <ul className="divide-y">
+            {rows.map((r) => (
+              <li key={r.id}>
+                <Link to={`/roles/${r.id}`} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-5 py-3.5 transition-colors hover:bg-secondary/50 md:grid-cols-[64px_1fr_160px_repeat(3,72px)_96px]">
+                  <span className="hidden font-mono text-xs text-muted-foreground md:block">{r.code}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{r.title}</span>
+                    <DeptDot name={r.department} className="text-xs text-muted-foreground" />
+                  </span>
+                  <StageBar stage={stageOf(r)} className="hidden md:block" />
+                  <span className="num hidden text-right md:block">{r.stats.screened}</span>
+                  <span className="num hidden text-right md:block">{r.stats.topAvg || "–"}</span>
+                  <span className="num hidden text-right md:block">{r.stats.hmYes}</span>
+                  <span className="justify-self-end"><RequestStatusBadge status={r.status} /></span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
       ) : (
-        <EmptyState title="No open roles yet">A role appears here as soon as Khalil approves a request.</EmptyState>
+        <EmptyState title={filter === "all" ? "No roles yet" : "Nothing here"}>{filter === "all" ? "A role appears here once Khalil approves a request." : null}</EmptyState>
       )}
     </>
   );
