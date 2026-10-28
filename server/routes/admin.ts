@@ -13,6 +13,7 @@ import { getSettings, updateSettings } from "../services/settings.js";
 import { sentTodayCount } from "../services/outreach.js";
 import { PLACEHOLDERS } from "../services/templates.js";
 import { publicUser } from "./access.js";
+import { searchProviders } from "../services/providers/select.js";
 import { previewRetention, RETENTION_MONTHS } from "../services/retention.js";
 
 export const adminRoutes = new Hono<AppEnv>()
@@ -70,8 +71,9 @@ export const adminRoutes = new Hono<AppEnv>()
       sentToday: await sentTodayCount(),
       integrations: {
         claude: { live: !mock.claude, model: env.claudeModel },
-        pdl: { live: !mock.pdl },
-        signalhire: { live: !mock.signalhire, creditsLeft: s.signalhireCreditsLeft },
+        // inUse = false when a source has no key while another is live, so runs skip it.
+        pdl: { live: !mock.pdl, inUse: searchProviders().some((p) => p.name === "PDL") },
+        signalhire: { live: !mock.signalhire, inUse: searchProviders().some((p) => p.name === "SignalHire"), creditsLeft: s.signalhireCreditsLeft },
         email: { live: !mock.email, from: env.emailFrom },
         database: { live: !!env.databaseUrl },
         appUrl: env.appUrl,
