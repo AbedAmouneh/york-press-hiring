@@ -92,14 +92,14 @@ function General() {
             </div>
           </Field>
           <SwitchRow id="rv" label="Reveal Top-10 contacts with SignalHire" hint="Uses 1 credit per person found." checked={s.signalhireRevealEnabled} onChange={(v) => patch({ signalhireRevealEnabled: v }, "Saved.")} />
-          <SwitchRow id="ws" label="Claude web search on the top 20" hint="Looks for portfolios, GitHub and publications ($10 per 1,000 searches)." checked={s.webSearchEnabled} onChange={(v) => patch({ webSearchEnabled: v }, "Saved.")} />
+          <SwitchRow id="ws" label="Claude web search on the top 20" hint={q.data.integrations.claude.via === "OpenCode" ? "Not available through OpenCode, so this step is skipped." : "Looks for portfolios, GitHub and publications ($10 per 1,000 searches)."} checked={s.webSearchEnabled} onChange={(v) => patch({ webSearchEnabled: v }, "Saved.")} />
           <SwitchRow id="sum" label="Weekly summary for Khalil" hint="Monday 09:00 Beirut: open roles, pipeline and spend." checked={s.weeklySummaryEnabled} onChange={(v) => patch({ weeklySummaryEnabled: v }, "Saved.")} />
         </CardContent>
       </Card>
       <Card>
         <CardHeader><CardTitle>Connections</CardTitle></CardHeader>
         <CardContent className="grid gap-3 text-sm">
-          <div className="flex justify-between gap-2"><span>Claude API <span className="text-muted-foreground">· {i.claude.model}</span></span><Live live={i.claude.live} /></div>
+          <div className="flex justify-between gap-2"><span>Claude{i.claude.via ? ` via ${i.claude.via}` : " API"} <span className="text-muted-foreground">· {i.claude.model}</span></span><Live live={i.claude.live} /></div>
           <div className="flex justify-between gap-2"><span>People Data Labs <span className="text-muted-foreground">· search</span></span><Live live={i.pdl.live} inUse={i.pdl.inUse} /></div>
           <div className="flex justify-between gap-2"><span>SignalHire <span className="text-muted-foreground">· search + contacts{i.signalhire.creditsLeft != null ? ` · ${i.signalhire.creditsLeft} credits left` : ""}</span></span><Live live={i.signalhire.live} inUse={i.signalhire.inUse} /></div>
           <div className="flex justify-between gap-2"><span>Email (Resend) <span className="text-muted-foreground">· {i.email.from}</span></span><Live live={i.email.live} /></div>
