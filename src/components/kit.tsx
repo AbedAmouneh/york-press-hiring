@@ -13,12 +13,25 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 
 // ---------------------------------------------------------------- form helpers
 
-/** A label, the control, an optional hint and the validation error, stacked. */
-export function Field({ label, hint, error, htmlFor, children, className }: { label: string; hint?: string; error?: string; htmlFor?: string; children: React.ReactNode; className?: string }) {
+/**
+ * A label, the control, an optional hint and the validation error, stacked.
+ * `required` adds a coral asterisk (hidden from screen readers, so the field's name stays the label) and
+ * marks the control aria-required, which screen readers announce instead.
+ */
+export function Field({ label, hint, error, htmlFor, children, className, required = false }: { label: string; hint?: string; error?: string; htmlFor?: string; children: React.ReactNode; className?: string; required?: boolean }) {
+  const control = required && React.isValidElement(children) ? React.cloneElement(children as React.ReactElement<{ "aria-required"?: boolean }>, { "aria-required": true }) : children;
   return (
     <UiField className={cn("gap-1.5", className)} data-invalid={error ? true : undefined}>
-      <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
-      {children}
+      {required ? (
+        // The asterisk sits next to the label, not inside it, so the field's accessible name stays the label.
+        <div className="flex items-center gap-0.5">
+          <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
+          <span aria-hidden className="text-sm font-medium text-primary" title="Required">*</span>
+        </div>
+      ) : (
+        <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
+      )}
+      {control}
       {error ? <FieldError className="text-xs">{error}</FieldError> : hint && <FieldDescription className="text-xs">{hint}</FieldDescription>}
     </UiField>
   );
