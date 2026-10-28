@@ -12,6 +12,7 @@ import { applyRevealResults } from "../services/pipeline.js";
 import { updateSettings } from "../services/settings.js";
 import { readCv } from "../services/cv-store.js";
 import { revealAvailable } from "../services/providers/select.js";
+import { signalhireBudget } from "../services/credit-budget.js";
 
 const canSeeContacts = (u: SessionUser, r: typeof schema.roleRequests.$inferSelect) => isStaff(u) || r.hiringManagerId === u.id;
 
@@ -128,6 +129,8 @@ export const candidateRoutes = new Hono<AppEnv>()
     if (!revealAvailable()) throw new HTTPException(400, { message: "SignalHire isn't set up yet, so contact details can't be looked up." });
     const item = cand.linkedinUrl ?? cand.signalhireUid;
     if (!item) throw new HTTPException(400, { message: "No LinkedIn URL or SignalHire ID to look this person up." });
+    const budget = await signalhireBudget();
+    if (budget.allowed < 1) throw new HTTPException(400, { message: `This month's SignalHire limit of ${budget.limit} credits is used up. An admin can raise it in Settings.` });
     const db = await getDb();
     const callback = appIsPublic() && !mock.signalhire ? `${env.appUrl}/api/webhooks/signalhire/${env.webhookSecret}` : null;
     const res = await revealContacts([item], callback);
