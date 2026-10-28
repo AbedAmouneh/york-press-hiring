@@ -3,11 +3,10 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { call, rpc } from "@/lib/rpc";
 import { stageOf } from "@/lib/home";
-import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { RequestStatusBadge } from "@/components/Status";
 import { StageBar } from "@/components/StageBar";
-import { DeptDot, EmptyState } from "@/components/kit";
+import { DeptDot, EmptyState, FilterChips } from "@/components/kit";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -32,18 +31,7 @@ export default function Roles() {
   return (
     <>
       <PageHeader title="Roles" />
-      <div role="group" aria-label="Filter roles" className="mb-4 flex flex-wrap gap-1.5">
-        {FILTERS.map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setFilter(key)}
-            aria-pressed={filter === key}
-            className={cn("rounded-full border px-3 py-1 text-sm transition-colors", filter === key ? "border-ink bg-ink text-white" : "bg-card hover:bg-secondary")}
-          >
-            {label} <span className={cn("num", filter === key ? "text-white/70" : "text-muted-foreground")}>{count(key)}</span>
-          </button>
-        ))}
-      </div>
+      <FilterChips label="Filter roles" options={FILTERS.map(([k, l]) => ({ key: k, label: l, count: count(k) }))} value={filter} onChange={(k) => setFilter(k as typeof filter)} />
       {q.isLoading ? (
         <div className="grid gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
       ) : rows.length ? (
