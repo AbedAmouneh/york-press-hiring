@@ -85,6 +85,12 @@ export default function RequestForm() {
   const reg = (name: keyof RequestFormValues) => ({ ...form.register(name), "aria-invalid": !!errors[name] });
 
   useEffect(() => { if (existing.data) form.reset(toForm(existing.data.request)); }, [existing.data, form]);
+  // A native select can't show a value whose option isn't there yet. When the lists arrive after the saved
+  // request, set the values again so the location and hiring manager show what was saved.
+  useEffect(() => {
+    if (!existing.data) return;
+    for (const name of ["locationId", "hiringManagerId"] as const) form.setValue(name, form.getValues(name));
+  }, [existing.data, locations.data, people.data, form]);
   useEffect(() => {
     if (!id && me.department && (DEPARTMENTS as readonly string[]).includes(me.department)) form.setValue("department", me.department);
   }, [id, me.department, form]);
