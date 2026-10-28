@@ -56,6 +56,7 @@ export const CURRENCIES = ["USD", "EUR", "GBP", "AED", "SAR", "LBP"] as const;
 export const DEPARTMENTS = [
   "Editorial",
   "Product & Technology",
+  "Design & Multimedia",
   "Finance",
   "Sales",
   "Marketing",
@@ -64,7 +65,10 @@ export const DEPARTMENTS = [
   "HR",
 ] as const;
 
-export const SENIORITIES = ["Junior", "Mid", "Mid-senior", "Senior", "Lead", "Manager", "Director"] as const;
+/** Suggested levels; managers can also type their own. */
+export const SENIORITIES = ["Entry", "Junior", "Mid", "Senior", "Manager"] as const;
+
+export const WORK_ARRANGEMENTS = ["On-site", "Hybrid", "Remote"] as const;
 
 export type ExperienceItem = {
   title: string;
