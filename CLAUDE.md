@@ -18,9 +18,11 @@ the app and sent from Abed's account by Claude in Chrome (see §9 of
 
 ## Stack
 
-React 18 + Vite + TypeScript, Tailwind + shadcn-style components (Radix), TanStack Query,
-React Router 7 · Hono API in one Vercel Function (`api/[[...route]].ts`) · Drizzle ORM on Postgres
-(PGlite locally when `DATABASE_URL` is empty) · `@anthropic-ai/sdk` · Resend · Zod 4.
+React 19 + Vite 6 + TypeScript, Tailwind CSS 4 + the official shadcn/ui components (Radix),
+react-hook-form, TanStack Query 5, React Router 7 · Hono API in one Vercel Function
+(`api/[[...route]].ts`) with Hono RPC types shared to the browser · Drizzle ORM on Postgres (Neon;
+PGlite locally when `DATABASE_URL` is empty) · Zod 4 · `@anthropic-ai/sdk` · SignalHire and
+People Data Labs (optional) · Resend · Vercel Blob · Upstash QStash · Sentry · Vitest + Playwright.
 
 ## Commands
 
