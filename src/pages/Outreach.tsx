@@ -6,17 +6,56 @@ import { call, rpc } from "@/lib/rpc";
 import { cn, fmtDate } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { Avatar, Badge, DataTable, EmptyState, FilterChips, Spinner, Td, Th, useToast } from "@/components/kit";
+import type { OutreachMessage } from "@/lib/types";
+import { Avatar, Badge, DataTable, EmptyState, Field, FilterChips, Modal, Spinner, Td, Th, useToast } from "@/components/kit";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 
 const TONE: Record<string, "warn" | "good" | "bad" | "neutral" | "info"> = { queued: "warn", sent: "good", failed: "bad", cancelled: "neutral", approved: "info", awaiting_approval: "warn" };
 const FILTERS = [["queued", "Queued"], ["sent", "Sent"], ["failed", "Failed"], ["all", "All"]] as const;
 
+/** The email as the candidate gets it. While it is still queued, the subject and text can be changed. */
+function EmailPreview({ m, onClose, onSaved }: { m: OutreachMessage; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const [subject, setSubject] = useState(m.subject ?? "");
+  const [body, setBody] = useState(m.body);
+  const editable = m.status === "queued";
+  const dirty = subject !== (m.subject ?? "") || body !== m.body;
+  async function save() {
+    try {
+      await call(rpc.outreach[":id"].$patch({ param: { id: m.id }, json: { subject, body } }));
+      toast("Email updated.");
+      onSaved();
+    } catch (e) { toast((e as Error).message, "error"); }
+  }
+  return (
+    <Modal open onOpenChange={(o) => !o && onClose()} title={`Email to ${m.candidateName}`} description={m.toAddress}>
+      {editable ? (
+        <div className="grid gap-3">
+          <Field label="Subject" htmlFor="em-subject"><Input id="em-subject" value={subject} onChange={(e) => setSubject(e.target.value)} /></Field>
+          <Field label="Message" htmlFor="em-body"><Textarea id="em-body" rows={12} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>Close</Button>
+            <Button disabled={!dirty} onClick={save}>Save changes</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-2">
+          {m.subject && <p className="text-sm font-medium">{m.subject}</p>}
+          <p className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap rounded-lg bg-secondary/60 p-3 text-sm">{m.body}</p>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 export default function Outreach() {
   const qc = useQueryClient();
   const toast = useToast();
   const [picked, setFilter] = useState<(typeof FILTERS)[number][0] | null>(null);
+  const [open, setOpen] = useState<OutreachMessage | null>(null);
   const q = useQuery({ queryKey: ["outreach", "email"], queryFn: () => call(rpc.outreach.$get({ query: { channel: "email" } })) });
   const msgs = q.data?.messages ?? [];
   const count = (f: string) => (f === "all" ? msgs.length : msgs.filter((m) => m.status === f).length);
@@ -64,24 +103,25 @@ export default function Outreach() {
           <TableHeader><TableRow><Th>Candidate</Th><Th>Role</Th><Th>To</Th><Th>Status</Th><Th>Sent</Th><Th>Follow up</Th><Th /></TableRow></TableHeader>
           <TableBody>
             {rows.map((m) => (
-              <TableRow key={m.id}>
+              <TableRow key={m.id} className="cursor-pointer hover:bg-secondary/50" onClick={() => setOpen(m)}>
                 <Td>
                   <div className="flex items-center gap-2.5">
                     <Avatar name={m.candidateName} size="sm" />
                     <div><div className="font-medium">{m.candidateName}</div><div className="text-xs text-muted-foreground">#{m.rank ?? "–"} · {m.score ?? "–"}</div></div>
                   </div>
                 </Td>
-                <Td><Link className="hover:underline" to={`/roles/${m.requestId}`}>{m.roleTitle}</Link></Td>
+                <Td><Link className="hover:underline" to={`/roles/${m.requestId}`} onClick={(e) => e.stopPropagation()}>{m.roleTitle}</Link></Td>
                 <Td className="text-xs text-muted-foreground">{m.toAddress}</Td>
                 <Td><Badge tone={TONE[m.status] ?? "neutral"} className="capitalize">{m.status}</Badge></Td>
                 <Td className="num text-xs">{fmtDate(m.sentAt)}</Td>
                 <Td className="num text-xs">{fmtDate(m.followUpDate)}</Td>
-                <Td>{m.status === "queued" && <Button size="sm" variant="ghost" onClick={() => cancel(m.id)}>Cancel</Button>}</Td>
+                <Td onClick={(e) => e.stopPropagation()}>{m.status === "queued" && <Button size="sm" variant="ghost" onClick={() => cancel(m.id)}>Cancel</Button>}</Td>
               </TableRow>
             ))}
           </TableBody>
         </DataTable>
       ) : <EmptyState title={msgs.length ? "Nothing here" : "No emails yet"}>{msgs.length ? null : "Top 10 candidates with an email are contacted after each run."}</EmptyState>}
+      {open && <EmailPreview key={open.id} m={open} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); qc.invalidateQueries({ queryKey: ["outreach"] }); }} />}
     </>
   );
 }
