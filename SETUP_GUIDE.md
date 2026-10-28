@@ -129,6 +129,8 @@ Sentry then emails you when a page crashes, an API call fails, or a sourcing run
 
 SignalHire sends contact results back to the app automatically. This only works once `APP_URL` is your real `https://…vercel.app` address. Nothing else to configure.
 
+**Keep credits in reserve.** Settings → **SignalHire monthly credit limit** sets the most credits the app may spend in a calendar month (each contact found costs 1). Once the limit is reached, runs skip the remaining contacts and the Reveal button says the limit is used up. Leave it empty for no limit. On a small plan, also turn off **Reveal Top-10 contacts** while testing and reveal single people by hand.
+
 ---
 
 ## Daily and weekly automation
