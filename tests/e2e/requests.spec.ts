@@ -39,6 +39,20 @@ test("editing a draft shows the saved location", async ({ page }) => {
   await expect(page.getByLabel("Location", { exact: true }).locator("option:checked")).toHaveText("Athens, Greece");
 });
 
+test("salaries are per month unless the manager picks per year", async ({ page }) => {
+  await signInAs(page, "Manager");
+  await page.goto("/requests/new");
+  await expect(page.getByLabel("Per")).toHaveValue("month");
+  await page.getByLabel("Job title").fill("Salary Period Check");
+  await page.keyboard.press("Escape");
+  await page.getByLabel("Currency").selectOption("USD");
+  await page.getByLabel("Salary from").fill("2500");
+  await page.getByLabel("Salary to").fill("3000");
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page).toHaveURL(/\/requests\/[0-9a-f-]{36}$/);
+  await expect(page.getByText("/ month")).toBeVisible();
+});
+
 test("a submitted request shows its timeline with the next step", async ({ page }) => {
   await signInAs(page, "CEO approver");
   await page.getByRole("link", { name: /^Review R-\d+ / }).first().click();
