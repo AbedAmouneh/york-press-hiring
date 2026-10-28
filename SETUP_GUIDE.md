@@ -63,6 +63,7 @@ Add each key under **Vercel → Settings → Environment Variables**, then **Red
 | Service | Variable | Where to get it | What changes |
 |---|---|---|---|
 | Claude | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys | Real search briefs, scoring, personal lines, web search, CV scoring |
+| Claude through OpenCode (instead of the line above) | `OPENCODE_API_KEY` | opencode.ai/console → API keys (starts with `oc_sk_`) | The same, except web search and the half-price weekly batch scoring. Wins if both keys are set. Settings shows "Claude via OpenCode". |
 | People Data Labs (optional) | `PDL_API_KEY` | dashboard.peopledatalabs.com → API keys | A second candidate source with fuller profiles (dates, education). Without it, SignalHire alone is searched |
 | SignalHire | `SIGNALHIRE_API_KEY` | signalhire.com/apiIntegrations | Real search + contact reveal for the Top 10 |
 | Resend (email) | `RESEND_API_KEY` | resend.com → API keys | Emails really send |
