@@ -1,13 +1,11 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
 import { call, rpc } from "@/lib/rpc";
 import { can, useMe } from "@/lib/auth";
 import type { RequestRow } from "@/lib/types";
 import { fmtDate, money } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { RequestStatusBadge } from "@/components/Status";
-import { Button } from "@/components/ui/button";
 import { EmptyState, Spinner } from "@/components/kit";
 import { Card } from "@/components/ui/card";
 
@@ -58,14 +56,12 @@ export default function Requests({ scope }: { scope: "all" | "approvals" }) {
       <PageHeader
         eyebrow={scope === "approvals" ? "CEO approvals" : staff ? "All departments" : "Your requests"}
         title={scope === "approvals" ? (rows.length ? `${rows.length} request${rows.length > 1 ? "s" : ""} waiting for you` : "Nothing waiting for you") : staff ? "All requests" : "My requests"}
-      >
-        {canCreate && scope === "all" && <Button asChild><Link to="/requests/new"><Plus /> New request</Link></Button>}
-      </PageHeader>
+      />
       {q.isLoading ? <Spinner /> : rows.length ? (
         <div className="grid gap-3">{rows.map((r) => <RequestCard key={r.id} r={r} />)}</div>
       ) : (
         <EmptyState title={scope === "approvals" ? "All caught up" : "No requests yet"}>
-          {scope === "approvals" ? "New requests appear here and arrive by email." : canCreate ? "Start with “New request”." : null}
+          {scope === "approvals" ? "New requests appear here and arrive by email." : canCreate ? "Use New request at the top." : null}
         </EmptyState>
       )}
       {scope === "approvals" && !!decided.data?.requests.filter((r) => !["submitted", "draft"].includes(r.status)).length && (
