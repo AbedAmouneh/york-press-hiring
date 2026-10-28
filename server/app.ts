@@ -10,6 +10,7 @@ import { candidateRoutes } from "./routes/candidates.js";
 import { outreachRoutes } from "./routes/outreach.js";
 import { adminRoutes } from "./routes/admin.js";
 import { positionRoutes } from "./routes/positions.js";
+import { locationRoutes } from "./routes/locations.js";
 import { apiHeaders, noStore, sameOrigin } from "./security.js";
 
 // AppEnv so the error handler can read the signed-in user (unset on public routes).
@@ -35,7 +36,8 @@ const authed = new Hono<AppEnv>()
   .route("/", candidateRoutes)
   .route("/", outreachRoutes)
   .route("/", adminRoutes)
-  .route("/", positionRoutes);
+  .route("/", positionRoutes)
+  .route("/", locationRoutes);
 
 // Public routes first: their handlers answer before the sign-in check on `authed` runs.
 export const routes = app.route("/", publicRoutes).route("/", authed);
