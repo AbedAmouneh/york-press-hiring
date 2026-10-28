@@ -186,11 +186,11 @@ function TemplateEditor({ template, placeholders, onSaved }: { template: Templat
       <CardContent className="pt-5">
         <form onSubmit={save} className="grid gap-4" noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Name" htmlFor="tn" error={errors.name?.message}><Input id="tn" aria-invalid={!!errors.name} {...form.register("name")} /></Field>
+            <Field required label="Name" htmlFor="tn" error={errors.name?.message}><Input id="tn" aria-invalid={!!errors.name} {...form.register("name")} /></Field>
             <Field label="Used for" htmlFor="td"><Input id="td" value={template.department ?? "All departments (default)"} disabled readOnly /></Field>
           </div>
           {isEmail && <Field label="Subject" htmlFor="ts" error={errors.subject?.message}><Input id="ts" {...form.register("subject")} /></Field>}
-          <Field label={isEmail ? "Email body" : `LinkedIn note (${LINKEDIN_NOTE_MAX} characters max after filling in)`} htmlFor="tb" error={errors.body?.message}
+          <Field required label={isEmail ? "Email body" : `LinkedIn note (${LINKEDIN_NOTE_MAX} characters max after filling in)`} htmlFor="tb" error={errors.body?.message}
             hint={`Placeholders: ${placeholders.map((p) => `{{${p}}}`).join(" ")}. Claude writes only {{personal_line}}: one sentence about a fact on the candidate's profile.`}>
             <Textarea id="tb" rows={isEmail ? 16 : 5} className="font-mono text-[13px]" aria-invalid={!!errors.body} {...form.register("body")} />
           </Field>
