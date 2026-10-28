@@ -70,7 +70,8 @@ export const requestRoutes = new Hono<AppEnv>()
     const t = schema.roleRequests;
     let where = isStaff(user) ? undefined : or(eq(t.requesterId, user.id), eq(t.hiringManagerId, user.id));
     if (scope === "mine") where = eq(t.requesterId, user.id);
-    if (scope === "approvals") where = eq(t.status, "submitted");
+    // Approvals are the CEO's queue; anyone else only sees their own requests waiting there.
+    if (scope === "approvals") where = isStaff(user) ? eq(t.status, "submitted") : and(eq(t.status, "submitted"), or(eq(t.requesterId, user.id), eq(t.hiringManagerId, user.id)));
     if (scope === "roles") {
       const roleStatuses = inArray(t.status, ["sourcing", "open", "closed"]);
       where = isStaff(user) ? roleStatuses : and(roleStatuses, or(eq(t.requesterId, user.id), eq(t.hiringManagerId, user.id)));
