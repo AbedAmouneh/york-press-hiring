@@ -211,7 +211,7 @@ export default function RoleDetail() {
         <Stat label="Contacted" value={all.filter((c) => c.status !== "new").length} />
         <Stat label="HM yes" value={all.filter((c) => c.hmDecision === "yes").length} />
         <div className="ml-auto flex items-center gap-6">
-          <StageBar stage={stageOf({ status: r.status, stats: { contacted: all.filter((c) => c.status !== "new").length } })} />
+          <StageBar stage={stageOf({ status: r.status, stats: { contacted: all.filter((c) => c.status !== "new").length } })} closed={r.status === "closed"} />
           <div className="text-xs text-muted-foreground">Last run<div className="text-sm text-foreground">{lastRun ? fmtDate(lastRun.createdAt) : "–"}</div></div>
         </div>
       </Card>
