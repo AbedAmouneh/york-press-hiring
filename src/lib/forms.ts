@@ -1,7 +1,7 @@
 // Form schemas for react-hook-form. Each one keeps the browser's field shape (text inputs, one item
 // per line) and pipes into the shared API schema, so the browser enforces the same rules as the server.
 import { z } from "zod";
-import { ApplyFields, cvProblem, InvitePasswordInput, ManagerInvite, RequestInput, SetupInput } from "../../shared/schemas";
+import { ApplyFields, cvProblem, InvitePasswordInput, ManagerInvite, PositionInput, RequestInput, SetupInput } from "../../shared/schemas";
 
 /** "a\nb\n\nc" → ["a", "b", "c"] */
 export const lines = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
@@ -116,3 +116,34 @@ export const InviteForm = InvitePasswordInput.extend({ confirm: z.string() }).re
   message: "The passwords don't match.",
   path: ["confirm"],
 });
+
+// ---------------------------------------------------------------- saved positions (Settings)
+
+export const PositionFormFields = z.object({
+  title: z.string(),
+  department: z.string(),
+  seniority: z.string(),
+  mustHaves: z.string(),
+  niceToHaves: z.string(),
+  languages: z.string(),
+  minYears: z.string(),
+  idealYears: z.string(),
+  active: z.boolean(),
+});
+export type PositionFormValues = z.input<typeof PositionFormFields>;
+
+const toPositionInput = (f: PositionFormValues) => ({
+  title: f.title,
+  department: f.department,
+  seniority: f.seniority,
+  mustHaves: lines(f.mustHaves),
+  niceToHaves: lines(f.niceToHaves),
+  languages: csv(f.languages),
+  minYears: num(f.minYears),
+  idealYears: num(f.idealYears),
+  active: f.active,
+});
+
+export const PositionForm = PositionFormFields.superRefine((f, ctx) => {
+  validateWith(PositionInput, toPositionInput(f), ctx);
+}).transform((f) => PositionInput.parse(toPositionInput(f)));
