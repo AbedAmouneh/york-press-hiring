@@ -1,6 +1,7 @@
 // Validation rules shared by the API (request parsing) and the React forms (react-hook-form resolver).
 import { z } from "zod";
 import { CANDIDATE_STATUSES, CRITERIA, CURRENCIES, HM_DECISIONS, ROLES } from "./types.js";
+import { MESSAGE_MAX } from "./messages.js";
 
 const email = z.email("Enter a valid email address.");
 const password = z.string().min(10, "Use at least 10 characters.");
@@ -81,6 +82,10 @@ export const RequestPatch = z
     ) as { [K in keyof typeof RequestFields.shape]: z.ZodType<z.output<(typeof RequestFields.shape)[K]>> },
   )
   .partial();
+
+export const MessageInput = z.object({
+  body: z.string().trim().min(1, "Write a message first.").max(MESSAGE_MAX, `Keep the message under ${MESSAGE_MAX} characters.`),
+});
 
 /** Longest comment Khalil can leave on a decision. */
 export const COMMENT_MAX = 2000;
