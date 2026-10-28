@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, Badge, DeptDot, Field, FormError, Spinner, useToast } from "@/components/kit";
 import { COMMENT_MAX, DecisionInput } from "../../shared/schemas";
 import { Card } from "@/components/ui/card";
+import { Discussion } from "@/components/Discussion";
 import { Textarea } from "@/components/ui/textarea";
 
 function Chips({ items }: { items: string[] }) {
@@ -195,7 +196,11 @@ export default function RequestDetail() {
           )}
         </Card>
 
-        <div className="grid gap-5 lg:sticky lg:top-20">
+        <div className="lg:col-span-2 lg:row-start-2">
+          <Discussion requestId={r.id} meId={me.id} />
+        </div>
+
+        <div className="grid gap-5 lg:sticky lg:top-20 lg:col-start-3 lg:row-span-2 lg:row-start-1 lg:self-start">
           {isCeo && r.status === "submitted" && <DecisionForm requestId={r.id} />}
           <Timeline r={r} events={events} />
         </div>
