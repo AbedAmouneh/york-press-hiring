@@ -68,6 +68,10 @@ ok(id, "manager submitted a request");
 const ceo = client();
 await ceo("POST", "/auth/login", { email: "demo.ceo@york-press.test", password: "demo-york-2026" });
 ok((await ceo("GET", "/requests?scope=approvals")).requests.length === 1, "CEO sees it in approvals");
+const outsider = client();
+await outsider("POST", "/auth/login", { email: "demo.hm@york-press.test", password: "demo-york-2026" });
+ok((await outsider("GET", "/requests?scope=approvals")).requests.length === 0, "someone else's pending request stays out of other users' Approvals list");
+ok((await outsider("GET", "/requests?scope=mine")).requests.length === 0, "and out of their own list");
 await ceo("POST", `/requests/${id}/decision`, { action: "approve" });
 
 let status = "";
