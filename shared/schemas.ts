@@ -82,9 +82,12 @@ export const RequestPatch = z
   )
   .partial();
 
+/** Longest comment Khalil can leave on a decision. */
+export const COMMENT_MAX = 2000;
+
 export const DecisionInput = z.object({
   action: z.enum(["approve", "reject", "request_changes"]),
-  comment: z.string().trim().optional(),
+  comment: z.string().trim().max(COMMENT_MAX, `Keep the comment under ${COMMENT_MAX} characters.`).optional(),
 }).refine((d) => d.action === "approve" || !!d.comment, { message: "Add a comment so the manager knows why.", path: ["comment"] });
 
 export const WeightsInput = z
