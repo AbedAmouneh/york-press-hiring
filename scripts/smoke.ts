@@ -60,7 +60,8 @@ await manager("POST", "/auth/login", { email: "demo.manager@york-press.test", pa
 
 // ---------------------------------------------------------------- saved positions
 const starter = (await manager("GET", "/positions")).positions;
-ok(starter.some((p: any) => p.title === "Junior Editor" && p.department === "Editorial" && p.mustHaves.length === 3), `managers see ${starter.length} saved positions with suggested details`);
+const accountant = starter.find((p: any) => p.title === "Accountant");
+ok(starter.length === 29 && accountant?.seniority === "Entry" && accountant.jdText.includes("Accounting"), `managers see ${starter.length} saved positions with suggested details and a job description`);
 ok((await manager.raw("POST", "/positions", { title: "Sneaky", department: "Editorial", seniority: "Mid" })).status === 403, "managers can't change the list");
 const recruiter = client();
 await recruiter("POST", "/auth/login", { email: "demo.recruiter@york-press.test", password: "demo-york-2026" });
@@ -73,13 +74,29 @@ ok(renamed.mustHaves[0] === "Audio editing", "renaming keeps the suggested detai
 ok(!(await manager("GET", "/positions")).positions.some((p: any) => p.id === position.id), "hidden positions aren't offered to managers");
 await recruiter("DELETE", `/positions/${position.id}`);
 ok(!(await recruiter("GET", "/positions")).positions.some((p: any) => p.id === position.id), "a recruiter deleted it");
+
+// ---------------------------------------------------------------- hiring locations
+const places = (await manager("GET", "/locations")).locations;
+const lebanon = places.find((l: any) => l.name === "Zouk Mosbeh, Lebanon");
+ok(places.length === 11 && lebanon?.country === "Lebanon" && lebanon.workingHours.includes("Sat"), `managers see ${places.length} hiring locations`);
+ok((await manager.raw("POST", "/locations", { name: "Somewhere", country: "Nowhere" })).status === 403, "managers can't change the locations");
+const { location } = await recruiter("POST", "/locations", { name: "Riyadh, Saudi Arabia", country: "Saudi Arabia", city: "Riyadh", workArrangement: "Hybrid" });
+ok(location.workingHours === "" && location.active, "a recruiter added a location");
+ok((await recruiter.raw("POST", "/locations", { name: "riyadh, saudi arabia", country: "Saudi Arabia" })).status === 409, "the same location can't be added twice");
+await recruiter("PATCH", `/locations/${location.id}`, { workingHours: "Sun–Thu 8:00–16:00" });
+await recruiter("DELETE", `/locations/${location.id}`);
+ok(!(await recruiter("GET", "/locations")).locations.some((l: any) => l.id === location.id), "a recruiter edited and deleted it");
+const ghost = await manager.raw("POST", "/requests", { title: "Ghost role", department: "Finance", seniority: "Mid", locationId: location.id });
+ok(ghost.status === 400 && (await ghost.json()).error.includes("location no longer exists"), "a request can't point at a deleted location");
 const { id } = await manager("POST", "/requests?submit=true", {
   title: "Senior Product Designer", department: "Product & Technology", seniority: "Senior", headcount: 1,
   jdText: "Design York-E.", mustHaves: ["Figma", "Design systems", "User research"], niceToHaves: ["Edtech"], dealBreakers: [],
   minYears: 5, idealYears: 8, languages: ["English"], locationPolicy: "Remote, global", searchLocations: ["Lebanon"],
   salaryMin: 50000, salaryMax: 70000, currency: "USD", justification: "Needed for York-E.",
+  locationId: lebanon.id, workingHours: lebanon.workingHours,
 });
 ok(id, "manager submitted a request");
+ok((await manager("GET", `/requests/${id}`)).request.locationId === lebanon.id, "the request keeps its location");
 
 const ceo = client();
 await ceo("POST", "/auth/login", { email: "demo.ceo@york-press.test", password: "demo-york-2026" });
