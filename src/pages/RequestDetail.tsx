@@ -80,7 +80,8 @@ function DecisionForm({ requestId }: { requestId: string }) {
 
 /** Real events as done steps, plus the step the request is waiting on now. */
 function Timeline({ r, events }: { r: RequestRow; events: RequestEvent[] }) {
-  const done = events.filter((e) => e.action !== "edited").slice().reverse();
+  // Oldest first, so the timeline reads top to bottom and ends with the step it is waiting on.
+  const done = events.filter((e) => e.action !== "edited").slice().sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   const next = r.status === "submitted" ? "Waiting for Khalil" : r.status === "sourcing" ? "Finding candidates" : r.status === "changes_requested" ? "Waiting for changes" : r.status === "draft" ? "Not submitted yet" : null;
   return (
     <Card className="gap-3 p-5">
