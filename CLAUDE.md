@@ -81,6 +81,12 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   `src/lib/types.ts` derives screen types from the responses. Never hand-write a response type or
   use raw `fetch` for the API; keep routes chained or their types are lost.
 - `src/pages/`, `src/components/`: React screens. `scripts/smoke.ts`: API end-to-end test.
+- **Look and feel** (`docs/ui-redesign/brief.md`, approved screens in `docs/ui-redesign/screens/`): calm Asana-style
+  layout, coral (`--primary`) as the only action color, ink sidebar, York yellow in the logo only. Colors are tokens in
+  `src/index.css`; shared pieces (Avatar, DeptDot, Stat, FilterChips, ScoreBar, StageBar) live in `src/components/`.
+  Keep screens simple with little text: short labels, one main action, details in drawers or tabs. Everyone lands on
+  Home (`src/pages/Home.tsx`, logic in `src/lib/home.ts`), which only lists tasks built from real data. The LinkedIn
+  queue headings "Approved — ready to send" and "Needs your approval" are read by Cowork: don't rename them.
 - `tests/unit/`: Vitest. `tests/e2e/`: Playwright, signing in with the demo accounts.
 
 ## Rules the code must keep
