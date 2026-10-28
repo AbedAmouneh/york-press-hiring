@@ -87,6 +87,11 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   Keep screens simple with little text: short labels, one main action, details in drawers or tabs. Everyone lands on
   Home (`src/pages/Home.tsx`, logic in `src/lib/home.ts`), which only lists tasks built from real data. The LinkedIn
   queue headings "Approved — ready to send" and "Needs your approval" are read by Cowork: don't rename them.
+- **Discussion on a request** (`request_messages`, routes in `server/routes/requests.ts`, `src/components/Discussion.tsx`,
+  rules in `shared/messages.ts`): everyone who can open the request reads and posts; new messages notify the requester,
+  hiring manager, assigned recruiter, the CEO and earlier posters (in the app and by email), filtered to people who can
+  still open the request. Authors can delete a message for 15 minutes; 2,000 characters max; 20 messages per user per
+  10 minutes. Messages on closed or rejected requests are removed by retention after 24 months.
 - `tests/unit/`: Vitest. `tests/e2e/`: Playwright, signing in with the demo accounts.
 
 ## Rules the code must keep
