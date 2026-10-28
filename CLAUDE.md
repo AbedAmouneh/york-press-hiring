@@ -112,7 +112,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 - **Outreach:** template only (Claude writes one personal line). Respect the kill switch and the
   daily cap. Every email states where the contact details came from. LinkedIn is approval-gated.
 - **Contacts:** SignalHire reveals only for the Top 10 (or a recruiter's manual click). Store the
-  source and retrieval date. Opt-outs and closed roles can delete emails and phones.
+  source and retrieval date. Opt-outs and closed roles can delete emails and phones. Every reveal
+  path checks `signalhireBudget()` (`server/services/credit-budget.ts`) so the monthly limit in
+  Settings is never passed; pending reveals hold a credit for 24 hours. Sample data is never limited.
 - **Retention** (`server/services/retention.ts`, daily cron): data untouched for 24 months is
   deleted. A new table holding personal data must be added there, with a test in
   `tests/unit/retention.test.ts`. Never delete the do-not-contact list.
