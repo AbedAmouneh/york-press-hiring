@@ -18,7 +18,7 @@ type Scored = import("../evals/scoring/checks.js").Scored;
 type CheckResult = import("../evals/scoring/checks.js").CheckResult;
 
 if (mock.claude) {
-  console.log("ANTHROPIC_API_KEY is not set, so there is nothing to evaluate (mock scores are random). Skipping.");
+  console.log("Neither OPENCODE_API_KEY nor ANTHROPIC_API_KEY is set, so there is nothing to evaluate (mock scores are random). Skipping.");
   process.exit(0);
 }
 
