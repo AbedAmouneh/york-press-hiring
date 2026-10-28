@@ -1,0 +1,1 @@
+ALTER TABLE "role_requests" ALTER COLUMN "salary_period" SET DEFAULT 'month';
