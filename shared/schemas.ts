@@ -53,7 +53,7 @@ export const RequestFields = z.object({
   salaryMin: z.coerce.number<number | string>().int().min(0).nullable().optional(),
   salaryMax: z.coerce.number<number | string>().int().min(0).nullable().optional(),
   currency: z.enum(CURRENCIES, "Choose a currency.").nullable().optional(),
-  salaryPeriod: z.enum(["year", "month"]).default("year"),
+  salaryPeriod: z.enum(["year", "month"]).default("month"),
   justification: z.string().default(""),
   targetCompanies: list,
   avoidCompanies: list,
