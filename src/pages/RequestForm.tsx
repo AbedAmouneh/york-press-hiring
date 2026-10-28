@@ -184,7 +184,7 @@ export default function RequestForm() {
   return (
     <>
       <PageHeader eyebrow={id ? existing.data?.request.code : undefined} title={id ? "Edit request" : "New request"} />
-      {returned?.comment && <p className="mb-4 rounded-lg border-l-[3px] border-chip-amber bg-chip-amber/15 px-3 py-2 text-sm"><b>{returned.actorName}:</b> {returned.comment}</p>}
+      {returned?.comment && <p dir="auto" className="mb-4 rounded-lg border-l-[3px] border-chip-amber bg-chip-amber/15 px-3 py-2 text-sm whitespace-pre-line break-words"><b>{returned.actorName}:</b> {returned.comment}</p>}
       <form className="grid items-start gap-5 lg:grid-cols-3" onSubmit={form.handleSubmit((vals) => save(vals, true))} noValidate>
         <div className="grid gap-5 lg:col-span-2">
           {/* overflow-visible so the job title list can open past the card's edge */}
