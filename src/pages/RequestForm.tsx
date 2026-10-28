@@ -18,7 +18,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/Combobox";
 import { PositionPicker } from "@/components/PositionPicker";
 import { yearsLabel } from "@/lib/positions";
-import { Check, Undo2 } from "lucide-react";
+import { Check, Circle, CircleCheck, Undo2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+/** Small numbered circle in front of a section title. */
+const Step = ({ n }: { n: number }) => <span className="mr-2 inline-grid size-5 place-items-center rounded-full bg-secondary text-xs font-semibold text-muted-foreground">{n}</span>;
 
 const EMPTY: RequestFormValues = {
   title: "", department: DEPARTMENTS[0], seniority: "Mid", headcount: "1", startDate: "", kind: "new", jdText: "",
@@ -148,102 +152,141 @@ export default function RequestForm() {
   if (id && existing.isLoading) return <Spinner />;
   const returned = existing.data?.request.status === "changes_requested" ? existing.data.request.lastEvent : null;
 
+  const v = form.watch();
+  const location = locations.data?.locations.find((l) => l.id === v.locationId);
+  const checks: [string, boolean][] = [
+    ["Job title", !!v.title.trim()],
+    ["Location", !!v.locationId],
+    ["Must-haves", !!v.mustHaves.trim()],
+    ["Budget", !!v.currency && !!(v.salaryMin || v.salaryMax)],
+    ["Why it's needed", !!v.justification.trim()],
+  ];
+  const ready = checks.filter(([, ok]) => ok).length;
+  const moreHasError = (["locationPolicy", "searchLocations", "timeZone", "workingHours", "targetCompanies", "avoidCompanies"] as const).some((k) => errors[k]);
+
   return (
     <>
-      <PageHeader eyebrow={id ? existing.data?.request.code : "New position"} title={id ? "Edit request" : "Request a new position"} />
-      {returned?.comment && <p className="mb-4 rounded-r border-l-[3px] border-warning bg-amber-50 px-3 py-2 text-sm"><b>{returned.actorName}:</b> {returned.comment}</p>}
-      <form className="grid gap-5" onSubmit={form.handleSubmit((v) => save(v, true))} noValidate>
-        {/* overflow-visible so the job title list can open past the card's edge */}
-        <Card className="overflow-visible">
-          <CardHeader><CardTitle>Basics</CardTitle></CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-3">
-            <Field label="Job title" htmlFor="title" className="sm:col-span-2" error={errors.title?.message}
-              hint={suggested ? undefined : "Pick a position York Press hires for often, or type a new title."}>
-              <Controller control={form.control} name="title" render={({ field }) => (
-                <PositionPicker id="title" value={field.value} onBlur={field.onBlur} invalid={!!errors.title}
-                  positions={positions.data?.positions ?? []}
-                  onChange={(v) => { field.onChange(v); if (suggested && v !== suggested.position.title) setSuggested(null); }}
-                  onPick={suggest} />
-              )} />
-              {suggested && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs" role="status">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-foreground/80">
-                    {[suggested.position.department, suggested.position.seniority, yearsLabel(suggested.position)].filter(Boolean).join(" · ")}
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-muted-foreground" title={suggested.fields.length ? `Suggested: ${suggested.fields.join(", ")}` : undefined}>
-                    {suggested.fields.length
-                      ? <><Check className="h-3.5 w-3.5 text-success" /> {suggested.fields.length} {suggested.fields.length === 1 ? "detail" : "details"} suggested below. Change anything you like.</>
-                      : <>Saved position. Your own details were kept.</>}
-                  </span>
-                  {suggested.fields.length > 0 && (
-                    <button type="button" onClick={undoSuggestions} className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline">
-                      <Undo2 className="h-3.5 w-3.5" /> Undo suggestions
-                    </button>
-                  )}
+      <PageHeader eyebrow={id ? existing.data?.request.code : undefined} title={id ? "Edit request" : "New request"} />
+      {returned?.comment && <p className="mb-4 rounded-lg border-l-[3px] border-chip-amber bg-chip-amber/15 px-3 py-2 text-sm"><b>{returned.actorName}:</b> {returned.comment}</p>}
+      <form className="grid items-start gap-5 lg:grid-cols-3" onSubmit={form.handleSubmit((vals) => save(vals, true))} noValidate>
+        <div className="grid gap-5 lg:col-span-2">
+          {/* overflow-visible so the job title list can open past the card's edge */}
+          <Card className="overflow-visible">
+            <CardHeader><CardTitle><Step n={1} /> Basics</CardTitle></CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <Field label="Job title" htmlFor="title" className="sm:col-span-2" error={errors.title?.message}>
+                <Controller control={form.control} name="title" render={({ field }) => (
+                  <PositionPicker id="title" value={field.value} onBlur={field.onBlur} invalid={!!errors.title}
+                    positions={positions.data?.positions ?? []}
+                    onChange={(val) => { field.onChange(val); if (suggested && val !== suggested.position.title) setSuggested(null); }}
+                    onPick={suggest} />
+                )} />
+                {suggested && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs" role="status">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-foreground/80">
+                      {[suggested.position.department, suggested.position.seniority, yearsLabel(suggested.position)].filter(Boolean).join(" · ")}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-muted-foreground" title={suggested.fields.length ? `Suggested: ${suggested.fields.join(", ")}` : undefined}>
+                      {suggested.fields.length
+                        ? <><Check className="size-3.5 text-success" /> {suggested.fields.length} {suggested.fields.length === 1 ? "detail" : "details"} suggested below</>
+                        : <>Your own details were kept</>}
+                    </span>
+                    {suggested.fields.length > 0 && (
+                      <button type="button" onClick={undoSuggestions} className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline">
+                        <Undo2 className="size-3.5" /> Undo suggestions
+                      </button>
+                    )}
+                  </div>
+                )}
+              </Field>
+              <Field label="Department" htmlFor="dept" error={errors.department?.message}><Select id="dept" {...reg("department")}>{withCurrent(DEPARTMENTS, form.watch("department")).map((d) => <option key={d}>{d}</option>)}</Select></Field>
+              <Field label="Location" htmlFor="loc-id" error={errors.locationId?.message} hint={location ? v.workingHours || undefined : undefined}>
+                <Select id="loc-id" aria-invalid={!!errors.locationId} {...form.register("locationId", { onChange: (e) => pickLocation(e.target.value) })}>
+                  <option value="">Choose…</option>
+                  {locations.data?.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Seniority" htmlFor="sen" error={errors.seniority?.message}>
+                <Controller control={form.control} name="seniority" render={({ field }) => (
+                  <Combobox id="sen" value={field.value} onChange={field.onChange} onBlur={field.onBlur} invalid={!!errors.seniority}
+                    listLabel="Levels" options={SENIORITIES.map((s) => ({ id: s, label: s }))} />
+                )} />
+              </Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Headcount" htmlFor="hc" error={errors.headcount?.message}><Input id="hc" type="number" min={1} {...reg("headcount")} /></Field>
+                <Field label="Type" htmlFor="kind"><Select id="kind" {...reg("kind")}><option value="new">New role</option><option value="backfill">Backfill</option></Select></Field>
+              </div>
+              <Field label="Target start date" htmlFor="sd" error={errors.startDate?.message}><Input id="sd" type="date" {...reg("startDate")} /></Field>
+              <Field label="Hiring manager" htmlFor="hm" error={errors.hiringManagerId?.message}>
+                <Select id="hm" {...reg("hiringManagerId")}>
+                  <option value="">Me</option>
+                  {people.data?.users.filter((u) => u.id !== me.id).map((u) => <option key={u.id} value={u.id}>{u.name}{u.department ? ` · ${u.department}` : ""}</option>)}
+                </Select>
+              </Field>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle><Step n={2} /> Job description</CardTitle></CardHeader>
+            <CardContent><Textarea rows={7} placeholder="Paste or write the job description" aria-label="Job description" {...reg("jdText")} /></CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle><Step n={3} /> Requirements</CardTitle></CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-3">
+              <Field label="Must-haves" hint="One per line" htmlFor="must" error={errors.mustHaves?.message}><Textarea id="must" rows={5} {...reg("mustHaves")} /></Field>
+              <Field label="Nice-to-haves" hint="One per line" htmlFor="nice" error={errors.niceToHaves?.message}><Textarea id="nice" rows={5} {...reg("niceToHaves")} /></Field>
+              <Field label="Deal-breakers" hint="Caps the score at 40" htmlFor="deal" error={errors.dealBreakers?.message}><Textarea id="deal" rows={5} {...reg("dealBreakers")} /></Field>
+              <Field label="Minimum years" htmlFor="miny" error={errors.minYears?.message}><Input id="miny" inputMode="numeric" {...reg("minYears")} /></Field>
+              <Field label="Ideal years" htmlFor="idy" error={errors.idealYears?.message}><Input id="idy" inputMode="numeric" {...reg("idealYears")} /></Field>
+              <Field label="Languages" htmlFor="lang" error={errors.languages?.message}><Input id="lang" {...reg("languages")} /></Field>
+              <details className="group sm:col-span-3" open={moreHasError || undefined}>
+                <summary className="cursor-pointer select-none text-sm font-medium text-muted-foreground hover:text-foreground">More details</summary>
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  <Field label="Location policy" htmlFor="loc" error={errors.locationPolicy?.message}><Input id="loc" placeholder="On-site, Zouk Mosbeh" {...reg("locationPolicy")} /></Field>
+                  <Field label="Search in countries" hint="Empty means global" htmlFor="sl" error={errors.searchLocations?.message}><Input id="sl" {...reg("searchLocations")} /></Field>
+                  <Field label="Working hours" htmlFor="wh" error={errors.workingHours?.message}><Input id="wh" {...reg("workingHours")} /></Field>
+                  <Field label="Time-zone overlap" htmlFor="tz" error={errors.timeZone?.message}><Input id="tz" placeholder="4 hours with GMT+2" {...reg("timeZone")} /></Field>
+                  <Field label="Target companies" htmlFor="tc" error={errors.targetCompanies?.message}><Input id="tc" {...reg("targetCompanies")} /></Field>
+                  <Field label="Companies to avoid" hint="York Press is always excluded" htmlFor="ac" error={errors.avoidCompanies?.message}><Input id="ac" {...reg("avoidCompanies")} /></Field>
                 </div>
-              )}
-            </Field>
-            <Field label="Department" htmlFor="dept" error={errors.department?.message}><Select id="dept" {...reg("department")}>{withCurrent(DEPARTMENTS, form.watch("department")).map((d) => <option key={d}>{d}</option>)}</Select></Field>
-            <Field label="Location" htmlFor="loc-id" error={errors.locationId?.message} hint="Where this person will work. Ask a recruiter to add a missing one.">
-              <Select id="loc-id" aria-invalid={!!errors.locationId} {...form.register("locationId", { onChange: (e) => pickLocation(e.target.value) })}>
-                <option value="">Choose…</option>
-                {locations.data?.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </Select>
-            </Field>
-            <Field label="Seniority" htmlFor="sen" error={errors.seniority?.message}>
-              <Controller control={form.control} name="seniority" render={({ field }) => (
-                <Combobox id="sen" value={field.value} onChange={field.onChange} onBlur={field.onBlur} invalid={!!errors.seniority}
-                  listLabel="Levels" options={SENIORITIES.map((s) => ({ id: s, label: s }))} />
-              )} />
-            </Field>
-            <Field label="Headcount" htmlFor="hc" error={errors.headcount?.message}><Input id="hc" type="number" min={1} {...reg("headcount")} /></Field>
-            <Field label="Target start date" htmlFor="sd" error={errors.startDate?.message}><Input id="sd" type="date" {...reg("startDate")} /></Field>
-            <Field label="Type" htmlFor="kind"><Select id="kind" {...reg("kind")}><option value="new">New role</option><option value="backfill">Backfill</option></Select></Field>
-            <Field label="Hiring manager" htmlFor="hm" className="sm:col-span-2" error={errors.hiringManagerId?.message}>
-              <Select id="hm" {...reg("hiringManagerId")}>
-                <option value="">Me</option>
-                {people.data?.users.filter((u) => u.id !== me.id).map((u) => <option key={u.id} value={u.id}>{u.name}{u.department ? ` · ${u.department}` : ""}</option>)}
-              </Select>
-            </Field>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Job description</CardTitle></CardHeader>
-          <CardContent><Textarea rows={7} placeholder="Paste the job description" aria-label="Job description" {...reg("jdText")} /></CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Requirements</CardTitle></CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-3">
-            <Field label="Must-haves" hint="One per line. These carry 35% of the score." htmlFor="must" error={errors.mustHaves?.message}><Textarea id="must" rows={5} {...reg("mustHaves")} /></Field>
-            <Field label="Nice-to-haves" hint="One per line." htmlFor="nice" error={errors.niceToHaves?.message}><Textarea id="nice" rows={5} {...reg("niceToHaves")} /></Field>
-            <Field label="Deal-breakers" hint="Missing one caps the score at 40." htmlFor="deal" error={errors.dealBreakers?.message}><Textarea id="deal" rows={5} {...reg("dealBreakers")} /></Field>
-            <Field label="Minimum years" htmlFor="miny" error={errors.minYears?.message}><Input id="miny" inputMode="numeric" {...reg("minYears")} /></Field>
-            <Field label="Ideal years" htmlFor="idy" error={errors.idealYears?.message}><Input id="idy" inputMode="numeric" {...reg("idealYears")} /></Field>
-            <Field label="Languages" hint="Comma-separated." htmlFor="lang" error={errors.languages?.message}><Input id="lang" {...reg("languages")} /></Field>
-            <Field label="Location policy" htmlFor="loc" error={errors.locationPolicy?.message}><Input id="loc" placeholder="On-site, Zouk Mosbeh, Lebanon" {...reg("locationPolicy")} /></Field>
-            <Field label="Search in countries" hint="Comma-separated, e.g. Lebanon, Jordan. Empty = global." htmlFor="sl" error={errors.searchLocations?.message}><Input id="sl" {...reg("searchLocations")} /></Field>
-            <Field label="Time-zone overlap" htmlFor="tz" error={errors.timeZone?.message}><Input id="tz" placeholder="At least 4 hours with GMT+2" {...reg("timeZone")} /></Field>
-            <Field label="Working hours" htmlFor="wh" error={errors.workingHours?.message}><Input id="wh" placeholder="Mon–Fri 8:00–17:00" {...reg("workingHours")} /></Field>
-            <Field label="Target companies" hint="Comma-separated." htmlFor="tc" error={errors.targetCompanies?.message}><Input id="tc" {...reg("targetCompanies")} /></Field>
-            <Field label="Companies to avoid" hint="York Press is always excluded." htmlFor="ac" className="sm:col-span-2" error={errors.avoidCompanies?.message}><Input id="ac" {...reg("avoidCompanies")} /></Field>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Budget</CardTitle></CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-4">
-            <Field label="Currency" htmlFor="cur" error={errors.currency?.message}><Select id="cur" {...reg("currency")}><option value="">Choose…</option>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
-            <Field label="Salary from" htmlFor="smin" error={errors.salaryMin?.message}><Input id="smin" inputMode="numeric" {...reg("salaryMin")} /></Field>
-            <Field label="Salary to" htmlFor="smax" error={errors.salaryMax?.message}><Input id="smax" inputMode="numeric" {...reg("salaryMax")} /></Field>
-            <Field label="Per" htmlFor="per"><Select id="per" {...reg("salaryPeriod")}><option value="year">Year</option><option value="month">Month</option></Select></Field>
-            <Field label="Business justification for Khalil" htmlFor="just" className="sm:col-span-4" error={errors.justification?.message}><Textarea id="just" {...reg("justification")} /></Field>
-          </CardContent>
-        </Card>
-        <FormError>{errors.root?.message}</FormError>
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={isSubmitting}>Submit to Khalil</Button>
-          <Button type="button" variant="outline" disabled={isSubmitting} onClick={form.handleSubmit((v) => save(v, false))}>Save draft</Button>
-          <Button type="button" variant="ghost" onClick={() => nav(-1)}>Cancel</Button>
+              </details>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle><Step n={4} /> Budget and reason</CardTitle></CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-4">
+              <Field label="Currency" htmlFor="cur" error={errors.currency?.message}><Select id="cur" {...reg("currency")}><option value="">Choose…</option>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
+              <Field label="Salary from" htmlFor="smin" error={errors.salaryMin?.message}><Input id="smin" inputMode="numeric" {...reg("salaryMin")} /></Field>
+              <Field label="Salary to" htmlFor="smax" error={errors.salaryMax?.message}><Input id="smax" inputMode="numeric" {...reg("salaryMax")} /></Field>
+              <Field label="Per" htmlFor="per"><Select id="per" {...reg("salaryPeriod")}><option value="year">Year</option><option value="month">Month</option></Select></Field>
+              <Field label="Business justification for Khalil" htmlFor="just" className="sm:col-span-4" error={errors.justification?.message}><Textarea id="just" {...reg("justification")} /></Field>
+            </CardContent>
+          </Card>
         </div>
+
+        <Card className="gap-4 p-5 lg:sticky lg:top-20">
+          <div>
+            <div className="text-xs text-muted-foreground">Summary</div>
+            <div className="font-semibold">{v.title || "Untitled position"}</div>
+            <div className="text-sm text-muted-foreground">{[v.department, v.seniority, location?.name].filter(Boolean).join(" · ")}</div>
+          </div>
+          <div>
+            <div className="mb-1.5 flex justify-between text-xs text-muted-foreground"><span>Ready to submit</span><span className="num">{ready}/{checks.length}</span></div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(ready / checks.length) * 100}%` }} /></div>
+            <ul className="mt-3 grid gap-1.5 text-sm">
+              {checks.map(([label, ok]) => (
+                <li key={label} className={cn("flex items-center gap-2", ok ? "text-foreground" : "text-muted-foreground")}>
+                  {ok ? <CircleCheck className="size-4 text-success" /> : <Circle className="size-4" />}{label}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <FormError>{errors.root?.message}</FormError>
+          <div className="grid gap-2">
+            <Button type="submit" disabled={isSubmitting}>Submit to Khalil</Button>
+            <Button type="button" variant="outline" disabled={isSubmitting} onClick={form.handleSubmit((vals) => save(vals, false))}>Save draft</Button>
+            <Button type="button" variant="ghost" onClick={() => nav(-1)}>Cancel</Button>
+          </div>
+        </Card>
       </form>
     </>
   );
