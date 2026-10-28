@@ -119,8 +119,14 @@ export async function drainEmailQueue() {
   let sent = 0, failed = 0;
   for (const m of queued.slice(0, Math.max(0, room))) {
     const [sender] = m.senderId ? await db.select().from(schema.users).where(eq(schema.users.id, m.senderId)) : [];
+    const [person] = await db
+      .select({ isSample: schema.candidates.isSample })
+      .from(schema.roleCandidates)
+      .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
+      .where(eq(schema.roleCandidates.id, m.roleCandidateId));
     const res = await sendEmail({
       kind: "outreach",
+      outboxOnly: person?.isSample ?? false,
       to: m.toAddress,
       subject: m.subject ?? "York Press",
       text: m.body,
