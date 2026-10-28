@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  type AnyPgColumn,
   jsonb,
   pgTable,
   real,
@@ -72,6 +73,8 @@ export const roleRequests = pgTable("role_requests", {
   justification: text("justification").notNull().default(""),
   targetCompanies: text("target_companies").array().notNull().default(sql`'{}'::text[]`),
   avoidCompanies: text("avoid_companies").array().notNull().default(sql`'{}'::text[]`),
+  locationId: uuid("location_id").references((): AnyPgColumn => locations.id, { onDelete: "set null" }),
+  workingHours: text("working_hours"),
   requesterId: uuid("requester_id").notNull().references(() => users.id),
   hiringManagerId: uuid("hiring_manager_id").references(() => users.id),
   recruiterId: uuid("recruiter_id").references(() => users.id),
@@ -236,10 +239,24 @@ export const positions = pgTable("positions", {
   languages: text("languages").array().notNull().default(sql`'{}'::text[]`),
   minYears: integer("min_years"),
   idealYears: integer("ideal_years"),
+  jdText: text("jd_text").notNull().default(""),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 }, (t) => [uniqueIndex("positions_title_idx").on(sql`lower(${t.title})`)]);
+
+/** Places York Press hires for (an office city or a country). Picking one fills a request's arrangement, hours and search country. */
+export const locations = pgTable("locations", {
+  id: id(),
+  name: text("name").notNull(), // e.g. "Zouk Mosbeh, Lebanon"
+  country: text("country").notNull(),
+  city: text("city"),
+  workArrangement: text("work_arrangement").notNull().default("On-site"),
+  workingHours: text("working_hours").notNull().default(""),
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("locations_name_idx").on(sql`lower(${t.name})`)]);
 
 export const outreachMessages = pgTable("outreach_messages", {
   id: id(),
