@@ -117,7 +117,12 @@ export function PositionPicker({ id, value, positions, onChange, onPick, onBlur,
         placeholder={`Search ${positions.length} saved positions or type a new title`}
         className="pr-9 pl-8"
         value={value}
-        onChange={(e) => { onChange(e.target.value); show(e.target.value); }}
+        onChange={(e) => {
+          onChange(e.target.value);
+          show(e.target.value);
+          // While typing, the best match is highlighted so Enter picks it (Escape keeps the typed text).
+          if (e.target.value.trim()) setActive(0);
+        }}
         onFocus={() => !open && reopen()}
         onClick={() => !open && reopen()}
       />
