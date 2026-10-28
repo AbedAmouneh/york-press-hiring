@@ -105,9 +105,9 @@ function PositionEditor({ position, onDone }: { position: Position | null; onDon
         <DialogDescription>These details are suggestions on the request form. Managers can change them.</DialogDescription>
       </DialogHeader>
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Job title" htmlFor="p-title" className="sm:col-span-3" error={errors.title?.message}><Input id="p-title" {...reg("title")} /></Field>
-        <Field label="Department" htmlFor="p-dept" error={errors.department?.message}><Select id="p-dept" {...reg("department")}>{[...new Set([...DEPARTMENTS, form.watch("department")])].filter(Boolean).map((d) => <option key={d}>{d}</option>)}</Select></Field>
-        <Field label="Seniority" htmlFor="p-sen" error={errors.seniority?.message}>
+        <Field required label="Job title" htmlFor="p-title" className="sm:col-span-3" error={errors.title?.message}><Input id="p-title" {...reg("title")} /></Field>
+        <Field required label="Department" htmlFor="p-dept" error={errors.department?.message}><Select id="p-dept" {...reg("department")}>{[...new Set([...DEPARTMENTS, form.watch("department")])].filter(Boolean).map((d) => <option key={d}>{d}</option>)}</Select></Field>
+        <Field required label="Seniority" htmlFor="p-sen" error={errors.seniority?.message}>
           <Controller control={form.control} name="seniority" render={({ field }) => (
             <Combobox id="p-sen" value={field.value} onChange={field.onChange} onBlur={field.onBlur} invalid={!!errors.seniority}
               listLabel="Levels" options={SENIORITIES.map((s) => ({ id: s, label: s }))} />
