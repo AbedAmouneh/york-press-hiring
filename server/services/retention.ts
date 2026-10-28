@@ -9,6 +9,7 @@ export const RETENTION_MONTHS = 24;
 /** Bound each daily run so it fits comfortably in one function call; the rest goes next day. */
 const BATCH = 500;
 const ACTIVE_ROLE: RequestStatus[] = ["sourcing", "open"];
+const FINISHED: RequestStatus[] = ["closed", "rejected"];
 
 export function retentionCutoff(now = new Date()) {
   const d = new Date(now);
@@ -49,19 +50,32 @@ function staleApplications(db: DB, cutoff: Date) {
     .limit(BATCH);
 }
 
-export type RetentionCounts = { candidates: number; applications: number; emailLog: number; notifications: number };
+/** Discussion messages older than the cutoff on requests that are finished (closed or rejected). */
+function staleMessages(db: DB, cutoff: Date) {
+  const m = schema.requestMessages;
+  const r = schema.roleRequests;
+  return db
+    .select({ id: m.id })
+    .from(m)
+    .innerJoin(r, eq(r.id, m.requestId))
+    .where(and(lt(m.createdAt, cutoff), inArray(r.status, FINISHED)))
+    .limit(BATCH);
+}
+
+export type RetentionCounts = { candidates: number; applications: number; emailLog: number; notifications: number; messages: number };
 
 /** What the next run would delete, without deleting anything (shown in Settings). */
 export async function previewRetention(now = new Date()): Promise<RetentionCounts & { cutoff: string }> {
   const db = await getDb();
   const cutoff = retentionCutoff(now);
-  const [candidates, applications, [emails], [notes]] = await Promise.all([
+  const [candidates, applications, messages, [emails], [notes]] = await Promise.all([
     staleCandidates(db, cutoff),
     staleApplications(db, cutoff),
+    staleMessages(db, cutoff),
     db.select({ n: sql<number>`count(*)::int` }).from(schema.emailLog).where(lt(schema.emailLog.createdAt, cutoff)),
     db.select({ n: sql<number>`count(*)::int` }).from(schema.notifications).where(lt(schema.notifications.createdAt, cutoff)),
   ]);
-  return { cutoff: cutoff.toISOString(), candidates: candidates.length, applications: applications.length, emailLog: emails.n, notifications: notes.n };
+  return { cutoff: cutoff.toISOString(), candidates: candidates.length, applications: applications.length, emailLog: emails.n, notifications: notes.n, messages: messages.length };
 }
 
 export async function runRetention(now = new Date()): Promise<RetentionCounts> {
@@ -82,5 +96,9 @@ export async function runRetention(now = new Date()): Promise<RetentionCounts> {
   const emails = await db.delete(schema.emailLog).where(lt(schema.emailLog.createdAt, cutoff)).returning({ id: schema.emailLog.id });
   const notes = await db.delete(schema.notifications).where(lt(schema.notifications.createdAt, cutoff)).returning({ id: schema.notifications.id });
 
-  return { candidates: people.length, applications: apps.length, emailLog: emails.length, notifications: notes.length };
+  // Discussions on finished requests name the people who took part.
+  const oldMessages = await staleMessages(db, cutoff);
+  if (oldMessages.length) await db.delete(schema.requestMessages).where(inArray(schema.requestMessages.id, oldMessages.map((x) => x.id)));
+
+  return { candidates: people.length, applications: apps.length, emailLog: emails.length, notifications: notes.length, messages: oldMessages.length };
 }
