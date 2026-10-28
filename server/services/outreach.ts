@@ -6,6 +6,7 @@ import { applyLink, dataSourcePhrase, fillTemplate, templateFor } from "./templa
 import { personalLine } from "./claude.js";
 import { addBusinessDays, localDate, startOfLocalDay } from "./dates.js";
 import { toAI, toReq } from "./mappers.js";
+import { midSentence } from "./wording.js";
 
 export async function isSuppressed(c: { id: string; email: string | null; linkedinUrl: string | null }) {
   const db = await getDb();
@@ -65,7 +66,7 @@ export async function queueOutreach(requestId: string, roleCandidateIds: string[
       first_name: c.fullName.split(" ")[0],
       role_title: request.title,
       personal_line: line,
-      location_policy: request.locationPolicy.toLowerCase(),
+      location_policy: midSentence(request.locationPolicy),
       apply_link: applyLink(request.applyToken),
       data_source: dataSourcePhrase(c.contactSource),
       recruiter_name: sender?.name ?? "The York Press talent team",
