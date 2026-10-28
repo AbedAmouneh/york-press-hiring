@@ -1,55 +1,5 @@
 {
   "version": "7",
   "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1793100628366,
-      "tag": "0000_init",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1793110145422,
-      "tag": "0001_rate-limit-hits",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1793110598994,
-      "tag": "0002_cv-blob-path",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1793111588477,
-      "tag": "0003_usage-cache-tokens",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1793112594854,
-      "tag": "0004_two-factor",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1793180407928,
-      "tag": "0005_positions",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1793180526515,
-      "tag": "0006_starter-positions",
-      "breakpoints": true
-    }
-  ]
+  "entries": []
 }
