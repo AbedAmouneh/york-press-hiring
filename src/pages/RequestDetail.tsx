@@ -118,6 +118,7 @@ export default function RequestDetail() {
               <Row k="Target start">{fmtDate(r.startDate)}</Row>
               <Row k="Location">{r.locationPolicy}{r.searchLocations.length ? ` · searching ${r.searchLocations.join(", ")}` : ""}</Row>
               <Row k="Time zone">{r.timeZone || "Flexible"}</Row>
+              <Row k="Working hours">{r.workingHours || "—"}</Row>
               <Row k="Languages">{r.languages.join(", ") || "—"}</Row>
               <Row k="Salary">{money(r.salaryMin, r.salaryMax, r.currency, r.salaryPeriod)}</Row>
               <Row k="Requested by">{r.requesterName}</Row>
