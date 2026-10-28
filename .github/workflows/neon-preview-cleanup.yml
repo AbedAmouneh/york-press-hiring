@@ -1,0 +1,59 @@
+name: Clean up preview databases
+
+# Every pull request gets its own Neon database branch named preview/<git branch>, and the free plan
+# allows 10 branches. This deletes a pull request's branch when it is merged or closed, and once a week
+# sweeps any preview branch whose pull request is no longer open. It only ever deletes branches whose
+# name starts with preview/ and never the default or a protected branch, so the live database is safe.
+# Needs the NEON_API_KEY repository secret; without it the job skips itself.
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: neon-preview-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID || 'dry-heart-11127369' }}
+      GH_TOKEN: ${{ github.token }}
+      CLOSED_BRANCH: ${{ github.event_name == 'pull_request' && format('preview/{0}', github.head_ref) || '' }}
+    steps:
+      - name: Delete preview database branches that are no longer needed
+        run: |
+          set -euo pipefail
+          if [ -z "$NEON_API_KEY" ]; then echo "NEON_API_KEY is not set, so nothing to do."; exit 0; fi
+          api="https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches"
+          auth=(-H "Authorization: Bearer $NEON_API_KEY" -H "Accept: application/json")
+          branches=$(curl -fsS "${auth[@]}" "$api")
+
+          if [ -n "$CLOSED_BRANCH" ]; then
+            # A pull request was merged or closed: only its own branch.
+            wanted=$(jq -n --arg n "$CLOSED_BRANCH" '[$n]')
+          else
+            # Weekly sweep: every preview branch without an open pull request.
+            open=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json headRefName --jq '[.[].headRefName | "preview/" + .]')
+            wanted=$(echo "$branches" | jq --argjson open "$open" '[.branches[].name | select(startswith("preview/")) | select([.] | inside($open) | not)]')
+          fi
+
+          echo "$branches" | jq -r --argjson wanted "$wanted" '
+            .branches[]
+            | select(.name | startswith("preview/"))
+            | select(.default != true and .protected != true)
+            | select([.name] | inside($wanted))
+            | "\(.id) \(.name)"' |
+          while read -r id name; do
+            echo "Deleting $name ($id)"
+            curl -fsS -X DELETE "${auth[@]}" "$api/$id" > /dev/null
+          done
+          echo "Done."
