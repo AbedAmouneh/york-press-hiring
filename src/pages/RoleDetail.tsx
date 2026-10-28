@@ -1,59 +1,65 @@
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Download, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, Download, Flag, RefreshCw, Sparkles } from "lucide-react";
 import { call, rpc } from "@/lib/rpc";
 import { can, useMe } from "@/lib/auth";
+import { stageOf } from "@/lib/home";
 import type { CandidateRow, RequestRow } from "@/lib/types";
 import { cn, fmtDate, fmtDateTime } from "@/lib/utils";
-import { PageHeader } from "@/components/AppShell";
 import { CandidateStatusBadge, OutreachBadge, RequestStatusBadge } from "@/components/Status";
 import { CandidateSheet } from "@/components/CandidateSheet";
+import { StageBar } from "@/components/StageBar";
 import { Button } from "@/components/ui/button";
 import { CANDIDATE_STATUSES, CRITERIA, DEFAULT_WEIGHTS, type HmDecision, type Weights } from "../../shared/types";
-import { Badge, DataTable, EmptyState, Modal, ScoreBar, Select, Spinner, Td, Th, useToast } from "@/components/kit";
+import { Avatar, Badge, DataTable, DeptDot, EmptyState, Modal, ScoreBar, Select, Spinner, Stat, Td, Th, useToast } from "@/components/kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
-const DECISION_STYLE: Record<string, string> = { yes: "bg-emerald-100 text-emerald-800", maybe: "bg-amber-100 text-amber-800", no: "bg-red-100 text-red-800" };
+const DECISION_STYLE: Record<string, string> = { yes: "bg-success/15 text-success", maybe: "bg-chip-amber/30 text-warning", no: "bg-destructive/10 text-destructive" };
 
 function CandidateTable({ rows, onOpen, canEdit, onDecision, top }: { rows: CandidateRow[]; onOpen: (id: string) => void; canEdit: boolean; onDecision: (id: string, d: HmDecision | null) => void; top: boolean }) {
   if (!rows.length) return <EmptyState title="No candidates match">Try a different filter.</EmptyState>;
   return (
     <DataTable>
       <TableHeader>
-        <TableRow><Th>#</Th><Th>Candidate</Th><Th>Current role</Th><Th>Score</Th><Th>Status</Th><Th>HM decision</Th><Th>{top ? "Outreach" : "Location"}</Th></TableRow>
+        <TableRow><Th className="w-10">#</Th><Th>Candidate</Th><Th>Current role</Th><Th>Score</Th><Th>Status</Th><Th>HM decision</Th><Th>{top ? "Outreach" : "Location"}</Th></TableRow>
       </TableHeader>
       <TableBody>
         {rows.map((c) => (
-          <TableRow key={c.id} className={cn("cursor-pointer hover:bg-secondary/50", c.isTop10 && "shadow-[inset_3px_0_0_var(--primary)]")} onClick={() => onOpen(c.id)}>
-            <Td className="num text-muted-foreground">{c.rank ?? "—"}</Td>
+          <TableRow key={c.id} className="cursor-pointer hover:bg-secondary/50" onClick={() => onOpen(c.id)}>
+            <Td className="num align-middle text-muted-foreground">{c.rank ?? "–"}</Td>
             <Td className="min-w-[220px]">
-              <div className="font-medium">
-                {c.fullName}
-                {c.newContender && <Badge tone="brand" className="ml-2">New contender</Badge>}
-                {c.isSample && <Badge className="ml-2">Sample</Badge>}
+              <div className="flex items-center gap-2.5">
+                <Avatar name={c.fullName} />
+                <div className="min-w-0">
+                  <div className="font-medium">
+                    {c.fullName}
+                    {c.redFlags && <Flag className="ml-1.5 inline size-3.5 text-destructive" aria-label="Red flag" />}
+                    {c.newContender && <Badge tone="brand" className="ml-2">New</Badge>}
+                    {c.isSample && <Badge className="ml-2">Sample</Badge>}
+                  </div>
+                  <div className="line-clamp-1 text-xs text-muted-foreground">{c.headline}</div>
+                </div>
               </div>
-              <div className="line-clamp-1 text-xs text-muted-foreground">{c.headline}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">via {c.sources.join(" + ")}{c.redFlags ? " · ⚑ red flag" : ""}</div>
             </Td>
             <Td className="min-w-[160px]"><div>{c.currentTitle ?? "—"}</div><div className="text-xs text-muted-foreground">{c.currentCompany}</div></Td>
             <Td><ScoreBar value={c.score} /></Td>
             <Td><CandidateStatusBadge status={c.status} /></Td>
             <Td onClick={(e) => e.stopPropagation()}>
               {canEdit ? (
-                <div className="inline-flex overflow-hidden rounded-md border">
+                <div className="inline-flex gap-0.5 rounded-lg bg-secondary p-0.5">
                   {(["yes", "maybe", "no"] as const).map((d) => (
                     <button key={d} onClick={() => onDecision(c.id, c.hmDecision === d ? null : d)} aria-pressed={c.hmDecision === d}
-                      className={cn("border-r px-2 py-1 text-xs capitalize last:border-r-0", c.hmDecision === d ? DECISION_STYLE[d] + " font-semibold" : "bg-card hover:bg-secondary")}>
+                      className={cn("rounded-md px-2 py-0.5 text-xs capitalize transition-colors", c.hmDecision === d ? DECISION_STYLE[d] + " font-semibold" : "text-muted-foreground hover:bg-card hover:text-foreground")}>
                       {d}
                     </button>
                   ))}
                 </div>
-              ) : c.hmDecision ? <Badge className={DECISION_STYLE[c.hmDecision]}>{c.hmDecision}</Badge> : <span className="text-muted-foreground">—</span>}
+              ) : c.hmDecision ? <Badge className={cn("capitalize", DECISION_STYLE[c.hmDecision])}>{c.hmDecision}</Badge> : <span className="text-muted-foreground">–</span>}
             </Td>
             <Td className="text-xs">{top ? <OutreachBadge outreach={c.outreach} /> : <span className="text-muted-foreground">{c.location}</span>}</Td>
           </TableRow>
@@ -152,36 +158,52 @@ export default function RoleDetail() {
 
   return (
     <>
-      <Link to="/roles" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Roles</Link>
-      <PageHeader eyebrow={`${r.code} · ${r.department} · ${r.locationPolicy}`} title={r.title}>
-        <RequestStatusBadge status={r.status} />
-        <Button asChild variant="outline" size="sm"><Link to={`/requests/${r.id}`}>Request</Link></Button>
-        {isRecruiter && r.status !== "closed" && <Button variant="outline" size="sm" onClick={rerun} disabled={!!running}><RefreshCw /> Refresh now</Button>}
-        {isRecruiter && <Button variant="outline" size="sm" onClick={exportCsv} disabled={!all.length}><Download /> CSV</Button>}
-        {isRecruiter && r.status !== "closed" && <Button variant="ghost" size="sm" onClick={() => setClosing(true)}>Close role</Button>}
-      </PageHeader>
-
-      {running && (
-        <Card className="mb-5 flex flex-row items-center gap-3 border-primary/20 bg-accent px-4 py-3 text-sm">
-          <Spinner />
-          <div><b>Sourcing in progress</b> — {running.state.log.at(-1)?.msg ?? "starting…"}</div>
-        </Card>
-      )}
-      {lastRun?.status === "failed" && !running && (
-        <Card className="mb-5 border-destructive bg-red-50 px-4 py-3 text-sm"><b>The last run failed:</b> {lastRun.error}</Card>
-      )}
-
-      <div className="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-5">
-        {[["Screened", all.length], ["Top 10 average", top.length ? Math.round(top.reduce((a, c) => a + (c.score ?? 0), 0) / top.length) : "—"], ["Contacted", all.filter((c) => c.status !== "new").length], ["HM yes", all.filter((c) => c.hmDecision === "yes").length], ["Last run", lastRun ? fmtDate(lastRun.createdAt) : "—"]].map(([k, v]) => (
-          <div key={k as string} className="bg-card px-4 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{k}</div>
-            <div className={cn("num font-semibold", k === "Last run" ? "pt-1 text-base" : "text-xl")}>{v}</div>
+      <Link to="/roles" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> Roles</Link>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <Link to={`/requests/${r.id}`} className="font-mono text-xs hover:text-foreground hover:underline" title="Open the request">{r.code}</Link>
+            <span aria-hidden>·</span><DeptDot name={r.department} />
+            <span aria-hidden>·</span><span>{r.locationPolicy}</span>
+            {r.hiringManagerName && <><span aria-hidden>·</span><span>HM {r.hiringManagerName}</span></>}
           </div>
-        ))}
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight">{r.title}</h1>
+            <RequestStatusBadge status={r.status} />
+          </div>
+        </div>
+        {isRecruiter && (
+          <div className="flex items-center gap-2">
+            {r.status !== "closed" && <Button variant="outline" size="sm" onClick={rerun} disabled={!!running}><RefreshCw /> Refresh</Button>}
+            <Button variant="outline" size="icon-sm" onClick={exportCsv} disabled={!all.length} aria-label="Download CSV" title="Download CSV"><Download /></Button>
+            {r.status !== "closed" && <Button variant="ghost" size="sm" onClick={() => setClosing(true)}>Close role</Button>}
+          </div>
+        )}
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })}>
-        <TabsList>
+      {running && (
+        <div role="status" className="mb-4 flex items-center gap-2.5 rounded-lg bg-accent px-4 py-2.5 text-sm">
+          <Spinner className="text-primary" />
+          <span>Finding candidates · {running.state.log.at(-1)?.msg ?? "starting…"}</span>
+        </div>
+      )}
+      {lastRun?.status === "failed" && !running && (
+        <div role="alert" className="mb-4 rounded-lg bg-destructive/10 px-4 py-2.5 text-sm text-destructive">Last run failed: {lastRun.error}</div>
+      )}
+
+      <Card className="mb-6 flex-row flex-wrap items-center gap-x-10 gap-y-4 px-5 py-4">
+        <Stat label="Screened" value={all.length} />
+        <Stat label="Top 10 average" value={top.length ? Math.round(top.reduce((a, c) => a + (c.score ?? 0), 0) / top.length) : "–"} />
+        <Stat label="Contacted" value={all.filter((c) => c.status !== "new").length} />
+        <Stat label="HM yes" value={all.filter((c) => c.hmDecision === "yes").length} />
+        <div className="ml-auto flex items-center gap-6">
+          <StageBar stage={stageOf({ status: r.status, stats: { contacted: all.filter((c) => c.status !== "new").length } })} />
+          <div className="text-xs text-muted-foreground">Last run<div className="text-sm text-foreground">{lastRun ? fmtDate(lastRun.createdAt) : "–"}</div></div>
+        </div>
+      </Card>
+
+      <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })} className="gap-4">
+        <TabsList variant="line" className="w-full justify-start gap-2 border-b pb-1 [&>button]:flex-none [&>button]:px-2">
           <TabsTrigger value="top">Top 10</TabsTrigger>
           <TabsTrigger value="all">All screened ({all.length})</TabsTrigger>
           <TabsTrigger value="applications">CVs received</TabsTrigger>
