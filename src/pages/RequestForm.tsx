@@ -27,7 +27,7 @@ const Step = ({ n }: { n: number }) => <span className="mr-2 inline-grid size-5 
 const EMPTY: RequestFormValues = {
   title: "", department: DEPARTMENTS[0], seniority: "Mid", headcount: "1", startDate: "", kind: "new", jdText: "",
   mustHaves: "", niceToHaves: "", dealBreakers: "", minYears: "", idealYears: "", languages: "English",
-  locationPolicy: "", searchLocations: "", timeZone: "", locationId: "", workingHours: "", salaryMin: "", salaryMax: "", currency: "", salaryPeriod: "year",
+  locationPolicy: "", searchLocations: "", timeZone: "", locationId: "", workingHours: "", salaryMin: "", salaryMax: "", currency: "", salaryPeriod: "month",
   justification: "", targetCompanies: "", avoidCompanies: "", hiringManagerId: "",
 };
 
@@ -274,7 +274,7 @@ export default function RequestForm() {
               <Field label="Currency" htmlFor="cur" error={errors.currency?.message}><Select id="cur" {...reg("currency")}><option value="">Choose…</option>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
               <Field label="Salary from" htmlFor="smin" error={errors.salaryMin?.message}><Input id="smin" inputMode="numeric" {...reg("salaryMin")} /></Field>
               <Field label="Salary to" htmlFor="smax" error={errors.salaryMax?.message}><Input id="smax" inputMode="numeric" {...reg("salaryMax")} /></Field>
-              <Field label="Per" htmlFor="per"><Select id="per" {...reg("salaryPeriod")}><option value="year">Year</option><option value="month">Month</option></Select></Field>
+              <Field label="Per" htmlFor="per"><Select id="per" {...reg("salaryPeriod")}><option value="month">Month</option><option value="year">Year</option></Select></Field>
               <Field label="Business justification for Khalil" htmlFor="just" className="sm:col-span-4" error={errors.justification?.message}><Textarea id="just" {...reg("justification")} /></Field>
             </CardContent>
           </Card>
