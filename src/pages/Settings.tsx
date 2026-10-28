@@ -115,7 +115,7 @@ function General() {
           {CRITERIA.map((c) => (
             <div key={c.key} className="grid grid-cols-[1fr_180px_40px] items-center gap-3 text-sm">
               <label htmlFor={`dw-${c.key}`}>{c.label}</label>
-              <input id={`dw-${c.key}`} type="range" min={0} max={50} value={w[c.key]} onChange={(e) => setW({ ...w, [c.key]: Number(e.target.value) })} className="accent-black" />
+              <input id={`dw-${c.key}`} type="range" min={0} max={50} value={w[c.key]} onChange={(e) => setW({ ...w, [c.key]: Number(e.target.value) })} className="accent-primary" />
               <span className="num text-right font-semibold">{w[c.key]}</span>
             </div>
           ))}
