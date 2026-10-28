@@ -20,7 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 
 type SettingsPatch = InferRequestType<typeof rpc.settings.$patch>["json"];
 
-function Live({ live }: { live: boolean }) {
+function Live({ live, inUse = true }: { live: boolean; inUse?: boolean }) {
+  if (!inUse) return <Badge tone="neutral" dot>Not used</Badge>;
   return <Badge tone={live ? "good" : "warn"} dot>{live ? "Live" : "Mock mode"}</Badge>;
 }
 
@@ -95,8 +96,8 @@ function General() {
         <CardHeader><CardTitle>Connections</CardTitle></CardHeader>
         <CardContent className="grid gap-3 text-sm">
           <div className="flex justify-between gap-2"><span>Claude API <span className="text-muted-foreground">· {i.claude.model}</span></span><Live live={i.claude.live} /></div>
-          <div className="flex justify-between gap-2"><span>People Data Labs <span className="text-muted-foreground">· search</span></span><Live live={i.pdl.live} /></div>
-          <div className="flex justify-between gap-2"><span>SignalHire <span className="text-muted-foreground">· search + contacts{i.signalhire.creditsLeft != null ? ` · ${i.signalhire.creditsLeft} credits left` : ""}</span></span><Live live={i.signalhire.live} /></div>
+          <div className="flex justify-between gap-2"><span>People Data Labs <span className="text-muted-foreground">· search</span></span><Live live={i.pdl.live} inUse={i.pdl.inUse} /></div>
+          <div className="flex justify-between gap-2"><span>SignalHire <span className="text-muted-foreground">· search + contacts{i.signalhire.creditsLeft != null ? ` · ${i.signalhire.creditsLeft} credits left` : ""}</span></span><Live live={i.signalhire.live} inUse={i.signalhire.inUse} /></div>
           <div className="flex justify-between gap-2"><span>Email (Resend) <span className="text-muted-foreground">· {i.email.from}</span></span><Live live={i.email.live} /></div>
           <div className="flex justify-between gap-2"><span>Database</span><Badge tone={i.database.live ? "good" : "warn"} dot>{i.database.live ? "Postgres" : "Local file"}</Badge></div>
           <div className="flex justify-between gap-2"><span>LinkedIn messaging</span><Badge tone="info">Claude in Chrome · approval required</Badge></div>
