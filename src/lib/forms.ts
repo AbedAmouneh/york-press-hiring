@@ -86,6 +86,11 @@ export const RequestForm = RequestFormFields.superRefine((f, ctx) => {
   validateWith(RequestInput, toRequestInput(f), ctx);
 }).transform((f) => RequestInput.parse(toRequestInput(f)));
 
+/** Saving a draft only needs what the API needs (a title, valid numbers); location, budget and reason can wait. */
+export const RequestDraftForm = RequestFormFields.superRefine((f, ctx) => {
+  validateWith(RequestInput, toRequestInput(f), ctx);
+}).transform((f) => RequestInput.parse(toRequestInput(f)));
+
 // ---------------------------------------------------------------- first-run setup
 
 export const SetupForm = SetupInput.omit({ managers: true })
