@@ -32,7 +32,7 @@ npm install --include=dev          # same reason: otherwise npm skips devDepende
 npm run check                      # lint + typecheck + unit tests + smoke: run before every push
 npm test                           # Vitest unit tests (tests/unit)
 npm run test:e2e                   # Playwright browser tests (tests/e2e) on a seeded demo database, ports 5174/3002
-npm run eval:scoring               # scoring test set against the real Claude API (needs ANTHROPIC_API_KEY)
+npm run eval:scoring               # scoring test set against the real Claude API (needs OPENCODE_API_KEY or ANTHROPIC_API_KEY)
 npm run build                      # typecheck both sides + Vite build
 npm run db:generate                # after any change to server/db/schema.ts; commit the migration
 ```
@@ -53,7 +53,10 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   Slices are queued with QStash (`server/services/queue.ts`, signed calls to
   `/api/internal/queue/runs`, retried on failure); without QStash they run in the background.
   A locked run answers 503 so QStash retries after the lock expires.
-- `server/services/claude.ts`: every Claude call, with mock heuristics when no key is set.
+- `server/services/claude.ts`: every Claude call, with mock heuristics when no key is set. With `OPENCODE_API_KEY`
+  the same Messages API calls go through OpenCode Console (`https://opencode.ai/inference/anthropic`, Bearer token);
+  it wins over `ANTHROPIC_API_KEY`. OpenCode has no Message Batches or web search tool, so `aiFeatures` in
+  `server/env.ts` turns those off (scoring runs directly, the web search step is skipped).
   Cost rules: anything shared across calls (request, scorecard, rules) goes in `cachedPrefix`
   and must not contain per-candidate data, or the cache stops hitting. Weekly refreshes score via
   the Message Batches API (half price) when QStash is on; first runs and manual refreshes score
