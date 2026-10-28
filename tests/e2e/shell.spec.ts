@@ -13,6 +13,9 @@ test("the top bar search finds a role and opens it", async ({ page }) => {
 
 test("the sidebar shows the signed-in person and only their screens", async ({ page }) => {
   await signInAs(page, "Manager");
+  const logo = page.getByRole("complementary").getByRole("img", { name: "York Press" });
+  await expect(logo).toBeVisible();
+  expect(await logo.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
   const nav = page.getByRole("navigation", { name: "Main" });
   await expect(nav.getByRole("link", { name: "Requests" })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Settings" })).toHaveCount(0);
