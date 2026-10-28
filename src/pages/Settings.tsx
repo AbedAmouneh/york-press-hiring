@@ -3,6 +3,8 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InferRequestType } from "hono/client";
+import { useSearchParams } from "react-router-dom";
+import { Ban, Briefcase, FileText, MapPin, SlidersHorizontal, Wallet } from "lucide-react";
 import { call, rpc } from "@/lib/rpc";
 import type { Template } from "@/lib/types";
 import { cn, fmtDateTime } from "@/lib/utils";
@@ -275,25 +277,38 @@ function Usage() {
   );
 }
 
+const SECTIONS = [
+  ["general", "Sending & scoring", SlidersHorizontal],
+  ["positions", "Positions", Briefcase],
+  ["locations", "Locations", MapPin],
+  ["templates", "Templates", FileText],
+  ["suppression", "Do-not-contact", Ban],
+  ["usage", "Usage & cost", Wallet],
+] as const;
+
 export default function Settings() {
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") ?? "general";
   return (
     <>
-      <PageHeader eyebrow="Recruiter" title="Settings" />
-      <Tabs defaultValue="general">
-        <TabsList>
-          <TabsTrigger value="general">Sending & scoring</TabsTrigger>
-          <TabsTrigger value="positions">Positions</TabsTrigger>
-          <TabsTrigger value="locations">Locations</TabsTrigger>
-          <TabsTrigger value="templates">Templates</TabsTrigger>
-          <TabsTrigger value="suppression">Do-not-contact</TabsTrigger>
-          <TabsTrigger value="usage">Usage & cost</TabsTrigger>
+      <PageHeader title="Settings" />
+      <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })} orientation="vertical" className="flex-col gap-6 md:flex-row md:items-start">
+        <TabsList
+          variant="line"
+          className="h-auto w-full shrink-0 flex-row items-stretch overflow-x-auto md:sticky md:top-20 md:w-52 md:flex-col [&>button]:h-auto [&>button]:flex-none [&>button]:justify-start [&>button]:gap-2.5 [&>button]:rounded-md [&>button]:px-3 [&>button]:py-2 [&>button]:after:hidden [&>button[data-state=active]]:bg-card [&>button[data-state=active]]:shadow-sm"
+        >
+          {SECTIONS.map(([value, label, Icon]) => (
+            <TabsTrigger key={value} value={value}><Icon className="size-4" /> {label}</TabsTrigger>
+          ))}
         </TabsList>
-        <TabsContent value="general"><General /></TabsContent>
-        <TabsContent value="positions"><PositionsSettings /></TabsContent>
-        <TabsContent value="locations"><LocationsSettings /></TabsContent>
-        <TabsContent value="templates"><Templates /></TabsContent>
-        <TabsContent value="suppression"><Suppression /></TabsContent>
-        <TabsContent value="usage"><Usage /></TabsContent>
+        <div className="min-w-0 flex-1">
+          <TabsContent value="general"><General /></TabsContent>
+          <TabsContent value="positions"><PositionsSettings /></TabsContent>
+          <TabsContent value="locations"><LocationsSettings /></TabsContent>
+          <TabsContent value="templates"><Templates /></TabsContent>
+          <TabsContent value="suppression"><Suppression /></TabsContent>
+          <TabsContent value="usage"><Usage /></TabsContent>
+        </div>
       </Tabs>
     </>
   );
