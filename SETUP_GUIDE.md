@@ -50,7 +50,9 @@ When you go live, turn demo accounts off: set `DEMO_MODE` to `false` and deactiv
 
 ## Step 5 — Logo
 
-Save the York Press logo as `public/brand/logo.png` (see `public/brand/README.md`), commit and push in GitHub Desktop. Vercel redeploys automatically.
+Done: the official York Press logo is in `public/brand/logo.png` and the tab icon in `public/brand/favicon.png`.
+To change them later, replace those files with the same names (see `public/brand/README.md`), commit and push.
+Vercel redeploys automatically.
 
 ---
 
