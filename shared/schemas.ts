@@ -171,6 +171,7 @@ export const SettingsPatch = z.object({
   autoSendEnabled: z.boolean().optional(),
   dailySendCap: z.number().int().min(0).max(500).optional(),
   signalhireRevealEnabled: z.boolean().optional(),
+  signalhireMonthlyLimit: z.number().int().min(0).max(100_000).nullable().optional(),
   webSearchEnabled: z.boolean().optional(),
   weeklySummaryEnabled: z.boolean().optional(),
   defaultWeights: WeightsInput.optional(),
