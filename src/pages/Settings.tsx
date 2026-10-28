@@ -7,6 +7,7 @@ import { call, rpc } from "@/lib/rpc";
 import type { Template } from "@/lib/types";
 import { cn, fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
+import { PositionsSettings } from "@/components/PositionsSettings";
 import { Button } from "@/components/ui/button";
 import { CRITERIA, DEFAULT_WEIGHTS, DEPARTMENTS, type Weights } from "../../shared/types";
 import { LINKEDIN_NOTE_MAX, TemplateInput } from "../../shared/schemas";
@@ -280,11 +281,13 @@ export default function Settings() {
       <Tabs defaultValue="general">
         <TabsList>
           <TabsTrigger value="general">Sending & scoring</TabsTrigger>
+          <TabsTrigger value="positions">Positions</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="suppression">Do-not-contact</TabsTrigger>
           <TabsTrigger value="usage">Usage & cost</TabsTrigger>
         </TabsList>
         <TabsContent value="general"><General /></TabsContent>
+        <TabsContent value="positions"><PositionsSettings /></TabsContent>
         <TabsContent value="templates"><Templates /></TabsContent>
         <TabsContent value="suppression"><Suppression /></TabsContent>
         <TabsContent value="usage"><Usage /></TabsContent>
