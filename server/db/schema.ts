@@ -225,6 +225,22 @@ export const outreachTemplates = pgTable("outreach_templates", {
   updatedAt: ts("updated_at").notNull().defaultNow(),
 });
 
+/** Positions York Press hires for often. Picking one on the request form suggests these details. */
+export const positions = pgTable("positions", {
+  id: id(),
+  title: text("title").notNull(),
+  department: text("department").notNull(),
+  seniority: text("seniority").notNull(),
+  mustHaves: text("must_haves").array().notNull().default(sql`'{}'::text[]`),
+  niceToHaves: text("nice_to_haves").array().notNull().default(sql`'{}'::text[]`),
+  languages: text("languages").array().notNull().default(sql`'{}'::text[]`),
+  minYears: integer("min_years"),
+  idealYears: integer("ideal_years"),
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("positions_title_idx").on(sql`lower(${t.title})`)]);
+
 export const outreachMessages = pgTable("outreach_messages", {
   id: id(),
   roleCandidateId: uuid("role_candidate_id").notNull().references(() => roleCandidates.id, { onDelete: "cascade" }),
