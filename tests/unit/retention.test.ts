@@ -41,7 +41,13 @@ beforeAll(async () => {
     { toAddress: "a@x.test", fromAddress: "h@york-press.test", subject: "old", body: "b", kind: "outreach", createdAt: ago(30) },
     { toAddress: "a@x.test", fromAddress: "h@york-press.test", subject: "new", body: "b", kind: "outreach", createdAt: ago(1) },
   ]);
-  ids = { stale: stale.id, recent: recent.id, inOpenRole: inOpenRole.id, recentlyApplied: recentlyApplied.id, oldCv: oldCv.id, liveCv: liveCv.id, newCv: newCv.id };
+  const msg = (requestId: string, body: string, createdAt: Date) => ({ requestId, authorId: u.id, authorName: "Manager", body, createdAt });
+  const [oldMsg, liveMsg, newMsg] = await db.insert(schema.requestMessages).values([
+    msg(closedRole.id, "old, finished request", ago(30)),
+    msg(openRole.id, "old, but the role is still open", ago(30)),
+    msg(closedRole.id, "recent", ago(1)),
+  ]).returning();
+  ids = { oldMsg: oldMsg.id, liveMsg: liveMsg.id, newMsg: newMsg.id, stale: stale.id, recent: recent.id, inOpenRole: inOpenRole.id, recentlyApplied: recentlyApplied.id, oldCv: oldCv.id, liveCv: liveCv.id, newCv: newCv.id };
 });
 
 describe("retention", () => {
@@ -50,19 +56,21 @@ describe("retention", () => {
   });
 
   it("previews without deleting", async () => {
-    expect(await previewRetention()).toMatchObject({ candidates: 1, applications: 1, emailLog: 1 });
+    expect(await previewRetention()).toMatchObject({ candidates: 1, applications: 1, emailLog: 1, messages: 1 });
     const db = await getDb();
     expect(await db.select().from(schema.candidates).where(eq(schema.candidates.id, ids.stale))).toHaveLength(1);
   });
 
   it("deletes only data untouched for 24 months that isn't tied to an open role", async () => {
-    expect(await runRetention()).toMatchObject({ candidates: 1, applications: 1, emailLog: 1 });
+    expect(await runRetention()).toMatchObject({ candidates: 1, applications: 1, emailLog: 1, messages: 1 });
     const db = await getDb();
     const people = (await db.select({ id: schema.candidates.id }).from(schema.candidates)).map((x) => x.id).sort();
     expect(people).toEqual([ids.recent, ids.inOpenRole, ids.recentlyApplied].sort());
     const cvs = (await db.select({ id: schema.applications.id }).from(schema.applications)).map((x) => x.id).sort();
     expect(cvs).toEqual([ids.liveCv, ids.newCv].sort());
     expect(await db.select().from(schema.roleCandidates).where(eq(schema.roleCandidates.candidateId, ids.stale))).toHaveLength(0);
+    const msgs = (await db.select({ id: schema.requestMessages.id }).from(schema.requestMessages)).map((x) => x.id).sort();
+    expect(msgs).toEqual([ids.liveMsg, ids.newMsg].sort());
   });
 
   it("keeps the do-not-contact list", async () => {
@@ -71,6 +79,6 @@ describe("retention", () => {
   });
 
   it("has nothing left to delete on the next run", async () => {
-    expect(await runRetention()).toEqual({ candidates: 0, applications: 0, emailLog: 0, notifications: 0 });
+    expect(await runRetention()).toEqual({ candidates: 0, applications: 0, emailLog: 0, notifications: 0, messages: 0 });
   });
 });
