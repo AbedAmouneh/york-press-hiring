@@ -145,7 +145,13 @@ export const requestRoutes = new Hono<AppEnv>()
     if (r.status !== "submitted") throw new HTTPException(400, { message: "This request isn't waiting for a decision." });
     const db = await getDb();
     const status = action === "approve" ? "sourcing" : action === "reject" ? "rejected" : "changes_requested";
-    await db.update(schema.roleRequests).set({ status, decidedAt: new Date(), updatedAt: new Date() }).where(eq(schema.roleRequests.id, r.id));
+    // Only move a request that is still waiting, so two decisions sent at once can't both apply (or start two runs).
+    const moved = await db
+      .update(schema.roleRequests)
+      .set({ status, decidedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(schema.roleRequests.id, r.id), eq(schema.roleRequests.status, "submitted")))
+      .returning({ id: schema.roleRequests.id });
+    if (!moved.length) throw new HTTPException(409, { message: "This request was just decided. Reload to see the decision." });
     const label = action === "approve" ? "Approved" : action === "reject" ? "Rejected" : "Requested changes";
     await event(r.id, user, label, comment);
     await notifyUsers([r.requesterId, r.hiringManagerId], { type: "decision", link: `/requests/${r.id}`, ...decisionNotice(action, user.name, r.title, comment) });
