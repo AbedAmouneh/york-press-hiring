@@ -27,6 +27,8 @@ export default defineConfig({
       PGLITE_DIR: ".data/e2e",
       API_PORT: String(API_PORT),
       DEMO_MODE: "true",
+      // Exercise the strictest setup: two-step login required for the admin.
+      REQUIRE_TWO_FACTOR: "true",
       APP_URL: `http://localhost:${PORT}`,
       // Empty values win over .env, so the tests always run in mock mode.
       DATABASE_URL: "",
