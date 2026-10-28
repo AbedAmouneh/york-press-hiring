@@ -57,11 +57,11 @@ export default function Apply() {
             <Card className="p-6">
               <form onSubmit={submit} className="grid gap-4" noValidate>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Full name" htmlFor="name" error={errors.name?.message}><Input id="name" autoComplete="name" aria-invalid={!!errors.name} {...form.register("name")} /></Field>
-                  <Field label="Email" htmlFor="email" error={errors.email?.message}><Input id="email" type="email" autoComplete="email" aria-invalid={!!errors.email} {...form.register("email")} /></Field>
+                  <Field required label="Full name" htmlFor="name" error={errors.name?.message}><Input id="name" autoComplete="name" aria-invalid={!!errors.name} {...form.register("name")} /></Field>
+                  <Field required label="Email" htmlFor="email" error={errors.email?.message}><Input id="email" type="email" autoComplete="email" aria-invalid={!!errors.email} {...form.register("email")} /></Field>
                 </div>
                 <Field label="LinkedIn profile (optional)" htmlFor="linkedin"><Input id="linkedin" placeholder="https://www.linkedin.com/in/…" {...form.register("linkedin")} /></Field>
-                <Field label="CV" hint="PDF, Word or text, up to 4 MB." htmlFor="cv" error={errors.cv?.message}>
+                <Field required label="CV" hint="PDF, Word or text, up to 4 MB." htmlFor="cv" error={errors.cv?.message}>
                   <Input id="cv" type="file" accept=".pdf,.doc,.docx,.txt" className="h-auto py-1.5" aria-invalid={!!errors.cv} {...form.register("cv")} />
                 </Field>
                 <Field label="Anything you'd like to add (optional)" htmlFor="note" error={errors.note?.message}><Textarea id="note" {...form.register("note")} /></Field>
