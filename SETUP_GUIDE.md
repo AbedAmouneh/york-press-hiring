@@ -39,7 +39,7 @@ The code lives at **https://github.com/AbedAmouneh/york-press-hiring**. The loca
 1. Open your site. You'll see **First-time setup**.
 2. Your name and email are pre-filled. Choose a password, check Khalil's email (`khalil.sayegh@york-press.com`), and optionally list department managers (one per line: `Name, email, Department`).
 3. Click **Create account and send invites**. While email is in mock mode, the invite links are shown on screen — send them to Khalil and the managers yourself.
-4. **Two-step login:** admin and CEO accounts must also use a code from a phone app. Right after setup (and on Khalil's first sign-in) the app shows a QR code: scan it with Google Authenticator, Microsoft Authenticator, 1Password or Authy, type the 6-digit code, and save the 8 recovery codes it shows. From then on, signing in asks for the password and then the code.
+4. **Two-step login (optional, off):** to make admin and CEO accounts enter a code from a phone app as well as the password, add `REQUIRE_TWO_FACTOR=true` in Vercel and redeploy. Each of them then scans a QR code on their next sign-in and saves 8 recovery codes.
 
 **Try the whole flow with the demo accounts** (password `demo-york-2026`, buttons on the sign-in page):
 Manager → *New request* → *Submit* · CEO → *Approvals* → *Approve* · Recruiter → *Open roles* → watch ~50 sample candidates get scored → Top 10 contacted.
@@ -163,5 +163,5 @@ Open http://localhost:5173. Data is stored in the `.data` folder.
 | Emails stay "queued" | Settings → the kill switch may be off, or today's cap is reached |
 | Contacts stay "Waiting for SignalHire" | Check `APP_URL` is the live https address; SignalHire also emails you about failed deliveries |
 | Someone forgot their password | Users → *Resend invite* |
-| Admin or CEO lost their phone | Sign in with one of the recovery codes in place of the 6-digit code. If those are gone too, another admin opens **Users → Reset 2-step**, and the person sets it up again with a new QR code |
+| Admin or CEO lost their phone (two-step login on) | Sign in with one of the recovery codes in place of the 6-digit code. If those are gone too, another admin opens **Users → Reset 2-step**, and the person sets it up again with a new QR code |
 | Everyone's two-step login stopped working after changing `SESSION_SECRET` | The authenticator secrets are encrypted with it. Put the old value back, or reset two-step login for each admin and CEO |
