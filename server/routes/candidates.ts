@@ -11,6 +11,7 @@ import { revealContacts } from "../services/providers/signalhire.js";
 import { applyRevealResults } from "../services/pipeline.js";
 import { updateSettings } from "../services/settings.js";
 import { readCv } from "../services/cv-store.js";
+import { revealAvailable } from "../services/providers/select.js";
 
 const canSeeContacts = (u: SessionUser, r: typeof schema.roleRequests.$inferSelect) => isStaff(u) || r.hiringManagerId === u.id;
 
@@ -124,6 +125,7 @@ export const candidateRoutes = new Hono<AppEnv>()
     const user = requireRole(c, "recruiter", "admin");
     const { rc, c: cand } = await loadRc(c.req.param("id"), user);
     if (cand.email) return c.json({ ok: true, already: true });
+    if (!revealAvailable()) throw new HTTPException(400, { message: "SignalHire isn't set up yet, so contact details can't be looked up." });
     const item = cand.linkedinUrl ?? cand.signalhireUid;
     if (!item) throw new HTTPException(400, { message: "No LinkedIn URL or SignalHire ID to look this person up." });
     const db = await getDb();
