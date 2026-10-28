@@ -48,7 +48,7 @@ export default function Roles() {
                     <span className="block truncate font-medium">{r.title}</span>
                     <DeptDot name={r.department} className="text-xs text-muted-foreground" />
                   </span>
-                  <StageBar stage={stageOf(r)} className="hidden md:block" />
+                  <StageBar stage={stageOf(r)} closed={r.status === "closed"} className="hidden md:block" />
                   <span className="num hidden text-right md:block">{r.stats.screened}</span>
                   <span className="num hidden text-right md:block">{r.stats.topAvg || "–"}</span>
                   <span className="num hidden text-right md:block">{r.stats.hmYes}</span>
