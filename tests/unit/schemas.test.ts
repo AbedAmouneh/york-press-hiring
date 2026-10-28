@@ -9,7 +9,7 @@ const messages = (r: { success: boolean; error?: { issues: { path: PropertyKey[]
 describe("request rules", () => {
   it("fills defaults for a minimal request", () => {
     const r = RequestInput.parse({ title: "Editor", department: "Editorial", seniority: "Senior" });
-    expect(r).toMatchObject({ headcount: 1, kind: "new", mustHaves: [], locationPolicy: "Remote, global", salaryPeriod: "year" });
+    expect(r).toMatchObject({ headcount: 1, kind: "new", mustHaves: [], locationPolicy: "Remote, global", salaryPeriod: "month" });
   });
 
   it("rejects a salary band and years range that run backwards", () => {
