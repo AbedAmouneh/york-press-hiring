@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge, DataTable, Field, FormError, Select, Spinner, Td, Th, useToast } from "@/components/kit";
+import { DeptDot, Badge, DataTable, Field, FormError, Select, Spinner, Td, Th, useToast } from "@/components/kit";
 import { Combobox } from "@/components/Combobox";
 import { DEPARTMENTS, SENIORITIES } from "../../shared/types";
 
@@ -47,7 +47,7 @@ export function PositionsSettings() {
           {q.data.positions.map((p) => (
             <TableRow key={p.id}>
               <Td className="font-medium">{p.title}{!p.jdText && <span className="ml-2 text-xs font-normal text-muted-foreground">no JD</span>}</Td>
-              <Td>{p.department}</Td>
+              <Td><DeptDot name={p.department} /></Td>
               <Td>{p.seniority}</Td>
               <Td className="max-w-xs truncate text-muted-foreground" title={p.mustHaves.join(", ")}>{p.mustHaves.join(", ") || "—"}</Td>
               <Td className="num">{years(p)}</Td>
