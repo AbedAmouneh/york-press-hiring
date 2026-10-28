@@ -61,20 +61,20 @@ export default function Setup() {
         <h1 className="text-xl font-bold">First-time setup</h1>
         <p className="mb-5 text-sm text-muted-foreground">Create your admin account and invite Khalil. You only do this once.</p>
         <form onSubmit={submit} className="grid gap-4" noValidate>
-          <Field label="Your name" htmlFor="an" error={errors.adminName?.message}>
+          <Field required label="Your name" htmlFor="an" error={errors.adminName?.message}>
             <Input id="an" aria-invalid={!!errors.adminName} {...form.register("adminName")} />
           </Field>
-          <Field label="Your email" htmlFor="ae" error={errors.adminEmail?.message}>
+          <Field required label="Your email" htmlFor="ae" error={errors.adminEmail?.message}>
             <Input id="ae" type="email" aria-invalid={!!errors.adminEmail} {...form.register("adminEmail")} />
           </Field>
-          <Field label="Choose a password" hint="At least 10 characters." htmlFor="ap" error={errors.adminPassword?.message}>
+          <Field required label="Choose a password" hint="At least 10 characters." htmlFor="ap" error={errors.adminPassword?.message}>
             <Input id="ap" type="password" autoComplete="new-password" aria-invalid={!!errors.adminPassword} {...form.register("adminPassword")} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="CEO name" htmlFor="cn" error={errors.ceoName?.message}>
+            <Field required label="CEO name" htmlFor="cn" error={errors.ceoName?.message}>
               <Input id="cn" aria-invalid={!!errors.ceoName} {...form.register("ceoName")} />
             </Field>
-            <Field label="CEO email" htmlFor="ce" error={errors.ceoEmail?.message}>
+            <Field required label="CEO email" htmlFor="ce" error={errors.ceoEmail?.message}>
               <Input id="ce" type="email" aria-invalid={!!errors.ceoEmail} {...form.register("ceoEmail")} />
             </Field>
           </div>
