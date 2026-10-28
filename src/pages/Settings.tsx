@@ -52,7 +52,7 @@ function Retention() {
         </p>
         {n ? (
           <p className="text-muted-foreground">
-            Next run (anything older than {fmtDateTime(n.cutoff)}): {n.candidates} candidates, {n.applications} CVs, {n.emailLog} emails, {n.notifications} notifications.
+            Next run (anything older than {fmtDateTime(n.cutoff)}): {n.candidates} candidates, {n.applications} CVs, {n.emailLog} emails, {n.notifications} notifications, {n.messages} discussion messages.
           </p>
         ) : <Spinner />}
       </CardContent>
