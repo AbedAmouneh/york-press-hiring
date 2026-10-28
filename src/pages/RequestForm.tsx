@@ -171,12 +171,18 @@ export default function RequestForm() {
 
   const v = form.watch();
   const location = locations.data?.locations.find((l) => l.id === v.locationId);
+  // What Khalil can't approve without (the same rules the form checks on submit).
   const checks: [string, boolean][] = [
     ["Job title", !!v.title.trim()],
     ["Location", !!v.locationId],
-    ["Must-haves", !!v.mustHaves.trim()],
-    ["Budget", !!v.currency && !!(v.salaryMin || v.salaryMax)],
+    ["Currency", !!v.currency],
     ["Why it's needed", !!v.justification.trim()],
+  ];
+  // Not required, but they make the search and scoring much better.
+  const recommended: [string, boolean][] = [
+    ["Must-haves", !!v.mustHaves.trim()],
+    ["Salary range", !!(v.salaryMin || v.salaryMax)],
+    ["Job description", !!v.jdText.trim()],
   ];
   const ready = checks.filter(([, ok]) => ok).length;
   const moreHasError = (["locationPolicy", "searchLocations", "timeZone", "workingHours", "targetCompanies", "avoidCompanies"] as const).some((k) => errors[k]);
@@ -184,6 +190,7 @@ export default function RequestForm() {
   return (
     <>
       <PageHeader eyebrow={id ? existing.data?.request.code : undefined} title={id ? "Edit request" : "New request"} />
+      <p className="-mt-4 mb-5 text-sm text-muted-foreground"><span aria-hidden className="text-primary">*</span> Required to submit. A draft only needs a job title.</p>
       {returned?.comment && <p dir="auto" className="mb-4 rounded-lg border-l-[3px] border-chip-amber bg-chip-amber/15 px-3 py-2 text-sm whitespace-pre-line break-words"><b>{returned.actorName}:</b> {returned.comment}</p>}
       <form className="grid items-start gap-5 lg:grid-cols-3" onSubmit={form.handleSubmit((vals) => save(vals, true))} noValidate>
         <div className="grid gap-5 lg:col-span-2">
@@ -287,12 +294,20 @@ export default function RequestForm() {
             <div className="text-sm text-muted-foreground">{[v.department, v.seniority, location?.name].filter(Boolean).join(" · ")}</div>
           </div>
           <div>
-            <div className="mb-1.5 flex justify-between text-xs text-muted-foreground"><span>Ready to submit</span><span className="num">{ready}/{checks.length}</span></div>
+            <div className="mb-1.5 flex justify-between text-xs text-muted-foreground"><span>Required to submit</span><span className="num">{ready}/{checks.length}</span></div>
             <div className="h-1.5 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(ready / checks.length) * 100}%` }} /></div>
             <ul className="mt-3 grid gap-1.5 text-sm">
               {checks.map(([label, ok]) => (
                 <li key={label} className={cn("flex items-center gap-2", ok ? "text-foreground" : "text-muted-foreground")}>
                   {ok ? <CircleCheck className="size-4 text-success" /> : <Circle className="size-4" />}{label}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 mb-1.5 text-xs text-muted-foreground">Recommended</div>
+            <ul aria-label="Recommended" className="grid gap-1.5 text-sm">
+              {recommended.map(([label, ok]) => (
+                <li key={label} className={cn("flex items-center gap-2", ok ? "text-foreground" : "text-muted-foreground")}>
+                  {ok ? <CircleCheck className="size-4 text-success" /> : <Circle className="size-4" strokeDasharray="3 3" />}{label}
                 </li>
               ))}
             </ul>
