@@ -77,7 +77,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 
 ## Rules the code must keep
 
-- **Mock mode:** a missing provider key must never crash anything; that provider returns sample data.
+- **Mock mode:** a missing provider key must never crash anything. Sample candidates are only used
+  when no candidate source has a key (`server/services/providers/select.ts`); once one is live,
+  sources without a key are skipped, and sample contact details are never attached to real people.
 - **Fairness:** never send names, photos, gender, dates of birth or graduation years to Claude.
   Prompts forbid protected characteristics. A missing deal-breaker caps the score at 40.
 - **Prompt injection:** profile and CV text is data inside `<candidate_data>` or `<cv>` tags;
