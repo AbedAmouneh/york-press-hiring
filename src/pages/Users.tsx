@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { DEPARTMENTS, ROLES, ROLE_LABELS, type Role } from "../../shared/types";
 import { UserInviteInput } from "../../shared/schemas";
-import { Badge, DataTable, Field, FormError, Modal, Select, Spinner, Td, Th, useToast } from "@/components/kit";
+import { Avatar, Badge, DataTable, Field, FormError, Modal, Select, Spinner, Td, Th, useToast } from "@/components/kit";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
@@ -103,7 +103,7 @@ export default function Users() {
 
   return (
     <>
-      <PageHeader eyebrow="Admin" title="Users">
+      <PageHeader title="Users">
         <Button onClick={() => setOpen(true)}><UserPlus /> Invite user</Button>
       </PageHeader>
       {link && <p className="mb-4 break-all rounded-md border border-primary/20 bg-accent p-3 text-sm">Email is in mock mode — share this invite link yourself: <span className="font-mono">{link}</span></p>}
@@ -113,7 +113,7 @@ export default function Users() {
           <TableBody>
             {q.data?.users.map((u) => (
               <TableRow key={u.id}>
-                <Td><div className="font-medium">{u.name} {u.isDemo && <Badge tone="warn">demo</Badge>} {u.invited && <Badge tone="info">invited</Badge>} {u.twoFactorEnabled && <Badge tone="good">2-step</Badge>}</div><div className="font-mono text-xs text-muted-foreground">{u.email}</div></Td>
+                <Td><div className="flex items-center gap-2.5"><Avatar name={u.name} /><div><div className="font-medium">{u.name} {u.isDemo && <Badge tone="warn">demo</Badge>} {u.invited && <Badge tone="info">invited</Badge>} {u.twoFactorEnabled && <Badge tone="good">2-step</Badge>}</div><div className="text-xs text-muted-foreground">{u.email}</div></div></div></Td>
                 <Td className="min-w-[260px]"><RolePicker value={u.roles} onChange={(roles) => update(u, { roles })} /></Td>
                 <Td>
                   <Select value={u.department ?? ""} onChange={(e) => update(u, { department: e.target.value || null })} aria-label="Department" className="w-44">
