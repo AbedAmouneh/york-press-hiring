@@ -5,9 +5,11 @@ import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, randomToken, requireRole, type AppEnv, type SessionUser } from "../auth.js";
 import { CRITERIA, type Weights } from "../../shared/types.js";
-import { DecisionInput, RequestInput, RequestPatch, WeightsInput } from "../../shared/schemas.js";
-import { isStaff, loadRequest } from "./access.js";
-import { notifyRoles, notifyUsers } from "../services/notify.js";
+import { DecisionInput, MessageInput, RequestInput, RequestPatch, WeightsInput } from "../../shared/schemas.js";
+import { canDeleteMessage, MESSAGE_DELETE_MINUTES } from "../../shared/messages.js";
+import { canViewRequest, isStaff, loadRequest } from "./access.js";
+import { notifyRoles, notifyUsers, usersWithRoles } from "../services/notify.js";
+import { assertWithinLimits, MESSAGE_LIMITS, recordHit } from "../services/rate-limit.js";
 import { decisionNotice } from "../services/decision-notice.js";
 import { startRun } from "../services/pipeline.js";
 import { json, query } from "../validate.js";
@@ -96,6 +98,53 @@ export const requestRoutes = new Hono<AppEnv>()
     const events = await db.select().from(schema.requestEvents).where(eq(schema.requestEvents.requestId, r.id)).orderBy(asc(schema.requestEvents.createdAt));
     const [serialized] = await serializeRequests([r]);
     return c.json({ request: serialized, events });
+  })
+  .get("/requests/:id/messages", async (c) => {
+    const user = c.get("user");
+    const r = await loadRequest(c.req.param("id"), user);
+    const db = await getDb();
+    const m = schema.requestMessages;
+    const rows = await db.select().from(m).where(eq(m.requestId, r.id)).orderBy(asc(m.createdAt));
+    return c.json({ messages: rows.map((x) => ({ ...x, canDelete: canDeleteMessage(x, user.id) })) });
+  })
+  .post("/requests/:id/messages", json(MessageInput), async (c) => {
+    const user = c.get("user");
+    const r = await loadRequest(c.req.param("id"), user);
+    const limits = MESSAGE_LIMITS(user.id);
+    await assertWithinLimits(limits, "You're sending messages very quickly. Please wait a minute.");
+    await recordHit(limits);
+    const { body } = c.req.valid("json");
+    const db = await getDb();
+    const [message] = await db.insert(schema.requestMessages).values({ requestId: r.id, authorId: user.id, authorName: user.name, body }).returning();
+    // Everyone involved hears about it, except the author: the requester, hiring manager, assigned recruiter,
+    // the CEO, and anyone who has already joined the discussion.
+    const earlier = await db.selectDistinct({ id: schema.requestMessages.authorId }).from(schema.requestMessages).where(eq(schema.requestMessages.requestId, r.id));
+    const ceos = await usersWithRoles(["ceo"]);
+    const ids = [...new Set([r.requesterId, r.hiringManagerId, r.recruiterId, ...ceos.map((u) => u.id), ...earlier.map((e) => e.id)])]
+      .filter((id): id is string => !!id && id !== user.id);
+    // Someone who took part earlier may since have lost access (e.g. a new hiring manager was set): they don't get the text.
+    const people = ids.length ? await db.select().from(schema.users).where(inArray(schema.users.id, ids)) : [];
+    const recipients = people.filter((u) => canViewRequest(u, r)).map((u) => u.id);
+    await notifyUsers(recipients, {
+      type: "message",
+      title: `${user.name} wrote on ${r.title}`,
+      link: `/requests/${r.id}#discussion`,
+      emailBody: `${user.name} wrote on the request for ${r.title}:\n\n${body}\n\nReply in York Press Hiring.`,
+    });
+    return c.json({ message: { ...message, canDelete: true } });
+  })
+  .delete("/requests/:id/messages/:messageId", async (c) => {
+    const user = c.get("user");
+    const r = await loadRequest(c.req.param("id"), user);
+    const db = await getDb();
+    const m = schema.requestMessages;
+    const [message] = await db.select().from(m).where(and(eq(m.id, c.req.param("messageId")), eq(m.requestId, r.id)));
+    if (!message) throw new HTTPException(404, { message: "Message not found." });
+    if (!canDeleteMessage(message, user.id)) {
+      throw new HTTPException(403, { message: `You can only delete your own message, within ${MESSAGE_DELETE_MINUTES} minutes of sending it.` });
+    }
+    await db.delete(m).where(eq(m.id, message.id));
+    return c.json({ ok: true });
   })
   .post("/requests", query(z.object({ submit: z.enum(["true", "false"]).optional() })), json(RequestInput), async (c) => {
     const user = requireRole(c, "manager", "recruiter", "admin");
