@@ -57,6 +57,13 @@
       "when": 1793182925054,
       "tag": "0007_starter-positions-and-locations",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793211850530,
+      "tag": "0008_request-messages",
+      "breakpoints": true
     }
   ]
 }
