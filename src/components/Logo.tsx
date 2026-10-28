@@ -1,20 +1,17 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
-/** Shows /brand/logo.png when it exists, otherwise the York Press wordmark. */
+/** The official York Press logo (/brand/logo.png) with a small "Hiring" label. Falls back to a wordmark if the file is missing. */
 export function Logo({ dark = false, className }: { dark?: boolean; className?: string }) {
   const [img, setImg] = useState(true);
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
       {img ? (
-        <img src="/brand/logo.png" alt="York Press" className="h-9 w-auto rounded" onError={() => setImg(false)} />
+        <img src="/brand/logo.png" alt="York Press" width={58} height={36} className="h-9 w-auto rounded-md" onError={() => setImg(false)} />
       ) : (
-        <span className="grid h-9 w-9 place-items-center rounded-md bg-brand text-lg font-black text-ink">Y</span>
+        <span className="text-[15px] font-bold tracking-tight">York Press</span>
       )}
-      <div className="leading-tight">
-        <div className={cn("text-[15px] font-bold tracking-tight", dark ? "text-white" : "text-foreground")}>York Press</div>
-        <div className={cn("text-[11px] font-medium uppercase tracking-[0.14em]", dark ? "text-white/60" : "text-muted-foreground")}>Hiring</div>
-      </div>
+      <span className={cn("text-[11px] font-medium uppercase tracking-[0.14em]", dark ? "text-white/60" : "text-muted-foreground")}>Hiring</span>
     </div>
   );
 }
