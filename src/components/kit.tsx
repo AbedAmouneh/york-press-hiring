@@ -163,6 +163,25 @@ export function DeptDot({ name, className }: { name: string; className?: string 
   );
 }
 
+/** A row of pill buttons to filter a list, each with its count. */
+export function FilterChips({ label, options, value, onChange }: { label: string; options: { key: string; label: string; count?: number }[]; value: string; onChange: (key: string) => void }) {
+  return (
+    <div role="group" aria-label={label} className="mb-4 flex flex-wrap gap-1.5">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          onClick={() => onChange(o.key)}
+          aria-pressed={value === o.key}
+          className={cn("rounded-full border px-3 py-1 text-sm transition-colors", value === o.key ? "border-ink bg-ink text-white" : "bg-card hover:bg-secondary")}
+        >
+          {o.label}{o.count != null && <span className={cn("num ml-1", value === o.key ? "text-white/70" : "text-muted-foreground")}>{o.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Small label + big number, used in metric strips. */
 export function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
