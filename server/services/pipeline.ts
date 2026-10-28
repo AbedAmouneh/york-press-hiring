@@ -5,8 +5,8 @@ import { appIsPublic, env, mock, POOL_SIZE, TOP_N } from "../env.js";
 import type { RunState } from "../db/schema.js";
 import type { Weights } from "../../shared/types.js";
 import { buildBrief, collectScoreBatch, scoreBatch, submitScoreBatch, totalScore, webFindings, type ScoreResult } from "./claude.js";
-import { pdlProvider } from "./providers/pdl.js";
-import { lastCreditsLeft, revealContacts, signalhireProvider, type RevealResult } from "./providers/signalhire.js";
+import { lastCreditsLeft, revealContacts, type RevealResult } from "./providers/signalhire.js";
+import { providerLabel, revealAvailable, searchProviders, skippedProviders } from "./providers/select.js";
 import type { NormalizedProfile } from "./providers/types.js";
 import { mergeProfiles, nameKey, prescore, type MergedProfile } from "./merge.js";
 import { getSettings, logUsage, updateSettings, weightsFor } from "./settings.js";
@@ -206,25 +206,27 @@ async function stepSearch({ run, request, state, counters }: Ctx) {
   const brief = state.brief!;
   const size = run.kind === "initial" ? POOL_SIZE : 25;
   const seed = Math.floor(Date.now() / 1000) % 100000;
-  const settled = await Promise.allSettled([
-    pdlProvider.search(brief, { size, requestTitle: request.title, seed }),
-    signalhireProvider.search(brief, { size, requestTitle: request.title, seed }),
-  ]);
+  const providers = searchProviders();
+  for (const skipped of skippedProviders()) log(state, `${providerLabel(skipped)} isn't set up, so it was skipped.`);
+  const settled = await Promise.allSettled(providers.map((p) => p.search(brief, { size, requestTitle: request.title, seed })));
   const profiles: NormalizedProfile[] = [];
   settled.forEach((s, i) => {
-    const name = i === 0 ? "People Data Labs" : "SignalHire";
+    const provider = providers[i];
+    const name = providerLabel(provider);
     if (s.status === "fulfilled") {
       profiles.push(...s.value.profiles);
-      if (i === 0) counters.pdlRecords += s.value.billedRecords;
+      if (provider.name === "PDL") counters.pdlRecords += s.value.billedRecords;
       else counters.signalhireSearches += s.value.searches;
       log(state, `${name}: ${s.value.profiles.length} profiles${s.value.mock ? " (sample data)" : ""}.`);
     } else {
       log(state, `${name} search failed: ${s.reason instanceof Error ? s.reason.message : s.reason}`);
     }
   });
-  if (settled.every((s) => s.status === "rejected")) throw new Error("Both candidate searches failed.");
-  await logUsage({ runId: run.id, provider: "pdl", action: "search", units: counters.pdlRecords, mock: mock.pdl });
-  await logUsage({ runId: run.id, provider: "signalhire", action: "search", units: counters.signalhireSearches, mock: mock.signalhire });
+  if (settled.every((s) => s.status === "rejected")) throw new Error("Every candidate search failed.");
+  for (const provider of providers) {
+    const pdl = provider.name === "PDL";
+    await logUsage({ runId: run.id, provider: pdl ? "pdl" : "signalhire", action: "search", units: pdl ? counters.pdlRecords : counters.signalhireSearches, mock: pdl ? mock.pdl : mock.signalhire });
+  }
   counters.found += profiles.length;
 
   // Merge duplicates across sources.
@@ -481,6 +483,7 @@ async function outreachTargets(run: Run, requestId: string) {
 async function stepReveal({ run, request, state, counters }: Ctx) {
   const settings = await getSettings();
   if (!settings.signalhireRevealEnabled) { log(state, "Contact reveal is turned off in Settings."); return; }
+  if (!revealAvailable()) { log(state, "SignalHire isn't set up, so contact details weren't looked up."); return; }
   const db = await getDb();
   const targets = (await outreachTargets(run, request.id)).filter(({ c }) => !c.email);
   const existing = targets.length
