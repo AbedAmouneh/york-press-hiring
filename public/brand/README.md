@@ -1,7 +1,8 @@
 # Brand files
 
-Put the York Press logo here as **`logo.png`** (or replace `logo.png` later with an SVG and update `src/components/Logo.tsx`).
+- `logo.png`: the official York Press logo (yellow Y and "YORK PRESS" on black), taken from
+  https://york-press.com/wp-content/uploads/2023/11/image001-1.png. Shown in the sidebar, on the sign-in page
+  and on the public apply page (`src/components/Logo.tsx`).
+- `favicon.png`: the Y mark cropped from the same file, used as the browser tab icon (`index.html`).
 
-The app shows the logo in the sidebar and on the sign-in page. Until the file exists, it shows the "York Press" wordmark instead.
-
-You can save the logo from the website: open https://york-press.com/wp-content/uploads/2023/11/image001-1.png, right-click → Save image as… → `logo.png` in this folder.
+If York Press gets a higher-resolution or SVG logo, replace these files with the same names.
