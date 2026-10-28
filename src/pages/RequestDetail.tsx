@@ -5,26 +5,35 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Users } from "lucide-react";
 import { call, rpc } from "@/lib/rpc";
 import { can, useMe } from "@/lib/auth";
-import { fmtDate, fmtDateTime, money } from "@/lib/utils";
-import { PageHeader } from "@/components/AppShell";
+import type { RequestEvent, RequestRow } from "@/lib/types";
+import { cn, fmtDate, fmtDateTime, money } from "@/lib/utils";
 import { RequestStatusBadge } from "@/components/Status";
 import { Button } from "@/components/ui/button";
-import { Badge, Field, FormError, Spinner, useToast } from "@/components/kit";
+import { Avatar, Badge, DeptDot, Field, FormError, Spinner, useToast } from "@/components/kit";
 import { DecisionInput } from "../../shared/schemas";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 
 function Chips({ items }: { items: string[] }) {
-  if (!items.length) return <span className="text-muted-foreground">None</span>;
+  if (!items.length) return <span className="text-sm text-muted-foreground">None</span>;
   return <div className="flex flex-wrap gap-1.5">{items.map((x) => <Badge key={x}>{x}</Badge>)}</div>;
 }
 
-function Row({ k, children }: { k: string; children: React.ReactNode }) {
+function Fact({ k, children }: { k: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-1 py-1.5 sm:grid-cols-[150px_1fr] sm:gap-4">
-      <dt className="text-sm text-muted-foreground">{k}</dt>
-      <dd className="text-sm">{children}</dd>
+    <div className="rounded-lg bg-secondary/60 px-3 py-2.5">
+      <dt className="text-xs text-muted-foreground">{k}</dt>
+      <dd className="text-sm font-medium">{children}</dd>
     </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h2 className="mb-2 text-sm font-semibold">{title}</h2>
+      {children}
+    </section>
   );
 }
 
@@ -54,20 +63,44 @@ function DecisionForm({ requestId }: { requestId: string }) {
     })();
   };
   return (
-    <Card className="mb-5 border-2 border-primary/30">
-      <CardHeader><CardTitle>Your decision</CardTitle></CardHeader>
-      <CardContent className="grid gap-3">
-        <Field label="Comment" hint="Required to reject or request changes." htmlFor="dc" error={errors.comment?.message}>
-          <Textarea id="dc" aria-invalid={!!errors.comment} {...form.register("comment")} />
-        </Field>
-        <FormError>{errors.root?.message}</FormError>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="brand" disabled={isSubmitting} onClick={() => decide("approve")}>Approve and start sourcing</Button>
-          <Button variant="outline" disabled={isSubmitting} onClick={() => decide("request_changes")}>Request changes</Button>
-          <Button variant="outline" className="text-destructive" disabled={isSubmitting} onClick={() => decide("reject")}>Reject</Button>
-        </div>
-        <p className="text-xs text-muted-foreground">Approving starts sourcing straight away: about 50 candidates are found and scored, the Top 10 are flagged and contacted from the department template.</p>
-      </CardContent>
+    <Card className="gap-3 border-primary/30 p-5">
+      <h2 className="font-semibold">Your decision</h2>
+      <Button disabled={isSubmitting} onClick={() => decide("approve")}>Approve and start sourcing</Button>
+      <Field label="Comment" hint="Needed to send back or reject." htmlFor="dc" error={errors.comment?.message}>
+        <Textarea id="dc" rows={3} aria-invalid={!!errors.comment} {...form.register("comment")} />
+      </Field>
+      <FormError>{errors.root?.message}</FormError>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="outline" disabled={isSubmitting} onClick={() => decide("request_changes")}>Request changes</Button>
+        <Button variant="outline" className="text-destructive" disabled={isSubmitting} onClick={() => decide("reject")}>Reject</Button>
+      </div>
+    </Card>
+  );
+}
+
+/** Real events as done steps, plus the step the request is waiting on now. */
+function Timeline({ r, events }: { r: RequestRow; events: RequestEvent[] }) {
+  const done = events.filter((e) => e.action !== "edited").slice().reverse();
+  const next = r.status === "submitted" ? "Waiting for Khalil" : r.status === "sourcing" ? "Finding candidates" : r.status === "changes_requested" ? "Waiting for changes" : r.status === "draft" ? "Not submitted yet" : null;
+  return (
+    <Card className="gap-3 p-5">
+      <h2 className="font-semibold">Timeline</h2>
+      <ol className="relative grid gap-4 border-l pl-5">
+        {done.map((e) => (
+          <li key={e.id} className="relative text-sm">
+            <span aria-hidden className={cn("absolute -left-[25px] top-1 size-2.5 rounded-full ring-4 ring-card", e.action === "Rejected" ? "bg-destructive" : e.action === "Requested changes" ? "bg-chip-amber" : "bg-success")} />
+            <div className="font-medium">{e.action}</div>
+            <div className="text-xs text-muted-foreground">{e.actorName} · {fmtDateTime(e.createdAt)}</div>
+            {e.comment && <p className="mt-1 rounded-md bg-secondary/70 px-2.5 py-1.5 text-muted-foreground">{e.comment}</p>}
+          </li>
+        ))}
+        {next && (
+          <li className="relative text-sm">
+            <span aria-hidden className="absolute -left-[25px] top-1 size-2.5 rounded-full bg-card ring-2 ring-primary" />
+            <div className="font-medium text-primary">{next}</div>
+          </li>
+        )}
+      </ol>
     </Card>
   );
 }
@@ -97,71 +130,73 @@ export default function RequestDetail() {
 
   return (
     <>
-      <Link to={isCeo ? "/approvals" : "/requests"} className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back</Link>
-      <PageHeader eyebrow={`${r.code} · ${r.department}`} title={r.title}>
-        <RequestStatusBadge status={r.status} />
-        {canSeeRole && <Button asChild variant="outline"><Link to={`/roles/${r.id}`}><Users /> Candidates</Link></Button>}
-        {canEdit && <Button asChild variant="outline"><Link to={`/requests/${r.id}/edit`}>Edit</Link></Button>}
-        {r.requesterId === me.id && r.status === "draft" && <Button onClick={submitDraft}>Submit to Khalil</Button>}
-      </PageHeader>
+      <Link to={isCeo ? "/approvals" : "/requests"} className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> {isCeo ? "Approvals" : "Requests"}</Link>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+            <span className="font-mono text-xs">{r.code}</span><span aria-hidden>·</span><DeptDot name={r.department} />
+            {r.requesterName && <><span aria-hidden>·</span><span>Requested by {r.requesterName}</span></>}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight">{r.title}</h1>
+            <RequestStatusBadge status={r.status} />
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {canSeeRole && <Button asChild variant="outline" size="sm"><Link to={`/roles/${r.id}`}><Users /> Candidates</Link></Button>}
+          {canEdit && <Button asChild variant="outline" size="sm"><Link to={`/requests/${r.id}/edit`}>Edit</Link></Button>}
+          {r.requesterId === me.id && r.status === "draft" && <Button size="sm" onClick={submitDraft}>Submit to Khalil</Button>}
+        </div>
+      </div>
 
-      {isCeo && r.status === "submitted" && <DecisionForm requestId={r.id} />}
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        <Card className="gap-6 p-6 lg:col-span-2">
+          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Fact k="Level">{r.seniority || "–"}</Fact>
+            <Fact k="Headcount">{r.headcount} · {r.kind === "backfill" ? "Backfill" : "New role"}</Fact>
+            <Fact k="Start">{fmtDate(r.startDate)}</Fact>
+            <Fact k="Location">{r.locationPolicy}</Fact>
+            <Fact k="Salary">{money(r.salaryMin, r.salaryMax, r.currency, r.salaryPeriod)}</Fact>
+            <Fact k="Hiring manager">{r.hiringManagerName ?? "–"}</Fact>
+          </dl>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle>Role</CardTitle></CardHeader>
-          <CardContent>
-            <dl>
-              <Row k="Seniority">{r.seniority}</Row>
-              <Row k="Headcount">{r.headcount}</Row>
-              <Row k="Type">{r.kind === "backfill" ? "Backfill" : "New role"}</Row>
-              <Row k="Target start">{fmtDate(r.startDate)}</Row>
-              <Row k="Location">{r.locationPolicy}{r.searchLocations.length ? ` · searching ${r.searchLocations.join(", ")}` : ""}</Row>
-              <Row k="Time zone">{r.timeZone || "Flexible"}</Row>
-              <Row k="Working hours">{r.workingHours || "—"}</Row>
-              <Row k="Languages">{r.languages.join(", ") || "—"}</Row>
-              <Row k="Salary">{money(r.salaryMin, r.salaryMax, r.currency, r.salaryPeriod)}</Row>
-              <Row k="Requested by">{r.requesterName}</Row>
-              <Row k="Hiring manager">{r.hiringManagerName ?? "—"}</Row>
-            </dl>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Requirements</CardTitle></CardHeader>
-          <CardContent>
-            <dl>
-              <Row k="Must-haves"><Chips items={r.mustHaves} /></Row>
-              <Row k="Nice-to-haves"><Chips items={r.niceToHaves} /></Row>
-              <Row k="Deal-breakers"><Chips items={r.dealBreakers} /></Row>
-              <Row k="Experience">{r.minYears ?? "?"}+ years{r.idealYears ? `, ideally ${r.idealYears}` : ""}</Row>
-              <Row k="Target companies"><Chips items={r.targetCompanies} /></Row>
-              <Row k="Avoid"><Chips items={["York Press", ...r.avoidCompanies]} /></Row>
-            </dl>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Job description</CardTitle></CardHeader>
-          <CardContent className="grid gap-4 text-sm">
-            <p className="whitespace-pre-line">{r.jdText || <span className="text-muted-foreground">Not provided</span>}</p>
-            <div>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Business justification</div>
-              <p className="whitespace-pre-line">{r.justification || "—"}</p>
+          {r.justification && (
+            <Section title="Why this role is needed">
+              <blockquote className="flex gap-3 rounded-lg border-l-[3px] border-primary bg-accent/60 p-4 text-sm">
+                {r.requesterName && <Avatar name={r.requesterName} size="sm" />}
+                <p className="whitespace-pre-line">{r.justification}</p>
+              </blockquote>
+            </Section>
+          )}
+
+          <Section title="Requirements">
+            <div className="grid gap-3 text-sm">
+              <div><div className="mb-1 text-xs text-muted-foreground">Must-haves</div><Chips items={r.mustHaves} /></div>
+              {!!r.niceToHaves.length && <div><div className="mb-1 text-xs text-muted-foreground">Nice-to-haves</div><Chips items={r.niceToHaves} /></div>}
+              {!!r.dealBreakers.length && <div><div className="mb-1 text-xs text-muted-foreground">Deal-breakers</div><Chips items={r.dealBreakers} /></div>}
+              {!!r.targetCompanies.length && <div><div className="mb-1 text-xs text-muted-foreground">Target companies</div><Chips items={r.targetCompanies} /></div>}
+              {!!r.avoidCompanies.length && <div><div className="mb-1 text-xs text-muted-foreground">Avoid</div><Chips items={r.avoidCompanies} /></div>}
+              <div className="text-muted-foreground">
+                {r.minYears ?? "?"}+ years{r.idealYears ? `, ideally ${r.idealYears}` : ""}
+                {r.languages.length ? ` · ${r.languages.join(", ")}` : ""}
+                {r.timeZone ? ` · ${r.timeZone}` : ""}
+                {r.workingHours ? ` · ${r.workingHours}` : ""}
+                {r.searchLocations.length ? ` · searching ${r.searchLocations.join(", ")}` : ""}
+              </div>
             </div>
-          </CardContent>
+          </Section>
+
+          {r.jdText && (
+            <Section title="Job description">
+              <p className="whitespace-pre-line text-sm text-muted-foreground">{r.jdText}</p>
+            </Section>
+          )}
         </Card>
-        <Card>
-          <CardHeader><CardTitle>History</CardTitle></CardHeader>
-          <CardContent>
-            <ol className="grid gap-3">
-              {events.filter((e) => e.action !== "edited").map((e) => (
-                <li key={e.id} className="grid grid-cols-[110px_1fr] gap-3 text-sm">
-                  <span className="num text-xs text-muted-foreground">{fmtDateTime(e.createdAt)}</span>
-                  <span><b>{e.actorName}</b> · {e.action}{e.comment && <span className="mt-0.5 block text-muted-foreground">{e.comment}</span>}</span>
-                </li>
-              ))}
-            </ol>
-          </CardContent>
-        </Card>
+
+        <div className="grid gap-5 lg:sticky lg:top-20">
+          {isCeo && r.status === "submitted" && <DecisionForm requestId={r.id} />}
+          <Timeline r={r} events={events} />
+        </div>
       </div>
     </>
   );
