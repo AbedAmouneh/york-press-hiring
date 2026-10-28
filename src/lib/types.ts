@@ -19,3 +19,4 @@ export type UserRow = Ok<typeof rpc.users.$get>["users"][number];
 export type Notification = Ok<typeof rpc.notifications.$get>["notifications"][number];
 export type OutboxEmail = Ok<typeof rpc.outbox.$get>["emails"][number];
 export type Position = Ok<typeof rpc.positions.$get>["positions"][number];
+export type HiringLocation = Ok<typeof rpc.locations.$get>["locations"][number];
