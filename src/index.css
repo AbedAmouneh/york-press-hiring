@@ -1,14 +1,22 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/inter";
 
 @custom-variant dark (&:is(.dark *));
 
-/* York Press brand: near-black + York yellow on a warm neutral ground. */
+/* Calm, Asana-inspired look: cool grey ground, white surfaces, ink sidebar, one coral action color.
+   York yellow is kept for the logo only. See docs/ui-redesign/brief.md. */
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-ink: var(--ink);
+  --color-chip-purple: var(--chip-purple);
+  --color-chip-teal: var(--chip-teal);
+  --color-chip-blue: var(--chip-blue);
+  --color-chip-amber: var(--chip-amber);
+  --color-chip-pink: var(--chip-pink);
+  --color-chip-green: var(--chip-green);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -41,29 +49,37 @@
 }
 
 :root {
-  --background: oklch(0.975 0.004 85);
-  --foreground: oklch(0.18 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0 0);
-  --primary: oklch(0.18 0 0);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.94 0.006 85);
-  --secondary-foreground: oklch(0.22 0 0);
-  --muted: oklch(0.95 0.005 85);
-  --muted-foreground: oklch(0.5 0.01 70);
-  --accent: oklch(0.97 0.06 100);
-  --accent-foreground: oklch(0.18 0 0);
-  --brand: oklch(0.89 0.18 100);
-  --brand-foreground: oklch(0.18 0 0);
-  --destructive: oklch(0.55 0.21 27);
-  --success: oklch(0.52 0.13 150);
-  --warning: oklch(0.6 0.15 65);
-  --border: oklch(0.9 0.006 85);
-  --input: oklch(0.87 0.006 85);
-  --ring: oklch(0.8 0.16 100);
+  --background: #f6f7f9;
+  --foreground: #1e1f21;
+  --card: #ffffff;
+  --card-foreground: #1e1f21;
+  --popover: #ffffff;
+  --popover-foreground: #1e1f21;
+  /* Coral, darkened a little from #F06A6A so white button text stays readable. */
+  --primary: #e0524f;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f2f4;
+  --secondary-foreground: #1e1f21;
+  --muted: #f1f2f4;
+  --muted-foreground: #6d6e6f;
+  --accent: #fdf0ef;
+  --accent-foreground: #1e1f21;
+  --brand: #f5c518;
+  --brand-foreground: #1e1f21;
+  --ink: #1e1f21;
+  --destructive: #e8384f;
+  --success: #3f8f6b;
+  --warning: #b7791f;
+  --border: #e8e8ea;
+  --input: #dcdde0;
+  --ring: #f06a6a;
   --radius: 0.5rem;
+  --chip-purple: #8d84e8;
+  --chip-teal: #4ecbc4;
+  --chip-blue: #4573d2;
+  --chip-amber: #f1bd6c;
+  --chip-pink: #f26fb2;
+  --chip-green: #5da283;
 }
 
 @layer base {
