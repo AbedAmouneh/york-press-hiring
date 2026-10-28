@@ -15,6 +15,7 @@ import { PLACEHOLDERS } from "../services/templates.js";
 import { publicUser } from "./access.js";
 import { searchProviders } from "../services/providers/select.js";
 import { previewRetention, RETENTION_MONTHS } from "../services/retention.js";
+import { signalhireBudget } from "../services/credit-budget.js";
 
 export const adminRoutes = new Hono<AppEnv>()
   // ---------------------------------------------------------------- users
@@ -66,6 +67,7 @@ export const adminRoutes = new Hono<AppEnv>()
   .get("/settings", async (c) => {
     requireRole(c, "recruiter", "admin", "ceo");
     const s = await getSettings();
+    const budget = await signalhireBudget();
     return c.json({
       settings: s,
       sentToday: await sentTodayCount(),
@@ -73,7 +75,7 @@ export const adminRoutes = new Hono<AppEnv>()
         claude: { live: !mock.claude, model: env.claudeModel, via: env.aiProvider === "opencode" ? "OpenCode" : env.aiProvider === "anthropic" ? "Anthropic" : null },
         // inUse = false when a source has no key while another is live, so runs skip it.
         pdl: { live: !mock.pdl, inUse: searchProviders().some((p) => p.name === "PDL") },
-        signalhire: { live: !mock.signalhire, inUse: searchProviders().some((p) => p.name === "SignalHire"), creditsLeft: s.signalhireCreditsLeft },
+        signalhire: { live: !mock.signalhire, inUse: searchProviders().some((p) => p.name === "SignalHire"), creditsLeft: s.signalhireCreditsLeft, spentThisMonth: budget.spent + budget.held },
         email: { live: !mock.email, from: env.emailFrom },
         database: { live: !!env.databaseUrl },
         appUrl: env.appUrl,
