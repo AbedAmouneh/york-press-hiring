@@ -69,6 +69,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 - `server/services/cv-store.ts`: CV files in a private Vercel Blob store (inline base64 locally).
   Never expose a Blob URL; CVs are served only by the authenticated `/api/applications/:id/cv`.
 - `shared/schemas.ts`: Zod rules used by both the API and the forms (`src/lib/forms.ts`).
+- Saved positions (`server/routes/positions.ts`, Settings → Positions): titles managers pick on the request
+  form (`src/components/TitleCombobox.tsx`, pick or type). Picking one suggests its details, but only into
+  fields that are empty, unchanged or still hold the last suggestion. The starter list is migration 0006.
 - **Typed API (Hono RPC):** each `server/routes/*.ts` is one chained router; inputs go through
   `json()`, `query()` or `form()` from `server/validate.ts`. `server/app.ts` exports `AppType`.
   The browser calls `call(rpc.requests[":id"].$get({ param: { id } }))` from `src/lib/rpc.ts`, and
