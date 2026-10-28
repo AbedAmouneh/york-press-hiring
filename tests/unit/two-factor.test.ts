@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   checkCode, createChallenge, currentCode, decryptSecret, encryptSecret, needsTwoFactorSetup, newRecoveryCodes, newSetup,
   readChallenge, redeemRecoveryCode, twoFactorRequired,
@@ -7,7 +7,15 @@ import {
 const NOW = Date.parse("2026-10-27T12:00:10Z");
 
 describe("who needs two-step login", () => {
-  it("is required for admin and CEO, not for other roles or demo accounts", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("is not required unless REQUIRE_TWO_FACTOR is on", () => {
+    expect(twoFactorRequired({ roles: ["admin"], isDemo: false, totpEnabledAt: null })).toBe(false);
+    expect(needsTwoFactorSetup({ roles: ["ceo"], isDemo: false, totpEnabledAt: null })).toBe(false);
+  });
+
+  it("when switched on, is required for admin and CEO, not for other roles or demo accounts", () => {
+    vi.stubEnv("REQUIRE_TWO_FACTOR", "true");
     expect(twoFactorRequired({ roles: ["admin", "recruiter"], isDemo: false, totpEnabledAt: null })).toBe(true);
     expect(twoFactorRequired({ roles: ["ceo"], isDemo: false, totpEnabledAt: null })).toBe(true);
     expect(twoFactorRequired({ roles: ["manager"], isDemo: false, totpEnabledAt: null })).toBe(false);
@@ -15,6 +23,7 @@ describe("who needs two-step login", () => {
   });
 
   it("asks for setup only until it is on", () => {
+    vi.stubEnv("REQUIRE_TWO_FACTOR", "true");
     expect(needsTwoFactorSetup({ roles: ["admin"], isDemo: false, totpEnabledAt: null })).toBe(true);
     expect(needsTwoFactorSetup({ roles: ["admin"], isDemo: false, totpEnabledAt: new Date() })).toBe(false);
   });
