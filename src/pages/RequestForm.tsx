@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { call, rpc } from "@/lib/rpc";
 import { useMe } from "@/lib/auth";
 import type { HiringLocation, Position, RequestRow } from "@/lib/types";
-import { RequestForm as RequestFormSchema, type RequestFormValues } from "@/lib/forms";
+import { RequestDraftForm, RequestForm as RequestFormSchema, type RequestFormValues } from "@/lib/forms";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { CURRENCIES, DEPARTMENTS, SENIORITIES } from "../../shared/types";
@@ -135,6 +135,17 @@ export default function RequestForm() {
     const l = locations.data?.locations.find((x) => x.id === locationId);
     if (!l) return;
     for (const [name, value] of Object.entries(fromLocation(l)) as [LocationField, string][]) fillIfUntouched(name, value);
+  }
+
+  /** A draft skips the rules that only matter when submitting (location, budget, reason). */
+  async function saveDraft() {
+    form.clearErrors();
+    const r = RequestDraftForm.safeParse(form.getValues());
+    if (!r.success) {
+      for (const issue of r.error.issues) form.setError(String(issue.path[0]) as keyof RequestFormValues, { message: issue.message });
+      return;
+    }
+    await save(r.data, false);
   }
 
   async function save(body: RequestInputT, submit: boolean) {
@@ -289,7 +300,7 @@ export default function RequestForm() {
           <FormError>{errors.root?.message}</FormError>
           <div className="grid gap-2">
             <Button type="submit" disabled={isSubmitting}>Submit to Khalil</Button>
-            <Button type="button" variant="outline" disabled={isSubmitting} onClick={form.handleSubmit((vals) => save(vals, false))}>Save draft</Button>
+            <Button type="button" variant="outline" disabled={isSubmitting} onClick={saveDraft}>Save draft</Button>
             <Button type="button" variant="ghost" onClick={() => nav(-1)}>Cancel</Button>
           </div>
         </Card>
