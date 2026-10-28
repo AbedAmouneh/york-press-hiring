@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Download, Flag, RefreshCw, Sparkles } from "lucide-react";
@@ -116,6 +116,20 @@ export default function RoleDetail() {
   const runs = useQuery({ queryKey: ["runs", id], queryFn: () => call(rpc.requests[":id"].runs.$get({ param: { id } })), refetchInterval: (q) => (q.state.data?.runs.some((r) => ["queued", "running", "waiting"].includes(r.status)) ? 3000 : false) });
   const running = runs.data?.runs.find((r) => ["queued", "running", "waiting"].includes(r.status));
   const cands = useQuery({ queryKey: ["candidates", id], queryFn: () => call(rpc.requests[":id"].candidates.$get({ param: { id } })), refetchInterval: running ? 3000 : false });
+  // When the latest run changes (a new run, or one that finishes), reload the candidates and numbers once.
+  // Polling stops with the run, and a quick run can finish before the page ever sees it running.
+  const latest = runs.data?.runs[0];
+  const runKey = latest ? `${latest.id}:${latest.status}` : "";
+  const seenRun = useRef<string | null>(null);
+  useEffect(() => {
+    if (!runKey) return;
+    if (seenRun.current !== null && seenRun.current !== runKey) {
+      qc.invalidateQueries({ queryKey: ["candidates", id] });
+      qc.invalidateQueries({ queryKey: ["request", id] });
+      qc.invalidateQueries({ queryKey: ["requests"] });
+    }
+    seenRun.current = runKey;
+  }, [runKey, qc, id]);
   const apps = useQuery({ queryKey: ["applications", id], queryFn: () => call(rpc.requests[":id"].applications.$get({ param: { id } })), enabled: tab === "applications" });
 
   const all = useMemo(() => cands.data?.candidates ?? [], [cands.data]);
