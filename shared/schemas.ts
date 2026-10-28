@@ -165,3 +165,30 @@ export const SettingsPatch = z.object({
   weeklySummaryEnabled: z.boolean().optional(),
   defaultWeights: WeightsInput.optional(),
 });
+
+// ---------------------------------------------------------------- saved positions
+
+const items = z.array(z.string().trim().min(1));
+const yearsRule = (p: { minYears?: number | null; idealYears?: number | null }) => p.minYears == null || p.idealYears == null || p.idealYears >= p.minYears;
+const yearsMessage = { message: "Ideal years should be at least the minimum.", path: ["idealYears"] };
+
+const PositionFields = z.object({
+  title: z.string().trim().min(2, "Add a job title.").max(120, "Keep the title under 120 characters."),
+  department: z.string().trim().min(1, "Choose a department."),
+  seniority: z.string().trim().min(1, "Choose a seniority."),
+  mustHaves: items,
+  niceToHaves: items,
+  languages: items,
+  minYears: optionalInt(40),
+  idealYears: optionalInt(40),
+  active: z.boolean(),
+});
+export const PositionInput = PositionFields.extend({
+  mustHaves: items.default([]),
+  niceToHaves: items.default([]),
+  languages: items.default([]),
+  active: z.boolean().default(true),
+}).refine(yearsRule, yearsMessage);
+/** Only the fields sent are changed (no defaults, so a rename doesn't clear the lists). */
+export const PositionPatch = PositionFields.partial();
+export type PositionInputT = z.output<typeof PositionInput>;
