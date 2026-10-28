@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { CandidateStatusBadge } from "./Status";
 import { CANDIDATE_STATUSES, CRITERIA, DEFAULT_WEIGHTS } from "../../shared/types";
 import { RoleCandidatePatch } from "../../shared/schemas";
-import { Badge, Field, FormError, Select, SidePanel, Spinner, useToast } from "@/components/kit";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, Badge, Field, FormError, Select, SidePanel, Spinner, useToast } from "@/components/kit";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -35,9 +35,9 @@ function TrackingForm({ detail: d, onSaved }: { detail: CandidateDetail; onSaved
     }
   });
   return (
-    <Card>
-      <CardHeader><CardTitle>Tracking</CardTitle></CardHeader>
-      <CardContent>
+    <section className="rounded-lg border p-4">
+      <h3 className="mb-3 text-sm font-medium">Your decision</h3>
+      <div>
         <form onSubmit={save} className="grid gap-3" noValidate>
           <div className="grid gap-3 sm:grid-cols-3">
             {d.isRecruiter && (
@@ -67,8 +67,8 @@ function TrackingForm({ detail: d, onSaved }: { detail: CandidateDetail; onSaved
             <Button size="sm" type="submit" disabled={isSubmitting}>Save</Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -93,143 +93,146 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
   async function messageAction(mid: string, action: "approve" | "cancel" | "sent") {
     try {
       await call(rpc.outreach[":id"][action].$post({ param: { id: mid } }));
-      toast(action === "approve" ? "Approved — it will be sent from your LinkedIn in the next Cowork session." : action === "sent" ? "Marked as sent." : "Cancelled.");
+      toast(action === "approve" ? "Approved. It goes out from your LinkedIn in the next Cowork session." : action === "sent" ? "Marked as sent." : "Cancelled.");
       refresh();
     } catch (e) { toast((e as Error).message, "error"); }
   }
 
   const d = q.data;
   const weights = d?.request.scorecardWeights ?? DEFAULT_WEIGHTS;
+  const label = "mb-1 text-xs font-medium text-muted-foreground";
   return (
-    <SidePanel open={!!id} onOpenChange={(o) => !o && onClose()} title={d ? `#${d.roleCandidate.rank ?? "—"} for ${d.request.title}` : "Candidate"}>
+    <SidePanel open={!!id} onOpenChange={(o) => !o && onClose()} title={d ? `#${d.roleCandidate.rank ?? "–"} for ${d.request.title}` : "Candidate"}>
       {!d ? <Spinner /> : (
-        <div className="grid gap-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <h2 className="text-xl font-bold">{d.candidate.fullName}</h2>
+        <div className="grid gap-5">
+          <div className="flex items-start gap-3">
+            <Avatar name={d.candidate.fullName} className="size-11 text-sm" />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold leading-tight">{d.candidate.fullName}</h2>
               <p className="text-sm text-muted-foreground">{d.candidate.headline}</p>
-              <p className="mt-1 text-sm">{d.candidate.location}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                <Badge>via {d.candidate.sources.join(" + ")}</Badge>
-                {d.candidate.isSample && <Badge tone="warn">Sample data</Badge>}
-                {d.candidate.openToWork && <Badge tone="good">Open to work</Badge>}
-                {d.roleCandidate.isTop10 && <Badge tone="brand">Top 10</Badge>}
+              <p className="text-sm text-muted-foreground">{d.candidate.location}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
                 <CandidateStatusBadge status={d.roleCandidate.status} />
-              </div>
-              <div className="mt-2 flex flex-wrap gap-3 text-sm">
-                {d.candidate.linkedinUrl && <a className="inline-flex items-center gap-1 underline" href={href(d.candidate.linkedinUrl)} target="_blank" rel="noreferrer"><ExternalLink className="h-3.5 w-3.5" /> LinkedIn</a>}
-                {d.candidate.otherUrls.map((u) => <a key={u} className="inline-flex items-center gap-1 underline" href={href(u)} target="_blank" rel="noreferrer"><ExternalLink className="h-3.5 w-3.5" /> {u.replace(/^https?:\/\//, "").slice(0, 30)}</a>)}
+                {d.roleCandidate.isTop10 && <Badge tone="brand">Top 10</Badge>}
+                {d.candidate.openToWork && <Badge tone="good">Open to work</Badge>}
+                {d.candidate.isSample && <Badge tone="warn">Sample data</Badge>}
+                {d.candidate.linkedinUrl && <a className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground" href={href(d.candidate.linkedinUrl)} target="_blank" rel="noreferrer"><ExternalLink className="size-3.5" /> LinkedIn</a>}
               </div>
             </div>
             <div className="text-right">
-              <div className="num text-4xl font-bold leading-none">{d.roleCandidate.score ?? "—"}</div>
+              <div className="num text-3xl font-semibold leading-none">{d.roleCandidate.score ?? "–"}</div>
               <div className="text-xs text-muted-foreground">of 100</div>
             </div>
           </div>
 
-          <Card>
-            <CardHeader><CardTitle>Score breakdown</CardTitle></CardHeader>
-            <CardContent className="grid gap-2">
-              {CRITERIA.map((c) => {
-                const v = d.roleCandidate.scoreBreakdown?.[c.key] ?? 0;
-                const max = weights[c.key] || 1;
-                return (
-                  <div key={c.key} className="grid grid-cols-[1fr_120px_48px] items-center gap-3 text-sm">
-                    <span>{c.label}</span>
-                    <span className="h-1.5 overflow-hidden rounded-full bg-secondary"><span className={cn("block h-full rounded-full", v / max >= 0.6 ? "bg-success" : "bg-chip-amber")} style={{ width: `${Math.round((v / max) * 100)}%` }} /></span>
-                    <span className="num text-right">{v}/{weights[c.key]}</span>
-                  </div>
-                );
-              })}
-              {d.roleCandidate.dealBreakerMissing && <p className="text-sm text-destructive">A deal-breaker isn't met, so the score is capped at 40.</p>}
-            </CardContent>
-          </Card>
+          <Tabs defaultValue="overview" className="gap-4">
+            <TabsList variant="line" className="w-full justify-start gap-2 border-b pb-1 [&>button]:flex-none [&>button]:px-2">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="experience">Experience</TabsTrigger>
+              <TabsTrigger value="outreach">Contact & outreach</TabsTrigger>
+            </TabsList>
 
-          <Card>
-            <CardContent className="grid gap-3 pt-5 text-sm">
-              <div><div className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Why recommended</div>{d.roleCandidate.whyRecommended ?? "—"}</div>
-              <div><div className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Gaps</div>{d.roleCandidate.gaps ?? "—"}</div>
-              <div><div className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Red flags</div>{d.roleCandidate.redFlags || <span className="text-muted-foreground">None noted</span>}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Experience · {d.candidate.totalYears ?? "?"} yrs total{d.roleCandidate.relevantYears != null ? `, ${d.roleCandidate.relevantYears} relevant` : ""}</CardTitle></CardHeader>
-            <CardContent className="grid gap-3">
-              {d.candidate.experience.map((e, i) => (
-                <div key={i} className="grid grid-cols-[110px_1fr] gap-3 text-sm">
-                  <span className="num text-xs text-muted-foreground">{e.start ?? "?"} – {e.end ?? (e.start ? "Present" : "?")}</span>
-                  <span><b>{e.title}</b><span className="block text-muted-foreground">{e.company}</span>{e.summary && <span className="mt-0.5 block text-xs text-muted-foreground">{e.summary}</span>}</span>
+            <TabsContent value="overview" className="grid gap-5">
+              <section>
+                <h3 className={label}>Score breakdown</h3>
+                <div className="grid gap-2">
+                  {CRITERIA.map((c) => {
+                    const v = d.roleCandidate.scoreBreakdown?.[c.key] ?? 0;
+                    const max = weights[c.key] || 1;
+                    return (
+                      <div key={c.key} className="grid grid-cols-[1fr_120px_48px] items-center gap-3 text-sm">
+                        <span>{c.label}</span>
+                        <span className="h-1.5 overflow-hidden rounded-full bg-secondary"><span className={cn("block h-full rounded-full", v / max >= 0.6 ? "bg-success" : "bg-chip-amber")} style={{ width: `${Math.round((v / max) * 100)}%` }} /></span>
+                        <span className="num text-right text-muted-foreground">{v}/{weights[c.key]}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+                {d.roleCandidate.dealBreakerMissing && <p className="mt-2 text-sm text-destructive">A deal-breaker isn't met, so the score is capped at 40.</p>}
+              </section>
+              <section className="grid gap-3 text-sm">
+                <div><h3 className={label}>Why recommended</h3>{d.roleCandidate.whyRecommended ?? "–"}</div>
+                <div><h3 className={label}>Gaps</h3>{d.roleCandidate.gaps ?? "–"}</div>
+                {d.roleCandidate.redFlags && <div><h3 className={label}>Red flags</h3><span className="text-destructive">{d.roleCandidate.redFlags}</span></div>}
+              </section>
+              {!!d.roleCandidate.webFindings?.length && (
+                <section className="grid gap-1 text-sm">
+                  <h3 className={label}>Found on the web</h3>
+                  {d.roleCandidate.webFindings.map((f) => <a key={f.url} href={f.url} target="_blank" rel="noreferrer" className="underline">{f.finding}</a>)}
+                </section>
+              )}
+              {d.canEdit && <TrackingForm key={d.roleCandidate.id} detail={d} onSaved={() => { toast("Saved."); refresh(); }} />}
+            </TabsContent>
+
+            <TabsContent value="experience" className="grid gap-5">
+              <section>
+                <h3 className={label}>{d.candidate.totalYears ?? "?"} years total{d.roleCandidate.relevantYears != null ? `, ${d.roleCandidate.relevantYears} relevant` : ""}</h3>
+                <ol className="grid gap-3 border-l pl-4">
+                  {d.candidate.experience.map((e, i) => (
+                    <li key={i} className="relative text-sm">
+                      <span aria-hidden className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-primary" />
+                      <div className="font-medium">{e.title}</div>
+                      <div className="text-muted-foreground">{e.company} · <span className="num">{e.start ?? "?"} – {e.end ?? (e.start ? "Present" : "?")}</span></div>
+                      {e.summary && <div className="mt-0.5 text-xs text-muted-foreground">{e.summary}</div>}
+                    </li>
+                  ))}
+                </ol>
+              </section>
               {!!d.candidate.education.length && (
-                <div className="border-t pt-3 text-sm">
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Education</div>
+                <section className="text-sm">
+                  <h3 className={label}>Education</h3>
                   {d.candidate.education.map((e, i) => <div key={i}>{[e.degree, e.field].filter(Boolean).join(", ")}{e.degree || e.field ? " · " : ""}{e.school}</div>)}
-                </div>
+                </section>
               )}
               {!!(d.candidate.skills.length || d.candidate.languages.length) && (
-                <div className="flex flex-wrap gap-1.5 border-t pt-3">
-                  {[...d.candidate.skills.slice(0, 20), ...d.candidate.certifications, ...d.candidate.languages].map((s) => <Badge key={s}>{s}</Badge>)}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {!!d.roleCandidate.webFindings?.length && (
-            <Card>
-              <CardHeader><CardTitle>Found on the web</CardTitle></CardHeader>
-              <CardContent className="grid gap-1 text-sm">
-                {d.roleCandidate.webFindings.map((f) => <a key={f.url} href={f.url} target="_blank" rel="noreferrer" className="underline">{f.finding}</a>)}
-              </CardContent>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
-            <CardContent className="grid gap-2 text-sm">
-              {d.candidate.email || d.candidate.phone ? (
-                <>
-                  {d.candidate.email && <div className="flex items-center gap-2"><Mail className="h-4 w-4" /><span className="font-mono">{d.candidate.email}</span></div>}
-                  {d.candidate.phone && <div className="flex items-center gap-2"><Phone className="h-4 w-4" /><span className="font-mono">{d.candidate.phone}</span></div>}
-                  <p className="text-xs text-muted-foreground">Source: {d.candidate.contactSource ?? "—"} · retrieved {fmtDate(d.candidate.contactRetrievedAt)}</p>
-                </>
-              ) : d.candidate.hasEmail ? (
-                <p className="text-muted-foreground">Contact details are visible to the recruiter and the hiring manager.</p>
-              ) : (
-                <>
-                  <p className="text-muted-foreground">{d.reveals.some((r) => r.status === "pending") ? "Waiting for SignalHire…" : d.reveals.length ? "SignalHire had no contact details for this person." : "Not revealed. Contacts are revealed automatically for the Top 10."}</p>
-                  {d.isRecruiter && !d.reveals.some((r) => r.status === "pending") && <div><Button size="sm" variant="outline" disabled={busy} onClick={reveal}>Reveal with SignalHire · 1 credit</Button></div>}
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {d.messages.map((m) => (
-            <Card key={m.id}>
-              <CardHeader className="flex-row items-center justify-between">
-                <CardTitle>{m.channel === "email" ? "Email" : "LinkedIn note"} · {m.status.replace("_", " ")}</CardTitle>
-                <span className="text-xs text-muted-foreground">{m.sentAt ? `Sent ${fmtDate(m.sentAt)}` : `Queued ${fmtDate(m.queuedAt)}`}</span>
-              </CardHeader>
-              <CardContent className="grid gap-2">
-                {m.subject && <p className="text-sm"><b>Subject:</b> {m.subject}</p>}
-                <pre className="whitespace-pre-wrap rounded-md border bg-secondary/40 p-3 font-sans text-sm">{m.body}</pre>
-                {d.isRecruiter && (
-                  <div className="flex flex-wrap gap-2">
-                    {m.status === "awaiting_approval" && <Button size="sm" onClick={() => messageAction(m.id, "approve")}>Approve LinkedIn message</Button>}
-                    {m.status === "approved" && <Button size="sm" variant="outline" onClick={() => messageAction(m.id, "sent")}>Mark as sent</Button>}
-                    {["queued", "awaiting_approval", "approved"].includes(m.status) && <Button size="sm" variant="ghost" onClick={() => messageAction(m.id, "cancel")}>Cancel</Button>}
+                <section>
+                  <h3 className={label}>Skills and languages</h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[...d.candidate.skills.slice(0, 20), ...d.candidate.certifications, ...d.candidate.languages].map((s) => <Badge key={s}>{s}</Badge>)}
                   </div>
+                </section>
+              )}
+              <p className="text-xs text-muted-foreground">Found via {d.candidate.sources.join(" + ")}{d.otherRoles.length ? ` · also in ${d.otherRoles.map((o) => `${o.title} (${o.score ?? "–"})`).join(", ")}` : ""}</p>
+            </TabsContent>
+
+            <TabsContent value="outreach" className="grid gap-5">
+              <section className="grid gap-2 text-sm">
+                <h3 className={label}>Contact</h3>
+                {d.candidate.email || d.candidate.phone ? (
+                  <>
+                    {d.candidate.email && <div className="flex items-center gap-2"><Mail className="size-4 text-muted-foreground" /><span>{d.candidate.email}</span></div>}
+                    {d.candidate.phone && <div className="flex items-center gap-2"><Phone className="size-4 text-muted-foreground" /><span>{d.candidate.phone}</span></div>}
+                    <p className="text-xs text-muted-foreground">From {d.candidate.contactSource ?? "–"} · {fmtDate(d.candidate.contactRetrievedAt)}</p>
+                  </>
+                ) : d.candidate.hasEmail ? (
+                  <p className="text-muted-foreground">Visible to the recruiter and hiring manager.</p>
+                ) : (
+                  <>
+                    <p className="text-muted-foreground">{d.reveals.some((r) => r.status === "pending") ? "Waiting for SignalHire…" : d.reveals.length ? "SignalHire had no contact details." : "Not revealed yet."}</p>
+                    {d.isRecruiter && !d.reveals.some((r) => r.status === "pending") && <div><Button size="sm" variant="outline" disabled={busy} onClick={reveal}>Reveal with SignalHire · 1 credit</Button></div>}
+                  </>
                 )}
-              </CardContent>
-            </Card>
-          ))}
-
-          {d.canEdit && <TrackingForm key={d.roleCandidate.id} detail={d} onSaved={() => { toast("Saved."); refresh(); }} />}
-
-          {!!d.otherRoles.length && (
-            <p className="text-xs text-muted-foreground">Also in: {d.otherRoles.map((o) => `${o.title} (${o.score ?? "—"})`).join(", ")}</p>
-          )}
+              </section>
+              {d.messages.map((m) => (
+                <section key={m.id} className="grid gap-2 rounded-lg border p-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{m.channel === "email" ? "Email" : "LinkedIn note"} <span className="font-normal text-muted-foreground">· {m.status.replace("_", " ")}</span></span>
+                    <span className="text-xs text-muted-foreground">{m.sentAt ? `Sent ${fmtDate(m.sentAt)}` : `Queued ${fmtDate(m.queuedAt)}`}</span>
+                  </div>
+                  {m.subject && <p className="text-sm font-medium">{m.subject}</p>}
+                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">{m.body}</p>
+                  {d.isRecruiter && (
+                    <div className="flex flex-wrap gap-2">
+                      {m.status === "awaiting_approval" && <Button size="sm" onClick={() => messageAction(m.id, "approve")}>Approve LinkedIn message</Button>}
+                      {m.status === "approved" && <Button size="sm" variant="outline" onClick={() => messageAction(m.id, "sent")}>Mark as sent</Button>}
+                      {["queued", "awaiting_approval", "approved"].includes(m.status) && <Button size="sm" variant="ghost" onClick={() => messageAction(m.id, "cancel")}>Cancel</Button>}
+                    </div>
+                  )}
+                </section>
+              ))}
+              {!d.messages.length && <p className="text-sm text-muted-foreground">No messages yet.</p>}
+            </TabsContent>
+          </Tabs>
         </div>
       )}
     </SidePanel>
