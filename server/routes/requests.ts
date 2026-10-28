@@ -62,6 +62,14 @@ async function notifyKhalil(id: string, title: string, dept: string, by: string)
   });
 }
 
+/** A request may only point at a location that exists (a deleted one would otherwise fail on the foreign key). */
+async function assertLocation(locationId: string | null | undefined) {
+  if (!locationId) return;
+  const db = await getDb();
+  const [l] = await db.select({ id: schema.locations.id }).from(schema.locations).where(eq(schema.locations.id, locationId));
+  if (!l) throw new HTTPException(400, { message: "That location no longer exists. Choose another one." });
+}
+
 export const requestRoutes = new Hono<AppEnv>()
   .get("/requests", query(z.object({ scope: z.enum(["mine", "approvals", "roles"]).optional() })), async (c) => {
     const user = c.get("user");
@@ -90,6 +98,7 @@ export const requestRoutes = new Hono<AppEnv>()
   .post("/requests", query(z.object({ submit: z.enum(["true", "false"]).optional() })), json(RequestInput), async (c) => {
     const user = requireRole(c, "manager", "recruiter", "admin");
     const input = c.req.valid("json");
+    await assertLocation(input.locationId);
     const submit = c.req.valid("query").submit === "true";
     const db = await getDb();
     const [r] = await db.insert(schema.roleRequests).values({
@@ -110,6 +119,7 @@ export const requestRoutes = new Hono<AppEnv>()
     const editable = (r.requesterId === user.id && ["draft", "changes_requested"].includes(r.status)) || hasRole(user, "admin", "recruiter");
     if (!editable) throw new HTTPException(403, { message: "This request can't be edited now." });
     const input = c.req.valid("json");
+    await assertLocation(input.locationId);
     const db = await getDb();
     await db.update(schema.roleRequests).set({ ...input, updatedAt: new Date() }).where(eq(schema.roleRequests.id, r.id));
     await event(r.id, user, "edited");
