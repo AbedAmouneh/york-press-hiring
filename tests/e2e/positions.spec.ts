@@ -10,7 +10,7 @@ test.describe("saved positions and locations", () => {
     await title.click();
     await expect(page.getByRole("listbox", { name: "Saved positions" })).toBeVisible();
     await title.fill("account");
-    await page.keyboard.press("ArrowDown");
+    // The best match is highlighted while typing, so Enter picks it.
     await page.keyboard.press("Enter");
 
     await expect(title).toHaveValue("Accountant");
