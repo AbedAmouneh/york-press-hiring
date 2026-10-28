@@ -105,6 +105,26 @@ const outsider = client();
 await outsider("POST", "/auth/login", { email: "demo.hm@york-press.test", password: "demo-york-2026" });
 ok((await outsider("GET", "/requests?scope=approvals")).requests.length === 0, "someone else's pending request stays out of other users' Approvals list");
 ok((await outsider("GET", "/requests?scope=mine")).requests.length === 0, "and out of their own list");
+
+// Comments on Khalil's decisions. The admin is the requester here because demo accounts get no email.
+const { id: commentReq } = await admin("POST", "/requests?submit=true", {
+  title: "Comment check", department: "Editorial", seniority: "Mid", locationId: lebanon.id, currency: "USD", justification: "Checking comments.",
+});
+const decide = (who: typeof ceo, action: string, comment?: string) => who.raw("POST", `/requests/${commentReq}/decision`, { action, comment });
+ok((await decide(manager, "approve")).status === 403, "only the CEO can decide on a request");
+ok((await decide(ceo, "request_changes", "   ")).status === 400, "sending a request back needs a real comment");
+ok((await decide(ceo, "reject", "x".repeat(2001))).status === 400, "decision comments are capped at 2,000 characters");
+const tricky = "Please add:\n- the start date\n<b>not bold</b>";
+ok((await decide(ceo, "request_changes", tricky)).status === 200, "the CEO sent it back with a comment");
+ok((await admin("GET", `/requests/${commentReq}`)).events.some((e: any) => e.action === "Requested changes" && e.comment === tricky), "the requester sees the comment exactly as written");
+ok((await decide(ceo, "approve")).status === 400, "a request that isn't waiting can't be decided");
+const decisionMail = (await admin("GET", "/outbox")).emails.find((e: any) => e.subject === "Changes requested: Comment check");
+ok(decisionMail?.body.includes("comment:\nPlease add:\n- the start date"), "the requester's email carries the comment and its line breaks");
+await admin("POST", `/requests/${commentReq}/submit`);
+const together = await Promise.all([decide(ceo, "reject", "No budget."), decide(ceo, "request_changes", "Add the owner.")]);
+const decided = (await admin("GET", `/requests/${commentReq}`)).events.filter((e: any) => ["Rejected", "Requested changes"].includes(e.action));
+ok(together.filter((r) => r.status === 200).length === 1 && decided.length === 2, "two decisions sent at once only apply once");
+
 await ceo("POST", `/requests/${id}/decision`, { action: "approve" });
 
 let status = "";
