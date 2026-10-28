@@ -1,5 +1,6 @@
 // Two-step login (TOTP authenticator apps such as Google Authenticator, 1Password or Authy).
-// Required for admin and CEO accounts. Secrets are encrypted at rest; recovery codes are stored hashed.
+// Optional: REQUIRE_TWO_FACTOR=true makes it mandatory for admin and CEO accounts. Anyone who has turned
+// it on is always asked for a code. Secrets are encrypted at rest; recovery codes are stored hashed.
 import crypto from "node:crypto";
 import { Secret, TOTP } from "otpauth";
 import QRCode from "qrcode";
@@ -15,8 +16,8 @@ export const TWO_FACTOR_ROLES: Role[] = ["admin", "ceo"];
 
 type TwoFactorUser = { roles: Role[]; isDemo: boolean; totpEnabledAt: Date | null };
 
-/** Admin and CEO accounts must set it up before using the app. Demo accounts are exempt. */
-export const twoFactorRequired = (u: TwoFactorUser) => !u.isDemo && u.roles.some((r) => TWO_FACTOR_ROLES.includes(r));
+/** With REQUIRE_TWO_FACTOR=true, admin and CEO accounts must set it up first. Demo accounts are exempt. */
+export const twoFactorRequired = (u: TwoFactorUser) => env.requireTwoFactor && !u.isDemo && u.roles.some((r) => TWO_FACTOR_ROLES.includes(r));
 export const needsTwoFactorSetup = (u: TwoFactorUser) => twoFactorRequired(u) && !u.totpEnabledAt;
 
 // ---------------------------------------------------------------- secret encryption (AES-256-GCM)
