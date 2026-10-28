@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cvProblem, DecisionInput, RequestInput, RequestPatch, TemplateInput, WeightsInput } from "../../shared/schemas.js";
 import { DEFAULT_WEIGHTS } from "../../shared/types.js";
-import { InviteForm, LocationForm, PositionForm, RequestForm, SetupForm, type RequestFormValues } from "../../src/lib/forms.js";
+import { InviteForm, LocationForm, PositionForm, RequestDraftForm, RequestForm, SetupForm, type RequestFormValues } from "../../src/lib/forms.js";
 
 const messages = (r: { success: boolean; error?: { issues: { path: PropertyKey[]; message: string }[] } }) =>
   Object.fromEntries((r.error?.issues ?? []).map((i) => [i.path.join("."), i.message]));
@@ -67,6 +67,11 @@ describe("browser forms reuse the API rules", () => {
       currency: "Choose a currency.",
       justification: "Explain why this role is needed.",
     });
+  });
+
+  it("lets a draft be saved without location, budget or reason, but not without a title", () => {
+    expect(messages(RequestDraftForm.safeParse(emptyRequest))).toEqual({ title: "Add a job title." });
+    expect(RequestDraftForm.safeParse({ ...emptyRequest, title: "Senior Editor" }).success).toBe(true);
   });
 
   it("turns text fields into the API shape", () => {
