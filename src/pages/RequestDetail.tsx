@@ -92,7 +92,7 @@ function Timeline({ r, events }: { r: RequestRow; events: RequestEvent[] }) {
             <span aria-hidden className={cn("absolute -left-[25px] top-1 size-2.5 rounded-full ring-4 ring-card", e.action === "Rejected" ? "bg-destructive" : e.action === "Requested changes" ? "bg-chip-amber" : "bg-success")} />
             <div className="font-medium">{e.action}</div>
             <div className="text-xs text-muted-foreground">{e.actorName} · {fmtDateTime(e.createdAt)}</div>
-            {e.comment && <p className="mt-1 rounded-md bg-secondary/70 px-2.5 py-1.5 text-muted-foreground">{e.comment}</p>}
+            {e.comment && <p dir="auto" className="mt-1 whitespace-pre-line break-words rounded-md bg-secondary/70 px-2.5 py-1.5 text-start text-muted-foreground">{e.comment}</p>}
           </li>
         ))}
         {next && (
