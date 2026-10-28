@@ -29,6 +29,7 @@ export async function serializeRequests(rows: (typeof schema.roleRequests.$infer
       screened: sql<number>`count(*)::int`,
       contacted: sql<number>`count(*) filter (where ${schema.roleCandidates.status} <> 'new')::int`,
       hmYes: sql<number>`count(*) filter (where ${schema.roleCandidates.hmDecision} = 'yes')::int`,
+      hmPending: sql<number>`count(*) filter (where ${schema.roleCandidates.isTop10} and ${schema.roleCandidates.hmDecision} is null)::int`,
       topAvg: sql<number>`coalesce(round(avg(${schema.roleCandidates.score}) filter (where ${schema.roleCandidates.isTop10})),0)::int`,
     })
     .from(schema.roleCandidates)
@@ -48,7 +49,7 @@ export async function serializeRequests(rows: (typeof schema.roleRequests.$infer
     requesterName: names.get(r.requesterId) ?? null,
     hiringManagerName: r.hiringManagerId ? names.get(r.hiringManagerId) ?? null : null,
     recruiterName: r.recruiterId ? names.get(r.recruiterId) ?? null : null,
-    stats: byId.get(r.id) ?? { screened: 0, contacted: 0, hmYes: 0, topAvg: 0 },
+    stats: byId.get(r.id) ?? { screened: 0, contacted: 0, hmYes: 0, hmPending: 0, topAvg: 0 },
     lastEvent: lastBy.get(r.id) ?? null,
   }));
 }
