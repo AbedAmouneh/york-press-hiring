@@ -64,6 +64,13 @@
       "when": 1793211850530,
       "tag": "0008_request-messages",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793212711633,
+      "tag": "0009_salary-per-month-default",
+      "breakpoints": true
     }
   ]
 }

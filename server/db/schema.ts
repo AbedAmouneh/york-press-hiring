@@ -69,7 +69,7 @@ export const roleRequests = pgTable("role_requests", {
   salaryMin: integer("salary_min"),
   salaryMax: integer("salary_max"),
   currency: text("currency"),
-  salaryPeriod: text("salary_period").$type<"year" | "month">().notNull().default("year"),
+  salaryPeriod: text("salary_period").$type<"year" | "month">().notNull().default("month"),
   justification: text("justification").notNull().default(""),
   targetCompanies: text("target_companies").array().notNull().default(sql`'{}'::text[]`),
   avoidCompanies: text("avoid_companies").array().notNull().default(sql`'{}'::text[]`),
