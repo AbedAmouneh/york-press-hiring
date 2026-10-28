@@ -19,7 +19,8 @@ test.describe("saved positions and locations", () => {
     await expect(page.getByRole("combobox", { name: "Seniority" })).toHaveValue("Entry");
     await expect(page.getByLabel("Must-haves")).toHaveValue(/^Bachelor's in Accounting or Finance\n/);
     await expect(page.getByLabel("Job description")).toHaveValue(/full accounting cycle/);
-    await expect(page.getByRole("status")).toContainText("Suggested from the saved “Accountant” position");
+    await expect(page.getByRole("status")).toContainText("Finance · Entry · 0–1 yrs");
+    await expect(page.getByRole("status")).toContainText("details suggested below");
 
     // Suggestions stay editable, and a later pick never overwrites what the manager typed.
     await page.getByLabel("Must-haves").fill("IFRS\nArabic");
@@ -28,6 +29,30 @@ test.describe("saved positions and locations", () => {
     await expect(title).toHaveValue("Financial Accountant");
     await expect(page.getByRole("combobox", { name: "Seniority" })).toHaveValue("Senior");
     await expect(page.getByLabel("Must-haves")).toHaveValue("IFRS\nArabic");
+
+    // Undo puts back what the fields held before the last pick; the title stays.
+    await page.getByRole("button", { name: "Undo suggestions" }).click();
+    await expect(page.getByRole("combobox", { name: "Seniority" })).toHaveValue("Entry");
+    await expect(title).toHaveValue("Financial Accountant");
+  });
+
+  test("department filters narrow the list and follow the search", async ({ page }) => {
+    await signInAs(page, "Manager");
+    await page.goto("/requests/new");
+    const title = page.getByRole("combobox", { name: "Job title" });
+    await title.click();
+    const filters = page.getByRole("group", { name: "Filter by department" });
+    await expect(filters.getByRole("button", { name: "All 29" })).toHaveAttribute("aria-pressed", "true");
+    await filters.getByRole("button", { name: /^Finance/ }).click();
+    const list = page.getByRole("listbox", { name: "Saved positions" });
+    await expect(list.getByRole("option")).toHaveCount(3);
+    await expect(title).toBeFocused();
+
+    await title.fill("editor");
+    await expect(filters.getByRole("button", { name: /^Editorial 7/ })).toBeVisible();
+    await filters.getByRole("button", { name: /^Editorial/ }).click();
+    // 7 editorial positions, plus "Use “editor” as a new title".
+    await expect(list.getByRole("option")).toHaveCount(8);
   });
 
   test("a manager can type a title or a level that isn't in the list", async ({ page }) => {
@@ -35,7 +60,7 @@ test.describe("saved positions and locations", () => {
     await page.goto("/requests/new");
     const title = page.getByRole("combobox", { name: "Job title" });
     await title.fill("Podcast Host");
-    await expect(page.getByText("“Podcast Host” will be used as typed.")).toBeVisible();
+    await expect(page.getByRole("option", { name: "Use “Podcast Host” as a new title" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(title).toHaveValue("Podcast Host");
     await expect(page.getByLabel("Must-haves")).toHaveValue("");
