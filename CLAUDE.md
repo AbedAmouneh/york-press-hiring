@@ -105,6 +105,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 - **Previews** (`VERCEL_ENV=preview`, one per pull request, own Neon branch): every provider is
   forced into mock mode unless `PREVIEW_USE_REAL_SERVICES=true`, `appUrl` is the preview's own
   URL, and the QStash queue is off. Keep it that way: a preview must never email a candidate.
+  `.github/workflows/neon-preview-cleanup.yml` deletes a PR's `preview/<branch>` database branch when the PR
+  closes, plus a weekly sweep (Neon free plan: 10 branches). It needs the `NEON_API_KEY` secret and must only
+  ever delete non-default, unprotected branches whose name starts with `preview/`.
 - **Secrets** live only in Vercel environment variables or a local `.env` (gitignored).
 - Permissions are enforced on the server for every route, not only hidden in the UI.
 - **Security** (`server/security.ts`, `server/services/rate-limit.ts`): state-changing requests
