@@ -80,6 +80,7 @@ test.describe("saved positions and locations", () => {
     await expect(page.getByLabel("Working hours")).toHaveValue(/Sat 8:00–13:30/);
 
     // Hiring for another country: the new location replaces the suggestion, but not what the manager typed.
+    await page.getByText("More details").click();
     await page.getByLabel("Search in countries").fill("Lebanon, Jordan");
     await page.getByLabel("Location", { exact: true }).selectOption({ label: "Dubai, United Arab Emirates" });
     await expect(page.getByLabel("Location policy")).toHaveValue("On-site, Dubai, United Arab Emirates");
