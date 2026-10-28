@@ -10,7 +10,7 @@ import { cn, fmtDate, fmtDateTime, money } from "@/lib/utils";
 import { RequestStatusBadge } from "@/components/Status";
 import { Button } from "@/components/ui/button";
 import { Avatar, Badge, DeptDot, Field, FormError, Spinner, useToast } from "@/components/kit";
-import { DecisionInput } from "../../shared/schemas";
+import { COMMENT_MAX, DecisionInput } from "../../shared/schemas";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -50,6 +50,7 @@ function DecisionForm({ requestId }: { requestId: string }) {
   const toast = useToast();
   const form = useForm({ resolver: zodResolver(DecisionInput), defaultValues: { action: "approve" as Action, comment: "" } });
   const { errors, isSubmitting } = form.formState;
+  const length = (form.watch("comment") ?? "").length;
   const decide = (action: Action) => {
     form.setValue("action", action);
     return form.handleSubmit(async (values) => {
@@ -66,8 +67,8 @@ function DecisionForm({ requestId }: { requestId: string }) {
     <Card className="gap-3 border-primary/30 p-5">
       <h2 className="font-semibold">Your decision</h2>
       <Button disabled={isSubmitting} onClick={() => decide("approve")}>Approve and start sourcing</Button>
-      <Field label="Comment" hint="Needed to send back or reject." htmlFor="dc" error={errors.comment?.message}>
-        <Textarea id="dc" rows={3} aria-invalid={!!errors.comment} {...form.register("comment")} />
+      <Field label="Comment" hint={length > COMMENT_MAX - 200 ? `${length} / ${COMMENT_MAX} characters` : "Needed to send back or reject."} htmlFor="dc" error={errors.comment?.message}>
+        <Textarea id="dc" rows={3} dir="auto" maxLength={COMMENT_MAX} aria-invalid={!!errors.comment} {...form.register("comment")} />
       </Field>
       <FormError>{errors.root?.message}</FormError>
       <div className="grid grid-cols-2 gap-2">
