@@ -91,6 +91,10 @@ Every pull request on GitHub gets its own copy of the site with its own database
 2. **A database per preview:** Vercel → Storage → your Neon database → Settings → turn on **Preview** branching (the option to create a branch for each preview deployment). Each preview then gets its own copy of the database; the build applies any new migrations to that copy only, and the copy is deleted with the preview.
 3. **Environment variables:** set `APP_URL` for **Production** only, and add `DEMO_MODE=true` for **Preview** so you can sign in with the demo buttons.
 4. Optional: Settings → Deployment Protection → **Protection Bypass for Automation**, so long sourcing runs can continue themselves inside a preview.
+5. **Clean up old preview databases automatically.** Neon's free plan allows 10 database branches, and each pull request makes one. A GitHub workflow deletes a pull request's branch when it's merged or closed, plus a weekly sweep. It needs a Neon API key:
+   - In Neon: **Organization settings → API keys → Create new API key**, choose **Project-scoped** and the **york-press-hiring-db** project, then copy the key.
+   - In GitHub: **repo → Settings → Secrets and variables → Actions → New repository secret**, name `NEON_API_KEY`, paste the key, **Add secret**.
+   - To clean up straight away: **Actions → Clean up preview databases → Run workflow**. It only ever deletes branches starting with `preview/`, never `main`.
 
 Previews show a yellow "Test copy" banner, use sample candidates and keep every email in the mock outbox, even though your API keys are present. Nothing in a preview emails a candidate or spends credits. (To test with the real services, set `PREVIEW_USE_REAL_SERVICES=true` for Preview.) Because a preview database starts as a copy of the live one, keep step 1 on.
 
