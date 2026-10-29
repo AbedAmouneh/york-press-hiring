@@ -546,6 +546,14 @@ export async function applyRevealResults(results: RevealResult[], isMock = false
         ...(r.linkedinUrl ? { linkedinUrl: r.linkedinUrl } : {}),
       }).where(and(eq(schema.candidates.id, reveal.candidateId), isNull(schema.candidates.email)));
     }
+    // The credit also bought the full profile: keep the LinkedIn link, dated experience and education.
+    if (success && (r.linkedinUrl || (r.profile && Object.keys(r.profile).length))) {
+      await db.update(schema.candidates).set({
+        ...(r.linkedinUrl ? { linkedinUrl: r.linkedinUrl } : {}),
+        ...(r.profile ?? {}),
+        lastRefreshedAt: new Date(),
+      }).where(eq(schema.candidates.id, reveal.candidateId));
+    }
   }
   await logUsage({ provider: "signalhire", action: "reveal", units: credits, mock: isMock });
   return credits;
