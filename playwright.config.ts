@@ -34,6 +34,7 @@ export default defineConfig({
       DATABASE_URL: "",
       ANTHROPIC_API_KEY: "",
       OPENCODE_API_KEY: "",
+      GEMINI_API_KEY: "",
       PDL_API_KEY: "",
       SIGNALHIRE_API_KEY: "",
       RESEND_API_KEY: "",
