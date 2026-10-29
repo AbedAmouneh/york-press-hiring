@@ -67,7 +67,12 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   score bands, rankings, deal-breakers, fairness pairs, prompt injection, red flags). Run
   `npm run eval:scoring` after any prompt or model change; `.github/workflows/eval.yml` runs it
   weekly and on PRs that touch the prompts. Add a case whenever a real scoring mistake is found.
-- `server/services/providers/`: PDL and SignalHire clients plus fictional mock data.
+- `server/services/providers/`: PDL and SignalHire clients plus fictional mock data. SignalHire's search returns a
+  preview only (no LinkedIn link, dates or education); a reveal (1 credit) returns the full profile, which is saved.
+- `server/services/linkedin-finder.ts`: with Gemini, finds each new candidate's LinkedIn link by Google search
+  (Gemini Search grounding, 5,000 free searches a month) in the enrich step, plus a "Find LinkedIn profiles" button
+  (`POST /requests/:id/linkedin`). A link is kept only if a search ran and its address carries the person's name.
+  LinkedIn itself is never fetched. SignalHire stays for emails and phones.
 - `server/routes/`: public (setup, auth, apply page, SignalHire webhook, cron), requests,
   candidates, outreach, admin. Permission checks live in `routes/access.ts`.
 - `server/services/merge.ts`: pure helpers that merge duplicate profiles and pre-rank them.
