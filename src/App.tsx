@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import Setup from "./pages/Setup";
 import Invite from "./pages/Invite";
 import TwoFactorSetup from "./pages/TwoFactor";
+import ChangePassword from "./pages/ChangePassword";
 import Apply from "./pages/Apply";
 import Home from "./pages/Home";
 import Requests from "./pages/Requests";
@@ -55,6 +56,7 @@ export default function App() {
       </Routes>
     );
   }
+  if (user.passwordChangeRequired) return <ChangePassword user={user} />;
   if (user.twoFactorSetupRequired) return <TwoFactorSetup />;
   return (
     <Routes>
