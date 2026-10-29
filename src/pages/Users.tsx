@@ -37,20 +37,31 @@ function RolePicker({ value, onChange }: { value: Role[]; onChange: (r: Role[]) 
 
 const INVITE_DEFAULTS: z.input<typeof UserInviteInput> = { name: "", email: "", department: null, roles: ["manager", "hm"] };
 
-function InviteUserForm({ onDone, onCancel }: { onDone: (email: string, link: string | null) => void; onCancel: () => void }) {
+type AddMode = "invite" | "password";
+
+function InviteUserForm({ onDone, onCancel }: { onDone: (email: string, link: string | null, mode: AddMode) => void; onCancel: () => void }) {
   const form = useForm({ resolver: zodResolver(UserInviteInput), defaultValues: INVITE_DEFAULTS });
+  const [mode, setMode] = useState<AddMode>("invite");
   const { errors, isSubmitting } = form.formState;
   const submit = form.handleSubmit(async (values) => {
     try {
-      const res = await call(rpc.users.$post({ json: values }));
+      const res = await call(rpc.users.$post({ json: mode === "password" ? values : { ...values, password: undefined } }));
       form.reset(INVITE_DEFAULTS);
-      onDone(values.email, res.inviteLink ?? null);
+      onDone(values.email, res.inviteLink ?? null, mode);
     } catch (err) {
       form.setError("root", { message: (err as Error).message });
     }
   });
   return (
     <form onSubmit={submit} className="grid gap-3" noValidate>
+      <div role="radiogroup" aria-label="How they sign in" className="grid grid-cols-2 gap-1 rounded-lg bg-secondary p-1 text-sm">
+        {([["invite", "Email an invite link"], ["password", "Set a password"]] as const).map(([m, label]) => (
+          <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setMode(m)}
+            className={`rounded-md px-2 py-1.5 ${mode === m ? "bg-card font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
       <Field required label="Name" htmlFor="un" error={errors.name?.message}><Input id="un" aria-invalid={!!errors.name} {...form.register("name")} /></Field>
       <Field required label="Email" htmlFor="ue" error={errors.email?.message}><Input id="ue" type="email" aria-invalid={!!errors.email} {...form.register("email")} /></Field>
       <Field label="Department" htmlFor="ud">
@@ -61,8 +72,16 @@ function InviteUserForm({ onDone, onCancel }: { onDone: (email: string, link: st
       <Field required label="Roles" error={errors.roles?.message}>
         <Controller control={form.control} name="roles" render={({ field }) => <RolePicker value={field.value} onChange={field.onChange} />} />
       </Field>
+      {mode === "password" && (
+        <Field required label="Starting password" hint="At least 10 characters. Give it to them yourself; they choose their own when they first sign in." htmlFor="upw" error={errors.password?.message}>
+          <Input id="upw" type="text" autoComplete="off" aria-invalid={!!errors.password} {...form.register("password", { shouldUnregister: true })} />
+        </Field>
+      )}
       <FormError>{errors.root?.message}</FormError>
-      <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel}>Cancel</Button><Button type="submit" disabled={isSubmitting}>Send invite</Button></div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" disabled={isSubmitting}>{mode === "password" ? "Create user" : "Send invite"}</Button>
+      </div>
     </form>
   );
 }
@@ -75,11 +94,20 @@ export default function Users() {
   const [open, setOpen] = useState(false);
   const [link, setLink] = useState<string | null>(null);
 
-  function invited(email: string, inviteLink: string | null) {
+  function added(email: string, inviteLink: string | null, mode: AddMode) {
     setOpen(false);
     setLink(inviteLink);
-    toast(`Invite sent to ${email}.`);
+    toast(mode === "password" ? `Account created for ${email}. Give them the starting password yourself.` : `Invite sent to ${email}.`);
     qc.invalidateQueries({ queryKey: ["users"] });
+  }
+  async function cancelInvite(u: U) {
+    if (!window.confirm(`Cancel ${u.name}'s invite? Their invite link stops working and they're removed from the list. You can add them again any time.`)) return;
+    try {
+      await call(rpc.users[":id"].$delete({ param: { id: u.id } }));
+      setLink(null);
+      toast(`Invite for ${u.name} cancelled.`);
+      qc.invalidateQueries({ queryKey: ["users"] });
+    } catch (err) { toast((err as Error).message, "error"); }
   }
   async function update(u: U, body: Pick<Partial<U>, "name" | "roles" | "department" | "active">) {
     try {
@@ -104,7 +132,7 @@ export default function Users() {
   return (
     <>
       <PageHeader title="Users">
-        <Button onClick={() => setOpen(true)}><UserPlus /> Invite user</Button>
+        <Button onClick={() => setOpen(true)}><UserPlus /> Add user</Button>
       </PageHeader>
       {link && <p className="mb-4 break-all rounded-md border border-primary/20 bg-accent p-3 text-sm">Email is in mock mode — share this invite link yourself: <span className="font-mono">{link}</span></p>}
       {q.isLoading ? <Spinner /> : (
@@ -124,6 +152,8 @@ export default function Users() {
                 <Td><Switch checked={u.active} onCheckedChange={(active) => update(u, { active })} aria-label="Active" /></Td>
                 <Td className="whitespace-nowrap">
                   {u.invited && <Button size="sm" variant="ghost" onClick={() => resend(u)}>Resend invite</Button>}
+                  {u.invited && !u.lastLoginAt && <Button size="sm" variant="ghost" onClick={() => cancelInvite(u)}>Cancel invite</Button>}
+                  {u.passwordChangeRequired && <Badge tone="info">new password due</Badge>}
                   {u.twoFactorEnabled && u.id !== me.id && <Button size="sm" variant="ghost" onClick={() => resetTwoFactor(u)}>Reset 2-step</Button>}
                 </Td>
               </TableRow>
@@ -131,8 +161,8 @@ export default function Users() {
           </TableBody>
         </DataTable>
       )}
-      <Modal open={open} onOpenChange={setOpen} title="Invite a user" description="They get an email with a link to set their password.">
-        <InviteUserForm onDone={invited} onCancel={() => setOpen(false)} />
+      <Modal open={open} onOpenChange={setOpen} title="Add a user" description="Email them an invite link, or set a starting password yourself.">
+        <InviteUserForm onDone={added} onCancel={() => setOpen(false)} />
       </Modal>
     </>
   );
