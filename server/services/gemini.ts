@@ -2,7 +2,7 @@
 // Same prompts and JSON schemas as the Claude path; Gemini returns the JSON directly (structured output).
 import { env } from "../env.js";
 
-const GEMINI_TIMEOUT_MS = 90_000;
+const GEMINI_TIMEOUT_MS = 60_000;
 
 export type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
@@ -61,8 +61,40 @@ export function readGemini<T>(res: GeminiResponse): { data: T; usage: GeminiUsag
   }
 }
 
+/** Models to try in order: the chosen one, then lighter ones that are usually less busy. Exported for tests. */
+export function geminiModels(chosen = env.geminiModel) {
+  return [...new Set([chosen, ...FALLBACK_MODELS])];
+}
+const FALLBACK_MODELS = ["gemini-3.6-flash", "gemini-3.5-flash-lite"];
+/** Busy or temporarily failing: worth trying again, or trying the next model. */
+const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+
+class GeminiError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
+/**
+ * Ask Gemini, moving to a lighter model when one is overloaded (503 "high demand", 429 rate limits),
+ * with a short pause between tries. Other errors (bad key, bad request) fail straight away.
+ */
 export async function geminiStructured<T>(call: GeminiCall): Promise<{ data: T; usage: GeminiUsage }> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.geminiModel)}:generateContent`;
+  const models = geminiModels();
+  let last: Error | null = null;
+  for (const [i, model] of models.entries()) {
+    try {
+      return await geminiOnce<T>(model, call);
+    } catch (err) {
+      last = err as Error;
+      const retryable = err instanceof GeminiError ? RETRYABLE.has(err.status) : /did not answer/.test(last.message);
+      if (!retryable || i === models.length - 1) break;
+      await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+    }
+  }
+  throw last ?? new Error("Gemini failed");
+}
+
+async function geminiOnce<T>(model: string, call: GeminiCall): Promise<{ data: T; usage: GeminiUsage }> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   let res: Response;
   try {
     res = await fetch(url, {
@@ -77,6 +109,6 @@ export async function geminiStructured<T>(call: GeminiCall): Promise<{ data: T; 
     throw err;
   }
   const json = (await res.json().catch(() => ({}))) as GeminiResponse;
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${json.error?.message ?? res.statusText}`);
+  if (!res.ok) throw new GeminiError(`Gemini ${res.status} (${model}): ${json.error?.message ?? res.statusText}`, res.status);
   return readGemini<T>(json);
 }
