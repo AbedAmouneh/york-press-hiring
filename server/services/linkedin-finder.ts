@@ -57,7 +57,10 @@ export async function findLinkedinUrl(p: LookupPerson, runId?: string | null): P
     body: JSON.stringify(lookupBody(p)),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  if (!res.ok) throw new Error(`LinkedIn lookup failed (${res.status})`);
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(`LinkedIn lookup failed (${res.status}): ${err.error?.message ?? res.statusText}`);
+  }
   const out = readLookup((await res.json()) as LookupResponse, p.fullName);
   await logUsage({ runId: runId ?? null, provider: "claude", action: "linkedin_lookup", units: out.searches });
   return out.url;
@@ -66,11 +69,14 @@ export async function findLinkedinUrl(p: LookupPerson, runId?: string | null): P
 /** Look several people up a few at a time. Failures count as "not found" and never stop the others. */
 export async function findLinkedinUrls<T extends LookupPerson & { id: string }>(people: T[], runId?: string | null, concurrency = 5) {
   const found = new Map<string, string>();
+  let error: string | null = null;
   for (let i = 0; i < people.length; i += concurrency) {
     await Promise.all(people.slice(i, i + concurrency).map(async (p) => {
-      const url = await findLinkedinUrl(p, runId).catch(() => null);
+      const url = await findLinkedinUrl(p, runId).catch((e: Error) => { error ??= e.message; return null; });
       if (url) found.set(p.id, url);
     }));
+    // Every lookup in the first group failed the same way (bad key, quota): stop rather than repeat it 50 times.
+    if (i === 0 && !found.size && error) break;
   }
-  return found;
+  return Object.assign(found, { error });
 }
