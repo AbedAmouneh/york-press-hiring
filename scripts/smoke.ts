@@ -7,7 +7,7 @@ import path from "node:path";
 process.env.PGLITE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "yp-smoke-"));
 process.env.DEMO_MODE = "true";
 process.env.REQUIRE_TWO_FACTOR = "true"; // check the strictest setup
-for (const k of ["DATABASE_URL", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY", "PDL_API_KEY", "SIGNALHIRE_API_KEY", "RESEND_API_KEY"]) delete process.env[k];
+for (const k of ["DATABASE_URL", "ANTHROPIC_API_KEY", "OPENCODE_API_KEY", "GEMINI_API_KEY", "PDL_API_KEY", "SIGNALHIRE_API_KEY", "RESEND_API_KEY"]) delete process.env[k];
 
 const { default: app } = await import("../server/app.js");
 const { currentCode } = await import("../server/services/two-factor.js");
