@@ -4,9 +4,11 @@ import { clientOptions } from "../../server/services/claude.js";
 
 afterEach(() => vi.unstubAllEnvs());
 
-const keys = (anthropic: string, opencode: string) => {
+const keys = (anthropic: string, opencode: string, gemini = "") => {
   vi.stubEnv("ANTHROPIC_API_KEY", anthropic);
   vi.stubEnv("OPENCODE_API_KEY", opencode);
+  vi.stubEnv("GEMINI_API_KEY", gemini);
+  vi.stubEnv("AI_PROVIDER", "");
 };
 
 describe("which service answers Claude calls", () => {
@@ -39,6 +41,22 @@ describe("which service answers Claude calls", () => {
     keys("", "oc_sk_test");
     vi.stubEnv("OPENCODE_BASE_URL", "https://opencode.ai/inference/go/anthropic/");
     expect(clientOptions()).toMatchObject({ baseURL: "https://opencode.ai/inference/go/anthropic" });
+  });
+
+  it("prefers Gemini when its key is set, without batches or web search", () => {
+    keys("sk-ant-test", "oc_sk_test", "gm-test");
+    expect(env.aiProvider).toBe("gemini");
+    expect(env.aiModel).toBe("gemini-3.8-flash");
+    expect(aiFeatures).toMatchObject({ batches: false, webSearch: false });
+  });
+
+  it("lets AI_PROVIDER pick a service whose key is set, and ignores it otherwise", () => {
+    keys("sk-ant-test", "oc_sk_test", "gm-test");
+    vi.stubEnv("AI_PROVIDER", "anthropic");
+    expect(env.aiProvider).toBe("anthropic");
+    keys("", "oc_sk_test", "gm-test");
+    vi.stubEnv("AI_PROVIDER", "anthropic");
+    expect(env.aiProvider).toBe("gemini");
   });
 
   it("still keeps pull-request previews on sample data", () => {
