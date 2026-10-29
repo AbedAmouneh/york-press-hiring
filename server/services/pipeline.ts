@@ -35,7 +35,11 @@ export async function startRun(requestId: string, kind: "initial" | "weekly" | "
     .from(schema.sourcingRuns)
     .where(and(eq(schema.sourcingRuns.requestId, requestId), inArray(schema.sourcingRuns.status, ["queued", "running", "waiting"])))
     .limit(1);
-  if (active.length) return active[0].id;
+  if (active.length) {
+    // Picks the run up again if the call that held it died (its lock has expired); otherwise a no-op.
+    kick(active[0].id);
+    return active[0].id;
+  }
   const [run] = await db.insert(schema.sourcingRuns).values({ requestId, kind, state: { log: [] } }).returning();
   if (kind === "initial") {
     await db.update(schema.roleRequests).set({ status: "sourcing", updatedAt: new Date() }).where(eq(schema.roleRequests.id, requestId));
