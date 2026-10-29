@@ -18,11 +18,22 @@ export const env = {
   /** OpenCode Console key (oc_sk_…). When set, Claude is reached through OpenCode instead of Anthropic directly. */
   get opencodeKey() { return v("OPENCODE_API_KEY"); },
   get opencodeBaseUrl() { return (v("OPENCODE_BASE_URL") || "https://opencode.ai/inference/anthropic").replace(/\/$/, ""); },
-  /** Which service answers the Claude calls: OpenCode wins when both keys are set. */
-  get aiProvider(): "opencode" | "anthropic" | null {
-    return v("OPENCODE_API_KEY") ? "opencode" : v("ANTHROPIC_API_KEY") ? "anthropic" : null;
+  /** Google Gemini key. When set, Gemini answers the AI calls (see aiProvider). */
+  get geminiKey() { return v("GEMINI_API_KEY"); },
+  get geminiModel() { return v("GEMINI_MODEL") || "gemini-3.8-flash"; },
+  /**
+   * Which service answers the AI calls. AI_PROVIDER picks one explicitly (if its key is set);
+   * otherwise Gemini, then OpenCode, then Anthropic, whichever has a key first.
+   */
+  get aiProvider(): "gemini" | "opencode" | "anthropic" | null {
+    const keys = { gemini: v("GEMINI_API_KEY"), opencode: v("OPENCODE_API_KEY"), anthropic: v("ANTHROPIC_API_KEY") };
+    const pick = v("AI_PROVIDER").toLowerCase();
+    if (pick in keys && keys[pick as keyof typeof keys]) return pick as keyof typeof keys;
+    return keys.gemini ? "gemini" : keys.opencode ? "opencode" : keys.anthropic ? "anthropic" : null;
   },
   get claudeModel() { return v("CLAUDE_MODEL") || "claude-sonnet-5-5"; },
+  /** The model answering AI calls, for display and the usage log. */
+  get aiModel() { return env.aiProvider === "gemini" ? env.geminiModel : env.claudeModel; },
   get pdlKey() { return v("PDL_API_KEY"); },
   get signalhireKey() { return v("SIGNALHIRE_API_KEY"); },
   get resendKey() { return v("RESEND_API_KEY"); },
@@ -55,7 +66,8 @@ export const mock = {
 
 /**
  * Features only Anthropic's own API offers. OpenCode serves the Messages API (with prompt caching) but not
- * Message Batches or the server-side web search tool, so those steps fall back or are skipped.
+ * Message Batches or the server-side web search tool, and Gemini has neither in this app, so those steps
+ * fall back (direct scoring) or are skipped (web search).
  */
 export const aiFeatures = {
   get batches() { return env.aiProvider === "anthropic"; },
