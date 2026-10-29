@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
 import { json } from "../validate.js";
 import { hasRole, requireRole, type AppEnv, type SessionUser } from "../auth.js";
@@ -13,6 +13,7 @@ import { updateSettings } from "../services/settings.js";
 import { readCv } from "../services/cv-store.js";
 import { revealAvailable } from "../services/providers/select.js";
 import { signalhireBudget } from "../services/credit-budget.js";
+import { findLinkedinUrls, linkedinLookupAvailable } from "../services/linkedin-finder.js";
 
 const canSeeContacts = (u: SessionUser, r: typeof schema.roleRequests.$inferSelect) => isStaff(u) || r.hiringManagerId === u.id;
 
@@ -40,6 +41,26 @@ async function loadRc(id: string, user: SessionUser) {
 export { isNotNull };
 
 export const candidateRoutes = new Hono<AppEnv>()
+  /** Look up LinkedIn profiles for this role's candidates who don't have one yet (Top 10 first, at most 50). */
+  .post("/requests/:id/linkedin", async (c) => {
+    const user = requireRole(c, "recruiter", "admin");
+    const r = await loadRequest(c.req.param("id"), user);
+    if (!linkedinLookupAvailable()) throw new HTTPException(400, { message: "LinkedIn lookup needs the Gemini key (GEMINI_API_KEY)." });
+    const db = await getDb();
+    const rows = await db
+      .select({ c: schema.candidates })
+      .from(schema.roleCandidates)
+      .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
+      .where(and(eq(schema.roleCandidates.requestId, r.id), isNull(schema.candidates.linkedinUrl), eq(schema.candidates.isSample, false)))
+      .orderBy(desc(schema.roleCandidates.isTop10), asc(schema.roleCandidates.rank))
+      .limit(50);
+    const people = rows.map(({ c: p }) => ({ id: p.id, fullName: p.fullName, currentTitle: p.currentTitle, currentCompany: p.currentCompany, location: p.location }));
+    const urls = await findLinkedinUrls(people);
+    for (const [candidateId, url] of urls) {
+      await db.update(schema.candidates).set({ linkedinUrl: url }).where(and(eq(schema.candidates.id, candidateId), isNull(schema.candidates.linkedinUrl)));
+    }
+    return c.json({ checked: people.length, found: urls.size });
+  })
   .get("/requests/:id/candidates", async (c) => {
     const user = c.get("user");
     const r = await loadRequest(c.req.param("id"), user);
