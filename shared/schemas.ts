@@ -142,7 +142,12 @@ export const UserInviteInput = z.object({
   email,
   roles: z.array(z.enum(ROLES)).min(1, "Pick at least one role."),
   department: z.string().nullable().optional(),
+  /** Set: the admin creates the account with this starting password instead of emailing an invite link. */
+  password: password.optional(),
 });
+
+/** Choosing your own password after an admin set a starting one. */
+export const NewPasswordInput = z.object({ password });
 
 export const UserPatch = z.object({
   name: z.string().min(2).optional(),
