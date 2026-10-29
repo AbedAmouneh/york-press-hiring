@@ -2,11 +2,11 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { and, eq, gt } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
-import { ApplyFields, cvProblem, InvitePasswordInput, LoginInput, SetupInput, TwoFactorCodeInput } from "../../shared/schemas.js";
+import { ApplyFields, cvProblem, InvitePasswordInput, LoginInput, NewPasswordInput, SetupInput, TwoFactorCodeInput } from "../../shared/schemas.js";
 import { env, mock } from "../env.js";
-import { clearMfaChallenge, createSession, currentUser, destroySession, getMfaChallenge, hashPassword, randomToken, setMfaChallenge, verifyPassword } from "../auth.js";
+import { canSignIn, clearMfaChallenge, createSession, currentUser, destroySession, getMfaChallenge, hashPassword, randomToken, setMfaChallenge, verifyPassword } from "../auth.js";
 import { checkCode, createChallenge, decryptSecret, encryptSecret, newRecoveryCodes, newSetup, readChallenge, redeemRecoveryCode } from "../services/two-factor.js";
-import { runSetup, userCount, DEMO_PASSWORD } from "../services/setup.js";
+import { ensureDemoUsers, runSetup, userCount, DEMO_PASSWORD } from "../services/setup.js";
 import { applyRevealResults, resumeWaitingRuns, runPipeline } from "../services/pipeline.js";
 import { parseCandidate, type SHCandidate } from "../services/providers/signalhire.js";
 import { runDaily } from "../services/cron.js";
@@ -52,11 +52,12 @@ export const publicRoutes = new Hono()
     const email = rawEmail.trim().toLowerCase();
     const limits = LOGIN_LIMITS(email, clientIp(c));
     await assertWithinLimits(limits, "Too many failed sign-in attempts. Please wait 15 minutes and try again.");
+    await ensureDemoUsers();
     const db = await getDb();
     const [u] = await db.select().from(schema.users).where(eq(schema.users.email, email));
     // Always run bcrypt, so the response time doesn't reveal whether the email exists.
     const valid = await verifyPassword(password, u?.passwordHash ?? (await getDummyHash()));
-    if (!u || !u.active || !u.passwordHash || !valid) {
+    if (!u || !canSignIn(u) || !u.passwordHash || !valid) {
       await recordHit(limits);
       throw new HTTPException(401, { message: "Email or password is incorrect." });
     }
@@ -78,7 +79,7 @@ export const publicRoutes = new Hono()
     await assertWithinLimits(limits, "Too many wrong codes. Please wait 15 minutes and try again.");
     const db = await getDb();
     const [u] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
-    if (!u || !u.active || !u.totpSecret) throw new HTTPException(401, { message: "Your sign-in timed out. Enter your password again." });
+    if (!u || !canSignIn(u) || !u.totpSecret) throw new HTTPException(401, { message: "Your sign-in timed out. Enter your password again." });
     const { code } = c.req.valid("json");
     const step = checkCode(decryptSecret(u.totpSecret), code, u.totpLastStep);
     const remaining = step === null ? redeemRecoveryCode(u.recoveryCodes, code) : null;
@@ -124,7 +125,22 @@ export const publicRoutes = new Hono()
     await destroySession(c);
     return c.json({ ok: true });
   })
+  /** After an admin created the account with a starting password: the owner sets their own. */
+  .post("/auth/password", json(NewPasswordInput), async (c) => {
+    const u = await currentUser(c);
+    if (!u) throw new HTTPException(401, { message: "Please sign in." });
+    if (!u.mustChangePassword) throw new HTTPException(400, { message: "Your password is already set." });
+    const { password } = c.req.valid("json");
+    if (await verifyPassword(password, u.passwordHash ?? "")) throw new HTTPException(400, { message: "Choose a password different from the one you were given." });
+    const db = await getDb();
+    const [updated] = await db.update(schema.users).set({ passwordHash: await hashPassword(password), mustChangePassword: false }).where(eq(schema.users.id, u.id)).returning();
+    // Sign out everywhere else: anyone who saw the starting password loses access.
+    await db.delete(schema.sessions).where(eq(schema.sessions.userId, u.id));
+    await createSession(c, u.id);
+    return c.json({ user: publicUser(updated) });
+  })
   .get("/auth/me", async (c) => {
+    await ensureDemoUsers();
     const u = await currentUser(c);
     return c.json({ user: u ? publicUser(u) : null, demoMode: env.demoMode, demoPassword: env.demoMode ? DEMO_PASSWORD : undefined, preview: env.isPreview });
   })
