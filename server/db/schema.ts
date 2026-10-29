@@ -30,6 +30,8 @@ export const users = pgTable("users", {
   isDemo: boolean("is_demo").notNull().default(false),
   inviteToken: text("invite_token"),
   inviteExpiresAt: ts("invite_expires_at"),
+  // Set when an admin creates the account with a starting password: they choose their own at first sign-in.
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   lastLoginAt: ts("last_login_at"),
   // Two-step login: secrets are AES-GCM encrypted, recovery codes are SHA-256 hashes.
   totpSecret: text("totp_secret"),
