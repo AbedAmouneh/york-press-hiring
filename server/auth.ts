@@ -54,12 +54,17 @@ export async function currentUser(c: Context): Promise<SessionUser | null> {
     .where(and(eq(schema.sessions.id, sha(token)), gt(schema.sessions.expiresAt, new Date())))
     .limit(1);
   const user = rows[0]?.user;
-  return user && user.active ? user : null;
+  return user && canSignIn(user) ? user : null;
 }
+
+/** Switched-off accounts can't sign in, and demo accounts only work while DEMO_MODE is on. */
+export const canSignIn = (u: { active: boolean; isDemo: boolean }) => u.active && (!u.isDemo || env.demoMode);
 
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   const user = await currentUser(c);
   if (!user) throw new HTTPException(401, { message: "Please sign in." });
+  // An account created with a starting password can't be used until its owner picks their own.
+  if (user.mustChangePassword) throw new HTTPException(403, { message: "Choose a new password to continue." });
   // Admin and CEO accounts can't use the app until two-step login is on (setup routes are public).
   if (needsTwoFactorSetup(user)) throw new HTTPException(403, { message: "Set up two-step login to continue." });
   c.set("user", user);
