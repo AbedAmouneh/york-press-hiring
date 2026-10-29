@@ -6,6 +6,7 @@ import { ExternalLink, Mail, Phone } from "lucide-react";
 import { call, rpc } from "@/lib/rpc";
 import type { CandidateDetail } from "@/lib/types";
 import { cn, fmtDate } from "@/lib/utils";
+import { dateRange, linkedinSearchUrl } from "@/lib/people";
 import { Button } from "@/components/ui/button";
 import { CandidateStatusBadge } from "./Status";
 import { CANDIDATE_STATUSES, CRITERIA, DEFAULT_WEIGHTS } from "../../shared/types";
@@ -116,7 +117,9 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
                 {d.roleCandidate.isTop10 && <Badge tone="brand">Top 10</Badge>}
                 {d.candidate.openToWork && <Badge tone="good">Open to work</Badge>}
                 {d.candidate.isSample && <Badge tone="warn">Sample data</Badge>}
-                {d.candidate.linkedinUrl && <a className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground" href={href(d.candidate.linkedinUrl)} target="_blank" rel="noreferrer"><ExternalLink className="size-3.5" /> LinkedIn</a>}
+                {d.candidate.linkedinUrl
+                  ? <a className="inline-flex items-center gap-1 font-medium text-primary hover:underline" href={href(d.candidate.linkedinUrl)} target="_blank" rel="noreferrer"><ExternalLink className="size-3.5" /> LinkedIn profile</a>
+                  : !d.candidate.isSample && <a className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground" href={linkedinSearchUrl(d.candidate.fullName, d.candidate.currentCompany)} target="_blank" rel="noreferrer" title="No profile link yet: search LinkedIn for this name"><ExternalLink className="size-3.5" /> Find on LinkedIn</a>}
               </div>
             </div>
             <div className="text-right">
@@ -166,13 +169,16 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
 
             <TabsContent value="experience" className="grid gap-5">
               <section>
-                <h3 className={label}>{d.candidate.totalYears ?? "?"} years total{d.roleCandidate.relevantYears != null ? `, ${d.roleCandidate.relevantYears} relevant` : ""}</h3>
+                <h3 className={label}>{[d.candidate.totalYears != null ? `${d.candidate.totalYears} years total` : null, d.roleCandidate.relevantYears != null ? `${d.roleCandidate.relevantYears} relevant` : null].filter(Boolean).join(", ") || "Experience"}</h3>
+                {!d.candidate.isSample && !d.candidate.contactRetrievedAt && !d.candidate.experience.some((e) => e.start || e.end) && (
+                  <p className="mb-2 text-xs text-muted-foreground">The search preview has no dates or education. Reveal contacts to load the full profile (1 SignalHire credit).</p>
+                )}
                 <ol className="grid gap-3 border-l pl-4">
                   {d.candidate.experience.map((e, i) => (
                     <li key={i} className="relative text-sm">
                       <span aria-hidden className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-primary" />
                       <div className="font-medium">{e.title}</div>
-                      <div className="text-muted-foreground">{e.company} · <span className="num">{e.start ?? "?"} – {e.end ?? (e.start ? "Present" : "?")}</span></div>
+                      <div className="text-muted-foreground">{e.company}{dateRange(e.start, e.end) && <> · <span className="num">{dateRange(e.start, e.end)}</span></>}</div>
                       {e.summary && <div className="mt-0.5 text-xs text-muted-foreground">{e.summary}</div>}
                     </li>
                   ))}
