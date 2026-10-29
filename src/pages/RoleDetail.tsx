@@ -38,7 +38,11 @@ function CandidateTable({ rows, onOpen, canEdit, onDecision, top }: { rows: Cand
                 <div className="min-w-0">
                   <div className="font-medium">
                     {c.fullName}
-                    {c.redFlags && <Flag className="ml-1.5 inline size-3.5 text-destructive" aria-label="Red flag" />}
+                    {c.linkedinUrl && (
+                      <a href={c.linkedinUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} aria-label={`${c.fullName} on LinkedIn`} title="Open LinkedIn profile"
+                        className="ml-1.5 inline-flex rounded bg-[#0a66c2] px-1 text-[10px] font-bold leading-4 text-white align-middle hover:opacity-90">in</a>
+                    )}
+                    {c.redFlags &&<Flag className="ml-1.5 inline size-3.5 text-destructive" aria-label="Red flag" />}
                     {c.newContender && <Badge tone="brand" className="ml-2">New</Badge>}
                     {c.isSample && <Badge className="ml-2">Sample</Badge>}
                   </div>
@@ -110,6 +114,7 @@ export default function RoleDetail() {
   const [open, setOpen] = useState<string | null>(null);
   const [filter, setFilter] = useState({ q: "", status: "", min: 0 });
   const [closing, setClosing] = useState(false);
+  const [finding, setFinding] = useState(false);
   const [deleteContacts, setDeleteContacts] = useState(false);
 
   const req = useQuery({ queryKey: ["request", id], queryFn: () => call(rpc.requests[":id"].$get({ param: { id } })), refetchInterval: (q) => (q.state.data?.request.status === "sourcing" ? 3000 : false) });
@@ -154,6 +159,14 @@ export default function RoleDetail() {
       qc.invalidateQueries({ queryKey: ["runs", id] });
     } catch (e) { toast((e as Error).message, "error"); }
   }
+  async function findLinkedin() {
+    setFinding(true);
+    try {
+      const res = await call(rpc.requests[":id"].linkedin.$post({ param: { id } }));
+      toast(res.checked ? `Found ${res.found} of ${res.checked} LinkedIn profiles.` : "Everyone already has a LinkedIn profile.");
+      qc.invalidateQueries({ queryKey: ["candidates", id] });
+    } catch (e) { toast((e as Error).message, "error"); } finally { setFinding(false); }
+  }
   async function closeRole() {
     await call(rpc.requests[":id"].close.$post({ param: { id }, json: { deleteContacts } }));
     setClosing(false);
@@ -188,6 +201,9 @@ export default function RoleDetail() {
         </div>
         {isRecruiter && (
           <div className="flex items-center gap-2">
+            {all.some((c) => !c.linkedinUrl && !c.isSample) && (
+              <Button variant="outline" size="sm" onClick={findLinkedin} disabled={finding}>{finding ? <Spinner /> : <span className="rounded bg-[#0a66c2] px-1 text-[10px] font-bold leading-4 text-white">in</span>} Find LinkedIn profiles</Button>
+            )}
             {r.status !== "closed" && <Button variant="outline" size="sm" onClick={rerun} disabled={!!running}><RefreshCw /> Refresh</Button>}
             <Button variant="outline" size="icon-sm" onClick={exportCsv} disabled={!all.length} aria-label="Download CSV" title="Download CSV"><Download /></Button>
             {r.status !== "closed" && <Button variant="ghost" size="sm" onClick={() => setClosing(true)}>Close role</Button>}
