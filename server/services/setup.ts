@@ -41,6 +41,31 @@ export async function inviteUser(input: { email: string; name: string; roles: Ro
   return { user, link };
 }
 
+/**
+ * An admin creates the account directly with a starting password and passes it on themselves. The person
+ * must choose their own password at first sign-in. An invited email that never set a password is taken over.
+ */
+export async function createUserWithPassword(input: { email: string; name: string; roles: Role[]; department?: string | null }, password: string) {
+  const db = await getDb();
+  const email = input.email.trim().toLowerCase();
+  const [existing] = await db.select().from(schema.users).where(eq(schema.users.email, email));
+  if (existing?.passwordHash) throw new HTTPException(409, { message: "Someone with this email already has an account." });
+  const values = {
+    name: input.name.trim(),
+    roles: input.roles,
+    department: input.department ?? null,
+    passwordHash: await hashPassword(password),
+    mustChangePassword: true,
+    inviteToken: null,
+    inviteExpiresAt: null,
+    active: true,
+  };
+  const [user] = existing
+    ? await db.update(schema.users).set(values).where(eq(schema.users.id, existing.id)).returning()
+    : await db.insert(schema.users).values({ email, ...values }).returning();
+  return user;
+}
+
 /** First-run setup: creates Abed as admin + recruiter, invites Khalil and managers, seeds templates and demo users. */
 export async function runSetup(input: {
   adminName: string;
@@ -83,6 +108,18 @@ export async function seedDemoUsers() {
     { email: "demo.hm@york-press.test", name: "Demo Hiring Manager", roles: ["hm"], department: "Editorial" },
   ];
   for (const d of demo) {
-    await db.insert(schema.users).values({ ...d, passwordHash: hash, isDemo: true }).onConflictDoNothing();
+    // DEMO_MODE decides whether demo accounts work, so switching it on brings back any that were switched off
+    // (a test copy's database starts from the live one, where they are off).
+    await db.insert(schema.users).values({ ...d, passwordHash: hash, isDemo: true })
+      .onConflictDoUpdate({ target: schema.users.email, set: { active: true, isDemo: true, passwordHash: hash } });
   }
+}
+
+let demoReady: Promise<void> | null = null;
+
+/** With DEMO_MODE on and setup done, make sure the demo accounts exist and work (once per server start). */
+export function ensureDemoUsers() {
+  if (!env.demoMode) return Promise.resolve();
+  demoReady ??= (async () => { if ((await userCount()) > 0) await seedDemoUsers(); })().catch((err) => { demoReady = null; throw err; });
+  return demoReady;
 }
