@@ -4,6 +4,7 @@ import { CRITERIA, type CriterionKey, type Weights } from "../../shared/types.js
 import type { SearchBrief, ScoreBreakdown, WebFinding } from "../db/schema.js";
 import { logUsage } from "./settings.js";
 import { rng } from "./providers/mock.js";
+import { geminiStructured, type GeminiPart } from "./gemini.js";
 
 export type Req = {
   title: string;
@@ -128,7 +129,23 @@ export const usageOf = (u: Anthropic.Usage) => ({
   cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
 });
 
+/** The same request as Gemini parts: the cached prefix first, then text and PDF blocks. */
+export function geminiParts(opts: Pick<ToolCall, "cachedPrefix" | "content">): GeminiPart[] {
+  const blocks: Anthropic.ContentBlockParam[] = typeof opts.content === "string" ? [{ type: "text", text: opts.content }] : opts.content;
+  const parts: GeminiPart[] = opts.cachedPrefix ? [{ text: opts.cachedPrefix }] : [];
+  for (const b of blocks) {
+    if (b.type === "text") parts.push({ text: b.text });
+    else if (b.type === "document" && b.source.type === "base64") parts.push({ inlineData: { mimeType: b.source.media_type, data: b.source.data } });
+  }
+  return parts;
+}
+
 async function structured<T>(opts: ToolCall & { runId?: string | null; action: string }): Promise<T> {
+  if (env.aiProvider === "gemini") {
+    const { data, usage } = await geminiStructured<T>({ system: opts.system, parts: geminiParts(opts), schema: opts.schema, maxTokens: opts.maxTokens });
+    await logUsage({ runId: opts.runId ?? null, provider: "claude", action: opts.action, units: 1, ...usage });
+    return data;
+  }
   const res = await ai().messages.create(toolParams(opts));
   await logUsage({ runId: opts.runId ?? null, provider: "claude", action: opts.action, units: 1, ...usageOf(res.usage) });
   return readTool<T>(res, opts.toolName);
@@ -250,6 +267,18 @@ export const readScores = (msg: Anthropic.Message) => readTool<{ results: ScoreR
 
 export async function scoreBatch(r: Req, weights: Weights, items: CandidateForAI[], runId?: string | null): Promise<ScoreResult[]> {
   if (mock.claude) return items.map((c) => mockScore(r, weights, c));
+  if (env.aiProvider === "gemini") {
+    const p = scoreParams(r, weights, items);
+    const tool = p.tools![0] as Anthropic.Tool;
+    const { data, usage } = await geminiStructured<{ results: ScoreResult[] }>({
+      system: p.system as string,
+      parts: geminiParts({ content: p.messages[0].content }),
+      schema: tool.input_schema as Record<string, unknown>,
+      maxTokens: p.max_tokens,
+    });
+    await logUsage({ runId: runId ?? null, provider: "claude", action: "score", units: 1, ...usage });
+    return data.results;
+  }
   const res = await ai().messages.create(scoreParams(r, weights, items));
   await logUsage({ runId: runId ?? null, provider: "claude", action: "score", units: 1, ...usageOf(res.usage) });
   return readScores(res);
