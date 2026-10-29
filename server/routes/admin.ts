@@ -17,6 +17,8 @@ import { searchProviders } from "../services/providers/select.js";
 import { previewRetention, RETENTION_MONTHS } from "../services/retention.js";
 import { signalhireBudget } from "../services/credit-budget.js";
 
+const AI_LABELS = { gemini: "Gemini", opencode: "OpenCode", anthropic: "Anthropic" } as const;
+
 export const adminRoutes = new Hono<AppEnv>()
   // ---------------------------------------------------------------- users
   .get("/users", async (c) => {
@@ -89,7 +91,7 @@ export const adminRoutes = new Hono<AppEnv>()
       settings: s,
       sentToday: await sentTodayCount(),
       integrations: {
-        claude: { live: !mock.claude, model: env.claudeModel, via: env.aiProvider === "opencode" ? "OpenCode" : env.aiProvider === "anthropic" ? "Anthropic" : null },
+        claude: { live: !mock.claude, model: env.aiModel, via: env.aiProvider ? AI_LABELS[env.aiProvider] : null },
         // inUse = false when a source has no key while another is live, so runs skip it.
         pdl: { live: !mock.pdl, inUse: searchProviders().some((p) => p.name === "PDL") },
         signalhire: { live: !mock.signalhire, inUse: searchProviders().some((p) => p.name === "SignalHire"), creditsLeft: s.signalhireCreditsLeft, spentThisMonth: budget.spent + budget.held },
