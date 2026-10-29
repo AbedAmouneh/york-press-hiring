@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { colorIndex, initials } from "../../src/lib/people";
+import { colorIndex, dateRange, initials, linkedinSearchUrl } from "../../src/lib/people";
+
+describe("linkedinSearchUrl", () => {
+  it("searches LinkedIn people for the name and employer", () => {
+    expect(linkedinSearchUrl("Nour Haidar", "Lebanese Alternative Learning")).toBe("https://www.linkedin.com/search/results/people/?keywords=Nour%20Haidar%20Lebanese%20Alternative%20Learning");
+  });
+  it("leaves out employers that don't narrow the search", () => {
+    expect(linkedinSearchUrl("Rayan Itani", "Freelance")).toBe("https://www.linkedin.com/search/results/people/?keywords=Rayan%20Itani");
+    expect(linkedinSearchUrl("Rayan Itani", null)).toBe("https://www.linkedin.com/search/results/people/?keywords=Rayan%20Itani");
+  });
+});
+
+describe("dateRange", () => {
+  it("shows nothing when there are no dates, and Present for a current role", () => {
+    expect(dateRange(null, null)).toBe("");
+    expect(dateRange("2021-03", null)).toBe("2021-03 – Present");
+    expect(dateRange("2017-01", "2021-02")).toBe("2017-01 – 2021-02");
+  });
+});
 
 describe("initials", () => {
   it("takes the first and last name", () => {
