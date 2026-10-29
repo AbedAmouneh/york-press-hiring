@@ -21,6 +21,8 @@ export const env = {
   /** Google Gemini key. When set, Gemini answers the AI calls (see aiProvider). */
   get geminiKey() { return v("GEMINI_API_KEY"); },
   get geminiModel() { return v("GEMINI_MODEL") || "gemini-3.8-flash"; },
+  /** Gemini thinking level: low by default (fast, cheap), or minimal/medium/high where the model supports it. */
+  get geminiThinking() { return v("GEMINI_THINKING").toLowerCase() || "low"; },
   /**
    * Which service answers the AI calls. AI_PROVIDER picks one explicitly (if its key is set);
    * otherwise Gemini, then OpenCode, then Anthropic, whichever has a key first.
