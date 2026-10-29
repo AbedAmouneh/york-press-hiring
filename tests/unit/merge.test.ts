@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeProfiles, nameKey, prescore } from "../../server/services/merge.js";
+import { atExcludedCompany, mergeProfiles, nameKey, prescore } from "../../server/services/merge.js";
 import type { NormalizedProfile } from "../../server/services/providers/types.js";
 
 const profile = (over: Partial<NormalizedProfile>): NormalizedProfile => ({
@@ -63,6 +63,22 @@ describe("mergeProfiles", () => {
   it("drops people currently at an excluded company", () => {
     const merged = mergeProfiles([profile({ currentCompany: "York Press Ltd" }), profile({ sourceId: "b", fullName: "Sami Khoury" })], ["York Press", ""]);
     expect(merged.map((p) => p.fullName)).toEqual(["Sami Khoury"]);
+  });
+
+  it("drops people who may still be at York Press: an undated role there, even if not listed first", () => {
+    const freelancerAtYorkPress = profile({ currentCompany: "Freelance", experience: [{ title: "Designer", company: "Freelance" }, { title: "Senior Illustrator", company: "York Press Limited" }] });
+    expect(atExcludedCompany(freelancerAtYorkPress, ["York Press"])).toBe(true);
+  });
+
+  it("keeps former York Press staff whose role there has an end date", () => {
+    const former = profile({ experience: [{ title: "Illustrator", company: "York Press", start: "2018-01", end: "2021-06" }] });
+    expect(atExcludedCompany(former, ["York Press"])).toBe(false);
+  });
+
+  it("only removes people currently at the request's other companies to avoid", () => {
+    const pastRival = profile({ currentCompany: "Acme Press", experience: [{ title: "Editor", company: "Rival Books" }] });
+    expect(atExcludedCompany(pastRival, ["York Press", "Rival Books"])).toBe(false);
+    expect(atExcludedCompany(profile({ currentCompany: "Rival Books" }), ["Rival Books"])).toBe(true);
   });
 });
 
