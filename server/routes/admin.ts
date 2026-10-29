@@ -8,7 +8,7 @@ import { requireRole, type AppEnv } from "../auth.js";
 import { ROLES, type Weights } from "../../shared/types.js";
 import { SettingsPatch, TemplateInput, TemplatePatch, UserInviteInput, UserPatch } from "../../shared/schemas.js";
 import { env, mock } from "../env.js";
-import { inviteUser } from "../services/setup.js";
+import { createUserWithPassword, inviteUser } from "../services/setup.js";
 import { getSettings, updateSettings } from "../services/settings.js";
 import { sentTodayCount } from "../services/outreach.js";
 import { PLACEHOLDERS } from "../services/templates.js";
@@ -27,9 +27,26 @@ export const adminRoutes = new Hono<AppEnv>()
   })
   .post("/users", json(UserInviteInput), async (c) => {
     const admin = requireRole(c, "admin");
-    const body = c.req.valid("json");
-    const { user, link } = await inviteUser(body, admin.name);
-    return c.json({ user: publicUser(user), inviteLink: mock.email ? link : undefined });
+    const { password, ...body } = c.req.valid("json");
+    const { user, link } = password
+      ? { user: await createUserWithPassword(body, password), link: null }
+      : await inviteUser(body, admin.name);
+    return c.json({ user: publicUser(user), inviteLink: mock.email && link ? link : undefined });
+  })
+  /** Cancels an invite nobody accepted: the person never set a password, so the account holds no work of theirs. */
+  .delete("/users/:id", async (c) => {
+    const admin = requireRole(c, "admin");
+    if (c.req.param("id") === admin.id) throw new HTTPException(400, { message: "You can't remove your own account." });
+    const db = await getDb();
+    const [u] = await db.select().from(schema.users).where(eq(schema.users.id, c.req.param("id")));
+    if (!u) throw new HTTPException(404, { message: "User not found." });
+    if (u.passwordHash || u.lastLoginAt) throw new HTTPException(400, { message: "Only invites that were never accepted can be cancelled. Switch the account off instead." });
+    try {
+      await db.delete(schema.users).where(eq(schema.users.id, u.id));
+    } catch {
+      throw new HTTPException(409, { message: `${u.name} is already linked to requests or roles. Switch the account off instead.` });
+    }
+    return c.json({ ok: true });
   })
   .patch("/users/:id", json(UserPatch), async (c) => {
     const admin = requireRole(c, "admin");
