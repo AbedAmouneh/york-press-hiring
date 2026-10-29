@@ -59,6 +59,7 @@ export const candidateRoutes = new Hono<AppEnv>()
     for (const [candidateId, url] of urls) {
       await db.update(schema.candidates).set({ linkedinUrl: url }).where(and(eq(schema.candidates.id, candidateId), isNull(schema.candidates.linkedinUrl)));
     }
+    if (!urls.size && urls.error) throw new HTTPException(502, { message: urls.error });
     return c.json({ checked: people.length, found: urls.size });
   })
   .get("/requests/:id/candidates", async (c) => {
