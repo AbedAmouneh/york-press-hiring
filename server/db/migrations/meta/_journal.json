@@ -78,6 +78,13 @@
       "when": 1793214659874,
       "tag": "0010_signalhire-monthly-limit",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793258144686,
+      "tag": "0011_must-change-password",
+      "breakpoints": true
     }
   ]
 }
