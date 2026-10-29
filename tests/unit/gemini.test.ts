@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { geminiBody, readGemini } from "../../server/services/gemini.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { geminiBody, geminiModels, geminiStructured, readGemini } from "../../server/services/gemini.js";
 import { geminiParts } from "../../server/services/claude.js";
 
 describe("Gemini requests", () => {
@@ -26,6 +26,35 @@ describe("Gemini requests", () => {
       { text: "Score it" },
     ]);
     expect(geminiParts({ content: "Plain" })).toEqual([{ text: "Plain" }]);
+  });
+});
+
+describe("when Gemini is busy", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const ok = { candidates: [{ content: { parts: [{ text: '{"line":"Hi"}' }] } }] };
+  const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+  const call = { system: "s", parts: [{ text: "p" }], schema: { type: "object" } };
+
+  it("tries the chosen model first, then lighter ones, without repeats", () => {
+    expect(geminiModels("gemini-3.8-flash")).toEqual(["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]);
+    expect(geminiModels("gemini-3.6-flash")).toEqual(["gemini-3.6-flash", "gemini-3.5-flash-lite"]);
+  });
+
+  it("moves to the next model on 'high demand' and returns its answer", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(reply(503, { error: { message: "This model is currently experiencing high demand." } }))
+      .mockResolvedValueOnce(reply(200, ok));
+    vi.stubGlobal("fetch", fetch);
+    const out = await geminiStructured<{ line: string }>(call);
+    expect(out.data).toEqual({ line: "Hi" });
+    expect(fetch.mock.calls.map((c) => String(c[0]).match(/models\/([^:]+)/)![1])).toEqual(["gemini-3.8-flash", "gemini-3.6-flash"]);
+  });
+
+  it("fails straight away on errors a retry can't fix", async () => {
+    const fetch = vi.fn().mockResolvedValue(reply(400, { error: { message: "API key not valid" } }));
+    vi.stubGlobal("fetch", fetch);
+    await expect(geminiStructured(call)).rejects.toThrow("Gemini 400 (gemini-3.8-flash): API key not valid");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 
