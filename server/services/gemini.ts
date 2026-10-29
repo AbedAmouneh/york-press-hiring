@@ -2,6 +2,8 @@
 // Same prompts and JSON schemas as the Claude path; Gemini returns the JSON directly (structured output).
 import { env } from "../env.js";
 
+const GEMINI_TIMEOUT_MS = 90_000;
+
 export type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
 export type GeminiCall = {
@@ -24,6 +26,8 @@ export function geminiBody(call: GeminiCall) {
       // Thinking tokens count towards the output limit, so leave room beyond the answer itself.
       maxOutputTokens: Math.max(8192, (call.maxTokens ?? 4000) * 3),
       temperature: 0.2,
+      // Screening is a judgement call on given evidence, not a puzzle: low thinking keeps each call fast and cheap.
+      thinkingConfig: { thinkingLevel: env.geminiThinking },
     },
   };
 }
@@ -59,11 +63,19 @@ export function readGemini<T>(res: GeminiResponse): { data: T; usage: GeminiUsag
 
 export async function geminiStructured<T>(call: GeminiCall): Promise<{ data: T; usage: GeminiUsage }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.geminiModel)}:generateContent`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": env.geminiKey },
-    body: JSON.stringify(geminiBody(call)),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": env.geminiKey },
+      body: JSON.stringify(geminiBody(call)),
+      // Never let one slow answer hold a whole run: fail clearly so the run can be retried.
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if ((err as Error).name === "TimeoutError") throw new Error(`Gemini did not answer within ${GEMINI_TIMEOUT_MS / 1000} seconds`);
+    throw err;
+  }
   const json = (await res.json().catch(() => ({}))) as GeminiResponse;
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${json.error?.message ?? res.statusText}`);
   return readGemini<T>(json);
