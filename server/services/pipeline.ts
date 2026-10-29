@@ -11,6 +11,7 @@ import type { NormalizedProfile } from "./providers/types.js";
 import { mergeProfiles, nameKey, prescore, type MergedProfile } from "./merge.js";
 import { getSettings, logUsage, updateSettings, weightsFor } from "./settings.js";
 import { signalhireBudget } from "./credit-budget.js";
+import { findLinkedinUrls, linkedinLookupAvailable } from "./linkedin-finder.js";
 import { toAI, toReq } from "./mappers.js";
 import { drainEmailQueue, isSuppressed, queueOutreach } from "./outreach.js";
 import { notifyRoles, notifyUsers } from "./notify.js";
@@ -326,7 +327,36 @@ async function upsertCandidate(p: MergedProfile) {
   return row.id;
 }
 
-async function stepEnrich({ run, state, counters, deadline }: Ctx): Promise<StepResult> {
+/** Find the LinkedIn profile of every new candidate who arrived without one (Google search through Gemini). */
+async function findMissingLinkedin({ run, state, deadline }: Ctx): Promise<StepResult> {
+  const ids = state.newRoleCandidateIds ?? [];
+  const checked = new Set(state.linkedinChecked ?? []);
+  if (!linkedinLookupAvailable() || !ids.length) return;
+  const db = await getDb();
+  const rows = await db
+    .select({ rcId: schema.roleCandidates.id, c: schema.candidates })
+    .from(schema.roleCandidates)
+    .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
+    .where(and(inArray(schema.roleCandidates.id, ids), isNull(schema.candidates.linkedinUrl), eq(schema.candidates.isSample, false)));
+  const todo = rows.filter((r) => !checked.has(r.rcId));
+  let found = 0;
+  for (let i = 0; i < todo.length; i += 10) {
+    if (Date.now() > deadline) return "again";
+    const slice = todo.slice(i, i + 10);
+    const urls = await findLinkedinUrls(slice.map((r) => ({ id: r.c.id, fullName: r.c.fullName, currentTitle: r.c.currentTitle, currentCompany: r.c.currentCompany, location: r.c.location })), run.id);
+    for (const [candidateId, url] of urls) {
+      await db.update(schema.candidates).set({ linkedinUrl: url }).where(and(eq(schema.candidates.id, candidateId), isNull(schema.candidates.linkedinUrl)));
+      found++;
+    }
+    for (const r of slice) checked.add(r.rcId);
+    state.linkedinChecked = [...checked];
+  }
+  if (todo.length) log(state, `Found LinkedIn profiles for ${found} of ${todo.length} people.`);
+}
+
+async function stepEnrich(ctx: Ctx): Promise<StepResult> {
+  if ((await findMissingLinkedin(ctx)) === "again") return "again";
+  const { run, state, counters, deadline } = ctx;
   const settings = await getSettings();
   if (mock.claude || !settings.webSearchEnabled || !aiFeatures.webSearch) {
     if (mock.claude) log(state, "Web search skipped (mock mode).");
