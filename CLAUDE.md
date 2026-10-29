@@ -56,7 +56,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 - `server/services/claude.ts`: every Claude call, with mock heuristics when no key is set. With `OPENCODE_API_KEY`
   the same Messages API calls go through OpenCode Console (`https://opencode.ai/inference/anthropic`, Bearer token);
   it wins over `ANTHROPIC_API_KEY`. OpenCode has no Message Batches or web search tool, so `aiFeatures` in
-  `server/env.ts` turns those off (scoring runs directly, the web search step is skipped).
+  `server/env.ts` turns those off (scoring runs directly, the web search step is skipped). With `GEMINI_API_KEY`
+  (wins over both unless `AI_PROVIDER` says otherwise) `structured()` and `scoreBatch()` send the same prompts and
+  JSON schemas to Gemini's generateContent with structured output (`server/services/gemini.ts`); same feature limits.
   Cost rules: anything shared across calls (request, scorecard, rules) goes in `cachedPrefix`
   and must not contain per-candidate data, or the cache stops hitting. Weekly refreshes score via
   the Message Batches API (half price) when QStash is on; first runs and manual refreshes score
