@@ -330,7 +330,7 @@ async function stepEnrich({ run, state, counters, deadline }: Ctx): Promise<Step
   const settings = await getSettings();
   if (mock.claude || !settings.webSearchEnabled || !aiFeatures.webSearch) {
     if (mock.claude) log(state, "Web search skipped (mock mode).");
-    else if (settings.webSearchEnabled && !aiFeatures.webSearch) log(state, "Web search skipped (not available through OpenCode).");
+    else if (settings.webSearchEnabled && !aiFeatures.webSearch) log(state, `Web search skipped (not available through ${env.aiProvider === "gemini" ? "Gemini" : "OpenCode"}).`);
     return;
   }
   const db = await getDb();
