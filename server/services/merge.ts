@@ -7,15 +7,28 @@ export type MergedProfile = NormalizedProfile & { sources: string[]; pdlId?: str
 export const nameKey = (p: { fullName: string; currentCompany?: string | null }) =>
   `${p.fullName.toLowerCase().replace(/\s+/g, " ").trim()}|${(p.currentCompany ?? "").toLowerCase().trim()}`;
 
+const YORK_PRESS = /york\s*press/i;
+
+/**
+ * True when someone should not be sourced: their current company is excluded, or they have a York Press role
+ * with no end date. Search previews (SignalHire) carry no dates and people often hold two jobs at once, so an
+ * undated York Press role counts as current. Former staff (a known end date) stay in; for the request's other
+ * companies to avoid, only the current company counts, so past employers there don't remove anyone.
+ */
+export function atExcludedCompany(p: Pick<NormalizedProfile, "currentCompany" | "experience">, excludeCompanies: string[]) {
+  const excluded = excludeCompanies.map((c) => c.toLowerCase().trim()).filter(Boolean);
+  const current = !!p.currentCompany && excluded.some((x) => p.currentCompany!.toLowerCase().includes(x));
+  return current || p.experience.some((e) => !!e.company && YORK_PRESS.test(e.company) && !e.end);
+}
+
 /**
  * Merge duplicates across sources by LinkedIn URL, then name + current company.
- * Drops anyone currently at an excluded company. Keeps the richest data from each source.
+ * Drops anyone at (or possibly still at) an excluded company. Keeps the richest data from each source.
  */
 export function mergeProfiles(profiles: NormalizedProfile[], excludeCompanies: string[]): MergedProfile[] {
-  const excluded = excludeCompanies.map((c) => c.toLowerCase()).filter(Boolean);
   const merged = new Map<string, MergedProfile>();
   for (const p of profiles) {
-    if (p.currentCompany && excluded.some((x) => p.currentCompany!.toLowerCase().includes(x))) continue;
+    if (atExcludedCompany(p, excludeCompanies)) continue;
     const li = normalizeLinkedin(p.linkedinUrl);
     const altKey = nameKey(p);
     const key = li ?? altKey;
