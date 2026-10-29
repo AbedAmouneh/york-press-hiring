@@ -234,5 +234,40 @@ await third("POST", "/auth/login", abed);
 ok((await third.raw("POST", "/auth/mfa", { code: recoveryCodes[0] })).status === 401, "the same recovery code can't be used twice");
 ok((await client().raw("POST", "/auth/mfa", { code: currentCode(enrol.secret) })).status === 401, "the second step needs the password step first");
 
+// ---------------------------------------------------------------- adding users by hand
+const team = async () => (await second("GET", "/users")).users as any[];
+const khalil = (await team()).find((u) => u.email === "khalil.sayegh@york-press.com");
+ok(khalil?.invited, "Khalil starts as an unaccepted invite");
+await second("DELETE", `/users/${khalil.id}`);
+ok(!(await team()).some((u) => u.email === khalil.email), "an unaccepted invite can be cancelled");
+const made = await second("POST", "/users", { name: "Khalil Sayegh", email: "khalil.sayegh@york-press.com", roles: ["ceo"], password: "starting-pass-123" });
+ok(made.user.passwordChangeRequired && !made.user.invited && !made.inviteLink, "an admin can create an account with a starting password");
+ok((await second.raw("POST", "/users", { name: "Khalil Again", email: "khalil.sayegh@york-press.com", roles: ["ceo"], password: "another-pass-456" })).status === 409, "a second account for the same email is refused");
+ok((await second.raw("DELETE", `/users/${made.user.id}`)).status === 400, "an account with a password can't be cancelled, only switched off");
+const khalilWeb = client();
+const khalilOther = client();
+await khalilOther("POST", "/auth/login", { email: "khalil.sayegh@york-press.com", password: "starting-pass-123" });
+ok((await khalilWeb("POST", "/auth/login", { email: "khalil.sayegh@york-press.com", password: "starting-pass-123" })).user.passwordChangeRequired, "signing in with the starting password asks for a new one");
+ok((await khalilWeb.raw("GET", "/requests")).status === 403, "the app stays locked until the new password is set");
+ok((await khalilWeb.raw("POST", "/auth/password", { password: "starting-pass-123" })).status === 400, "the starting password can't be kept");
+ok((await khalilWeb.raw("POST", "/auth/password", { password: "short" })).status === 400, "the new password needs 10 characters");
+const changed = await khalilWeb("POST", "/auth/password", { password: "khalils-own-password" });
+ok(!changed.user.passwordChangeRequired && (await khalilWeb("GET", "/auth/me")).user.passwordChangeRequired === false, "the new password unlocks the account");
+ok((await khalilOther("GET", "/auth/me")).user === null, "other sessions opened with the starting password are signed out");
+ok((await khalilWeb.raw("POST", "/auth/password", { password: "yet-another-password" })).status === 400, "the forced change only happens once");
+
+// ---------------------------------------------------------------- DEMO_MODE switches demo accounts
+const demoUser = client();
+await demoUser("POST", "/auth/login", { email: "demo.recruiter@york-press.test", password: "demo-york-2026" });
+process.env.DEMO_MODE = "false";
+ok((await demoUser("GET", "/auth/me")).user === null, "with DEMO_MODE off, open demo sessions stop working");
+ok((await client().raw("POST", "/auth/login", { email: "demo.recruiter@york-press.test", password: "demo-york-2026" })).status === 401, "with DEMO_MODE off, demo accounts can't sign in");
+process.env.DEMO_MODE = "true";
+const demoHm = (await team()).find((u) => u.email === "demo.hm@york-press.test");
+await second("PATCH", `/users/${demoHm.id}`, { active: false });
+const { seedDemoUsers } = await import("../server/services/setup.js");
+await seedDemoUsers();
+ok((await team()).find((u) => u.email === "demo.hm@york-press.test")?.active, "with DEMO_MODE on, switched-off demo accounts come back (test copies)");
+
 console.log("\nAll smoke checks passed.");
 process.exit(0);
