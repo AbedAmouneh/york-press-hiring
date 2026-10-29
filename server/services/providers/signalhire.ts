@@ -3,12 +3,57 @@ import { env, mock } from "../../env.js";
 import { mockContact, mockProfiles } from "./mock.js";
 import { countriesFrom } from "./pdl.js";
 import { normalizeLinkedin, type CandidateSearchProvider, type NormalizedProfile } from "./types.js";
+import type { EducationItem, ExperienceItem } from "../../../shared/types.js";
 
 /** Person API candidate object (only the fields we read). https://docs.signalhire.com/person-api/candidate-object */
 export type SHCandidate = {
+  headLine?: string | null;
+  locations?: { name?: string | null }[];
+  skills?: string[];
+  experienceYears?: number | null;
   contacts?: { type: string; value: string; rating?: number; subType?: string | null }[];
   social?: { type: string; link: string }[];
+  experience?: { position?: string | null; company?: string | null; current?: boolean; started?: string | null; ended?: string | null; summary?: string | null }[];
+  education?: { university?: string | null; faculty?: string | null; degree?: string[] | null; startedYear?: number | null; endedYear?: number | null }[];
+  language?: { name?: string | null }[];
+  certification?: { name?: string | null }[];
 } | null | undefined;
+
+/** The full profile a reveal returns: dated experience, education, languages. Fields missing upstream stay out. */
+export type RevealProfile = {
+  headline?: string | null;
+  location?: string | null;
+  experience?: ExperienceItem[];
+  education?: EducationItem[];
+  skills?: string[];
+  languages?: string[];
+  certifications?: string[];
+  totalYears?: number | null;
+};
+
+const month = (iso?: string | null) => (iso && /^\d{4}-\d{2}/.test(iso) ? iso.slice(0, 7) : null);
+
+export function profileFrom(c: NonNullable<SHCandidate>): RevealProfile {
+  const p: RevealProfile = {};
+  if (c.headLine) p.headline = c.headLine;
+  if (c.locations?.[0]?.name) p.location = c.locations[0].name;
+  const exp = (c.experience ?? []).filter((e) => e.position || e.company).map((e) => ({
+    title: e.position ?? "", company: e.company ?? "", start: month(e.started), end: e.current ? null : month(e.ended), summary: e.summary ?? null,
+  }));
+  if (exp.length) p.experience = exp;
+  const edu = (c.education ?? []).filter((e) => e.university).map((e) => ({
+    school: e.university!, degree: e.degree?.join(", ") || null, field: e.faculty ?? null,
+    start: e.startedYear ? String(e.startedYear) : null, end: e.endedYear ? String(e.endedYear) : null,
+  }));
+  if (edu.length) p.education = edu;
+  if (c.skills?.length) p.skills = c.skills;
+  const langs = (c.language ?? []).map((l) => l.name).filter((n): n is string => !!n);
+  if (langs.length) p.languages = langs;
+  const certs = (c.certification ?? []).map((l) => l.name).filter((n): n is string => !!n);
+  if (certs.length) p.certifications = certs;
+  if (typeof c.experienceYears === "number") p.totalYears = c.experienceYears;
+  return p;
+}
 type SHItem = { item: string; status: string; candidate?: SHCandidate };
 
 const BASE = "https://www.signalhire.com/api/v1";
@@ -86,7 +131,7 @@ export const signalhireProvider: CandidateSearchProvider = {
   },
 };
 
-export type RevealResult = { item: string; status: string; email: string | null; phone: string | null; linkedinUrl: string | null };
+export type RevealResult = { item: string; status: string; email: string | null; phone: string | null; linkedinUrl: string | null; profile?: RevealProfile };
 
 export function parseCandidate(item: string, status: string, c: SHCandidate): RevealResult {
   if (status !== "success" || !c) return { item, status, email: null, phone: null, linkedinUrl: null };
@@ -94,7 +139,7 @@ export function parseCandidate(item: string, status: string, c: SHCandidate): Re
   const emails = contacts.filter((x) => x.type === "email").sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (a.subType === "work" ? -1 : 1));
   const phones = contacts.filter((x) => x.type === "phone").sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
   const li = (c.social ?? []).find((s) => s.type === "li")?.link ?? null;
-  return { item, status, email: emails[0]?.value ?? null, phone: phones[0]?.value ?? null, linkedinUrl: normalizeLinkedin(li) };
+  return { item, status, email: emails[0]?.value ?? null, phone: phones[0]?.value ?? null, linkedinUrl: normalizeLinkedin(li), profile: profileFrom(c) };
 }
 
 /**
