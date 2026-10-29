@@ -95,6 +95,13 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   hiring manager, assigned recruiter, the CEO and earlier posters (in the app and by email), filtered to people who can
   still open the request. Authors can delete a message for 15 minutes; 2,000 characters max; 20 messages per user per
   10 minutes. Messages on closed or rejected requests are removed by retention after 24 months.
+- **Users** (`server/routes/admin.ts`, `src/pages/Users.tsx`): an admin adds people by emailing an invite link or by
+  setting a starting password (`createUserWithPassword`, `must_change_password`). Such an account is locked by
+  `requireAuth` until its owner picks a new password at `POST /auth/password`, which also signs out other sessions.
+  Unaccepted invites (no password, never signed in) can be cancelled; anyone else is switched off, never deleted.
+- **Demo accounts** (`demo.*@york-press.test`, `isDemo`): `DEMO_MODE` alone decides whether they work. Off, they
+  can't sign in and open demo sessions stop (`canSignIn` in `server/auth.ts`). On, `ensureDemoUsers` recreates and
+  reactivates them once per server start, so test copies of the live database get working demo buttons.
 - `tests/unit/`: Vitest. `tests/e2e/`: Playwright, signing in with the demo accounts.
 
 ## Rules the code must keep
