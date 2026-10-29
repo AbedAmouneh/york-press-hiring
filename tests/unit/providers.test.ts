@@ -112,7 +112,36 @@ describe("SignalHire", () => {
       ],
       social: [{ type: "li", link: "https://lb.linkedin.com/in/Rana-Haddad" }],
     });
-    expect(r).toEqual({ item: "item-1", status: "success", email: "best@mail.test", phone: "+961 1 000 000", linkedinUrl: "https://www.linkedin.com/in/rana-haddad" });
+    expect(r).toEqual({ item: "item-1", status: "success", email: "best@mail.test", phone: "+961 1 000 000", linkedinUrl: "https://www.linkedin.com/in/rana-haddad", profile: {} });
+  });
+
+  it("keeps the full profile a reveal returns: dated experience, education, languages", () => {
+    const r = parseCandidate("item-3", "success", {
+      headLine: "Children's book illustrator",
+      locations: [{ name: "Beirut, Lebanon" }],
+      experienceYears: 7,
+      skills: ["Procreate"],
+      experience: [
+        { position: "Illustrator", company: "Studio A", current: true, started: "2021-03-01T00:00:00+00:00", ended: null, summary: "Picture books" },
+        { position: "Designer", company: "Agency B", current: false, started: "2017-01-01T00:00:00+00:00", ended: "2021-02-01T00:00:00+00:00" },
+      ],
+      education: [{ university: "ALBA", faculty: "Illustration", degree: ["BA"], startedYear: 2013, endedYear: 2016 }],
+      language: [{ name: "Arabic" }, { name: "English" }],
+      certification: [{ name: "Adobe Certified" }],
+    });
+    expect(r.profile).toEqual({
+      headline: "Children's book illustrator",
+      location: "Beirut, Lebanon",
+      totalYears: 7,
+      skills: ["Procreate"],
+      experience: [
+        { title: "Illustrator", company: "Studio A", start: "2021-03", end: null, summary: "Picture books" },
+        { title: "Designer", company: "Agency B", start: "2017-01", end: "2021-02", summary: null },
+      ],
+      education: [{ school: "ALBA", degree: "BA", field: "Illustration", start: "2013", end: "2016" }],
+      languages: ["Arabic", "English"],
+      certifications: ["Adobe Certified"],
+    });
   });
 
   it("returns empty contacts when the reveal failed", () => {
