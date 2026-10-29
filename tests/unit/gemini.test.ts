@@ -9,6 +9,7 @@ describe("Gemini requests", () => {
     expect(body.contents).toEqual([{ role: "user", parts: [{ text: "Hi" }] }]);
     expect(body.generationConfig).toMatchObject({ responseMimeType: "application/json", responseSchema: { type: "object" } });
     expect(body.generationConfig.maxOutputTokens).toBeGreaterThanOrEqual(8192);
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "low" });
   });
 
   it("turns Claude content into Gemini parts, shared prefix first, PDFs inline", () => {
