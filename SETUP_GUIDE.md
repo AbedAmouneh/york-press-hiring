@@ -46,7 +46,9 @@ Manager → *New request* → *Submit* · CEO → *Approvals* → *Approve* · R
 
 **Positions and locations:** Settings → **Positions** holds the jobs York Press hires for often, with a suggested job description and requirements; Settings → **Locations** holds the offices and countries York Press hires in, with their work arrangement and hours. Managers pick from both on every request and can change anything. Add, edit or hide entries as the company grows.
 
-When you go live, turn demo accounts off: set `DEMO_MODE` to `false` and deactivate the demo users under **Users**.
+When you go live, turn demo accounts off: remove `DEMO_MODE` from Production (keep it `true` for Preview) and redeploy. With it off, demo accounts can't sign in at all.
+
+**Adding people:** Users → **Add user**. Either email them an invite link, or choose **Set a password**, type a starting password and give it to them yourself (WhatsApp, in person). They choose their own password the first time they sign in. An invite nobody accepted can be removed with **Cancel invite**.
 
 ## Step 5 — Logo
 
