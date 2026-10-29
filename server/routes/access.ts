@@ -37,4 +37,5 @@ export const publicUser = (u: SessionUser) => ({
   lastLoginAt: u.lastLoginAt,
   twoFactorEnabled: !!u.totpEnabledAt,
   twoFactorSetupRequired: needsTwoFactorSetup(u),
+  passwordChangeRequired: u.mustChangePassword,
 });
