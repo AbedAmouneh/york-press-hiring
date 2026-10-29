@@ -116,6 +116,8 @@ export type RunState = {
   log: { at: string; msg: string }[];
   rawProfiles?: number;
   newRoleCandidateIds?: string[];
+  /** Role candidates already looked up on LinkedIn in this run, so a resumed run doesn't search them again. */
+  linkedinChecked?: string[];
   /** A Claude Message Batch in flight (weekly runs): chunk custom_id → role-candidate ids. */
   scoreBatch?: { id: string; submittedAt: string; chunks: Record<string, string[]> };
 };
