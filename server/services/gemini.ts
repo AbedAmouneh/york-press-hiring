@@ -1,0 +1,70 @@
+// Google Gemini as the AI behind briefs, scoring, personal lines and CV scoring (GEMINI_API_KEY).
+// Same prompts and JSON schemas as the Claude path; Gemini returns the JSON directly (structured output).
+import { env } from "../env.js";
+
+export type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+
+export type GeminiCall = {
+  system: string;
+  parts: GeminiPart[];
+  schema: Record<string, unknown>;
+  maxTokens?: number;
+};
+
+export type GeminiUsage = { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
+
+/** The generateContent request body. Exported for tests. */
+export function geminiBody(call: GeminiCall) {
+  return {
+    systemInstruction: { parts: [{ text: call.system }] },
+    contents: [{ role: "user", parts: call.parts }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: call.schema,
+      // Thinking tokens count towards the output limit, so leave room beyond the answer itself.
+      maxOutputTokens: Math.max(8192, (call.maxTokens ?? 4000) * 3),
+      temperature: 0.2,
+    },
+  };
+}
+
+type GeminiResponse = {
+  candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[];
+  promptFeedback?: { blockReason?: string };
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number; cachedContentTokenCount?: number };
+  error?: { code?: number; message?: string; status?: string };
+};
+
+/** Read the JSON answer and token counts from a generateContent response. Exported for tests. */
+export function readGemini<T>(res: GeminiResponse): { data: T; usage: GeminiUsage } {
+  const u = res.usageMetadata ?? {};
+  const usage = {
+    inputTokens: u.promptTokenCount ?? 0,
+    outputTokens: (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0),
+    cacheReadTokens: u.cachedContentTokenCount ?? 0,
+    cacheWriteTokens: 0,
+  };
+  const cand = res.candidates?.[0];
+  const text = (cand?.content?.parts ?? []).filter((p) => !p.thought && p.text).map((p) => p.text).join("");
+  if (!text) {
+    const why = res.promptFeedback?.blockReason ?? cand?.finishReason ?? "no answer";
+    throw new Error(`Gemini returned no result (${why})`);
+  }
+  try {
+    return { data: JSON.parse(text) as T, usage };
+  } catch {
+    throw new Error(`Gemini returned invalid JSON (${cand?.finishReason ?? "unknown"})`);
+  }
+}
+
+export async function geminiStructured<T>(call: GeminiCall): Promise<{ data: T; usage: GeminiUsage }> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.geminiModel)}:generateContent`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": env.geminiKey },
+    body: JSON.stringify(geminiBody(call)),
+  });
+  const json = (await res.json().catch(() => ({}))) as GeminiResponse;
+  if (!res.ok) throw new Error(`Gemini ${res.status}: ${json.error?.message ?? res.statusText}`);
+  return readGemini<T>(json);
+}
