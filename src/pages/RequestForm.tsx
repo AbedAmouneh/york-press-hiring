@@ -16,6 +16,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/Combobox";
+import { MultiSelect, type MultiOption } from "@/components/MultiSelect";
+import { joinList, splitList } from "@/lib/multi";
+import { COUNTRIES } from "../../shared/countries";
 import { PositionPicker } from "@/components/PositionPicker";
 import { yearsLabel } from "@/lib/positions";
 import { Check, Circle, CircleCheck, Undo2 } from "lucide-react";
@@ -185,7 +188,13 @@ export default function RequestForm() {
     ["Job description", !!v.jdText.trim()],
   ];
   const ready = checks.filter(([, ok]) => ok).length;
-  const moreHasError = (["locationPolicy", "searchLocations", "timeZone", "workingHours", "targetCompanies", "avoidCompanies"] as const).some((k) => errors[k]);
+  // Countries York Press already hires in come first, then every country.
+  const hiringCountries = [...new Set((locations.data?.locations ?? []).map((l) => l.country).filter(Boolean))];
+  const countryOptions: MultiOption[] = [
+    ...hiringCountries.map((label) => ({ label, group: "Where York Press hires" })),
+    ...COUNTRIES.filter((c) => !hiringCountries.includes(c)).map((label) => ({ label, group: "All countries" })),
+  ];
+  const moreHasError =(["locationPolicy", "searchLocations", "timeZone", "workingHours", "targetCompanies", "avoidCompanies"] as const).some((k) => errors[k]);
 
   return (
     <>
@@ -266,7 +275,12 @@ export default function RequestForm() {
                 <summary className="cursor-pointer select-none text-sm font-medium text-muted-foreground hover:text-foreground">More details</summary>
                 <div className="mt-4 grid gap-4 sm:grid-cols-3">
                   <Field label="Location policy" htmlFor="loc" error={errors.locationPolicy?.message}><Input id="loc" placeholder="On-site, Zouk Mosbeh" {...reg("locationPolicy")} /></Field>
-                  <Field label="Search in countries" hint="Empty means global" htmlFor="sl" error={errors.searchLocations?.message}><Input id="sl" {...reg("searchLocations")} /></Field>
+                  <Field label="Search in countries" hint="Empty means global" htmlFor="sl" error={errors.searchLocations?.message}>
+                    <Controller control={form.control} name="searchLocations" render={({ field }) => (
+                      <MultiSelect id="sl" values={splitList(field.value)} onChange={(vals) => field.onChange(joinList(vals))} onBlur={field.onBlur}
+                        invalid={!!errors.searchLocations} placeholder="Global" listLabel="Countries" options={countryOptions} />
+                    )} />
+                  </Field>
                   <Field label="Working hours" htmlFor="wh" error={errors.workingHours?.message}><Input id="wh" {...reg("workingHours")} /></Field>
                   <Field label="Time-zone overlap" htmlFor="tz" error={errors.timeZone?.message}><Input id="tz" placeholder="4 hours with GMT+2" {...reg("timeZone")} /></Field>
                   <Field label="Target companies" htmlFor="tc" error={errors.targetCompanies?.message}><Input id="tc" {...reg("targetCompanies")} /></Field>
