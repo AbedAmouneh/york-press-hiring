@@ -74,17 +74,40 @@ test.describe("saved positions and locations", () => {
   test("picking a location fills the arrangement, hours and country to search", async ({ page }) => {
     await signInAs(page, "Manager");
     await page.goto("/requests/new");
+    await page.getByText("More details").click();
     await page.getByLabel("Location", { exact: true }).selectOption({ label: "Zouk Mosbeh, Lebanon" });
     await expect(page.getByLabel("Location policy")).toHaveValue("On-site, Zouk Mosbeh, Lebanon");
-    await expect(page.getByLabel("Search in countries")).toHaveValue("Lebanon");
+    await expect(page.getByRole("button", { name: "Remove Lebanon" })).toBeVisible();
     await expect(page.getByLabel("Working hours")).toHaveValue(/Sat 8:00–13:30/);
 
-    // Hiring for another country: the new location replaces the suggestion, but not what the manager typed.
-    await page.getByText("More details").click();
-    await page.getByLabel("Search in countries").fill("Lebanon, Jordan");
+    // Hiring for another country: the new location replaces the suggestion, but not what the manager picked.
+    const countries = page.getByRole("combobox", { name: "Search in countries" });
+    await countries.fill("jor");
+    await page.getByRole("listbox", { name: "Countries" }).getByRole("option", { name: "Jordan" }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Remove Jordan" })).toBeVisible();
     await page.getByLabel("Location", { exact: true }).selectOption({ label: "Dubai, United Arab Emirates" });
     await expect(page.getByLabel("Location policy")).toHaveValue("On-site, Dubai, United Arab Emirates");
-    await expect(page.getByLabel("Search in countries")).toHaveValue("Lebanon, Jordan");
+    await expect(page.getByRole("button", { name: "Remove Lebanon" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove Jordan" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove United Arab Emirates" })).toHaveCount(0);
+  });
+
+  test("search countries can be several, typed or picked, and removed again", async ({ page }) => {
+    await signInAs(page, "Manager");
+    await page.goto("/requests/new");
+    await page.getByText("More details").click();
+    const countries = page.getByRole("combobox", { name: "Search in countries" });
+    await countries.fill("united arab");
+    await page.keyboard.press("Enter");
+    await countries.fill("Kurdistan Region");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: "Remove United Arab Emirates" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove Kurdistan Region" })).toBeVisible();
+    await page.keyboard.press("Backspace");
+    await expect(page.getByRole("button", { name: "Remove Kurdistan Region" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Remove United Arab Emirates" }).click();
+    await expect(countries).toHaveAttribute("placeholder", "Global");
   });
 
   test("a recruiter adds a position and a location in Settings and managers can use them", async ({ page }) => {
