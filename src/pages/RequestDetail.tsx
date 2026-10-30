@@ -2,7 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, Users } from "lucide-react";
 import { call, rpc } from "@/lib/rpc";
 import { can, useMe } from "@/lib/auth";
 import type { RequestEvent, RequestRow } from "@/lib/types";
@@ -108,18 +108,42 @@ function Timeline({ r, events }: { r: RequestRow; events: RequestEvent[] }) {
   );
 }
 
+/** The way from an approved request to its candidates: how many were found, and one clear button to see them. */
+function CandidatesBanner({ r, total, top }: { r: RequestRow; total: number | null; top: number }) {
+  const finding = r.status === "sourcing" && !total;
+  const title = total == null ? "Candidates" : finding ? "Finding candidates" : `${total} ${total === 1 ? "candidate" : "candidates"} found`;
+  const detail = total == null ? "Loading…"
+    : finding ? "The app is searching and scoring. This usually takes about 10 minutes."
+    : r.status === "closed" ? "This role is closed."
+    : top ? `Top ${top} ready to review` : "Scores, notes and contact status for everyone found";
+  return (
+    <Card className="mb-5 flex-row flex-wrap items-center gap-4 border-primary/30 bg-primary/5 p-4 sm:p-5">
+      <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary"><Users className="size-5" /></span>
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold">{title}</div>
+        <div className="text-sm text-muted-foreground">{detail}</div>
+      </div>
+      <Button asChild variant={finding || r.status === "closed" ? "outline" : "default"}>
+        <Link to={`/roles/${r.id}`}>{finding ? "See progress" : "View candidates"} <ArrowRight /></Link>
+      </Button>
+    </Card>
+  );
+}
+
 export default function RequestDetail() {
   const { id = "" } = useParams();
   const me = useMe().data!.user!;
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ["request", id], queryFn: () => call(rpc.requests[":id"].$get({ param: { id } })) });
+  const canSeeRole = !!q.data && ["sourcing", "open", "closed"].includes(q.data.request.status);
+  const cands = useQuery({ queryKey: ["candidates", id], queryFn: () => call(rpc.requests[":id"].candidates.$get({ param: { id } })), enabled: canSeeRole });
   if (q.isLoading) return <Spinner />;
   if (q.error) return <p className="text-destructive">{(q.error as Error).message}</p>;
   const { request: r, events } = q.data!;
   const isCeo = can(me, "ceo");
   const canEdit = (r.requesterId === me.id && ["draft", "changes_requested"].includes(r.status)) || can(me, "admin", "recruiter");
-  const canSeeRole = ["sourcing", "open", "closed"].includes(r.status);
+  const found = cands.data?.candidates ?? null;
 
   async function submitDraft() {
     try {
@@ -146,11 +170,12 @@ export default function RequestDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {canSeeRole && <Button asChild variant="outline" size="sm"><Link to={`/roles/${r.id}`}><Users /> Candidates</Link></Button>}
           {canEdit && <Button asChild variant="outline" size="sm"><Link to={`/requests/${r.id}/edit`}>Edit</Link></Button>}
           {r.requesterId === me.id && r.status === "draft" && <Button size="sm" onClick={submitDraft}>Submit to Khalil</Button>}
         </div>
       </div>
+
+      {canSeeRole && <CandidatesBanner r={r} total={found ? found.length : null} top={found ? found.filter((c) => c.isTop10).length : 0} />}
 
       <div className="grid items-start gap-5 lg:grid-cols-3">
         <Card className="gap-6 p-6 lg:col-span-2">
