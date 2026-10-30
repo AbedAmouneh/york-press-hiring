@@ -12,6 +12,18 @@ test("roles can be filtered by status", async ({ page }) => {
   await expect(page.getByText("Nothing here")).toBeVisible();
 });
 
+test("an approved request shows how many candidates were found and links to them", async ({ page }) => {
+  await signInAs(page, "CEO approver");
+  await page.goto("/roles");
+  await page.getByRole("link", { name: /Senior Product Designer/ }).click();
+  const roleUrl = new URL(page.url()).pathname;
+  await page.goto(roleUrl.replace("/roles/", "/requests/"));
+  await expect(page.getByText(/^\d+ candidates? found$/)).toBeVisible();
+  await expect(page.getByText(/^Top \d+ ready to review$/)).toBeVisible();
+  await page.getByRole("link", { name: "View candidates" }).click();
+  await expect(page).toHaveURL(new RegExp(`${roleUrl}$`));
+});
+
 test("the candidate panel splits details into tabs", async ({ page }) => {
   await signInAs(page, "Recruiter");
   await page.goto("/roles");
