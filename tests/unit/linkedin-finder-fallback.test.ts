@@ -5,7 +5,7 @@ vi.mock("../../server/env.js", async (importOriginal) => {
   return {
     ...real,
     env: { ...real.env, aiProvider: "gemini", geminiKey: "test-key", geminiModel: "gemini-3.8-flash", geminiThinking: "low" },
-    mock: { ...real.mock, claude: false },
+    mock: { ...real.mock, claude: false, gemini: false },
   };
 });
 vi.mock("../../server/services/settings.js", () => ({ logUsage: vi.fn() }));
