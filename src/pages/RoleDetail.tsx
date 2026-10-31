@@ -163,7 +163,8 @@ export default function RoleDetail() {
     setFinding(true);
     try {
       const res = await call(rpc.requests[":id"].linkedin.$post({ param: { id } }));
-      toast(res.checked ? `Found ${res.found} of ${res.checked} LinkedIn profiles.` : "Everyone already has a LinkedIn profile.");
+      toast(!res.checked ? "Everyone already has a LinkedIn profile."
+        : `Found ${res.found} of ${res.checked} LinkedIn profiles.${res.remaining ? ` Click again to look up the other ${res.remaining}.` : ""}`);
       qc.invalidateQueries({ queryKey: ["candidates", id] });
     } catch (e) { toast((e as Error).message, "error"); } finally { setFinding(false); }
   }
