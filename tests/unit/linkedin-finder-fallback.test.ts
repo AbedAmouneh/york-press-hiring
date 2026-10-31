@@ -27,11 +27,19 @@ describe("LinkedIn lookup when a model has no quota", () => {
     vi.stubGlobal("fetch", fetch);
     expect(await findLinkedinUrl({ fullName: "Nour Haidar" })).toBe("https://www.linkedin.com/in/nour-haidar-7b2");
     expect(await findLinkedinUrl({ fullName: "Nour Haidar" })).toBe("https://www.linkedin.com/in/nour-haidar-7b2");
-    expect(modelsCalled(fetch)).toEqual(["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.6-flash"]);
+    expect(modelsCalled(fetch)).toEqual(["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.6-flash"]);
+  });
+
+  it("moves on to the next model when one doesn't answer in time", async () => {
+    const timeout = Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+    const fetch = vi.fn().mockRejectedValueOnce(timeout).mockResolvedValueOnce(reply(200, found));
+    vi.stubGlobal("fetch", fetch);
+    expect(await findLinkedinUrl({ fullName: "Nour Haidar" })).toBe("https://www.linkedin.com/in/nour-haidar-7b2");
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("names the model and reason when every model fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => reply(429, { error: { message: "You exceeded your current quota" } })));
-    await expect(findLinkedinUrl({ fullName: "Nour Haidar" })).rejects.toThrow(/failed on gemini-3\.5-flash-lite \(429\): You exceeded your current quota/);
+    await expect(findLinkedinUrl({ fullName: "Nour Haidar" })).rejects.toThrow(/failed on gemini-3\.8-flash \(429\): You exceeded your current quota/);
   });
 });
