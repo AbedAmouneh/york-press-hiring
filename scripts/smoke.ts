@@ -202,6 +202,12 @@ ok(retention.months === 24 && retention.nextRun.candidates === 0, "retention pre
 const daily = await admin("GET", "/cron/daily");
 ok(daily.retention && daily.retention.candidates === 0, "the daily job runs the retention step");
 
+// ---------------------------------------------------------------- connection checks
+const testMail = await admin("POST", "/settings/test-email");
+ok(testMail.ok && testMail.mock, "the admin's test email lands in the outbox while email is in test mode");
+const credits = await admin("POST", "/settings/signalhire-credits");
+ok(credits.creditsLeft === null && credits.error === null, "refreshing SignalHire credits is a no-op without a key");
+
 // ---------------------------------------------------------------- security
 const raw = (method: string, url: string, body?: unknown, headers: Record<string, string> = {}) =>
   app.fetch(new Request(`http://localhost/api${url}`, {
