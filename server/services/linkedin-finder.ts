@@ -9,7 +9,7 @@ import { geminiModels } from "./gemini.js";
 
 const TIMEOUT_MS = 45_000;
 
-export const linkedinLookupAvailable = () => env.aiProvider === "gemini" && !mock.claude;
+export const linkedinLookupAvailable = () => !mock.gemini;
 
 export type LookupPerson = { fullName: string; currentTitle?: string | null; currentCompany?: string | null; location?: string | null };
 
