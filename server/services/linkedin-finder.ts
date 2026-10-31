@@ -5,9 +5,12 @@
 import { env, mock } from "../env.js";
 import { normalizeLinkedin } from "./providers/types.js";
 import { logUsage } from "./settings.js";
-import { geminiModels } from "./gemini.js";
 
-const TIMEOUT_MS = 45_000;
+/** Per attempt. A slow model is skipped for the next one rather than holding up the whole batch. */
+const TIMEOUT_MS = 20_000;
+
+/** Flash-Lite answers a Google search fastest and cheapest; the bigger models are the fallback. Exported for tests. */
+export const lookupModels = () => [...new Set(["gemini-3.5-flash-lite", "gemini-3.6-flash", env.geminiModel])];
 
 export const linkedinLookupAvailable = () => !mock.gemini;
 
@@ -55,15 +58,22 @@ let preferred: string | null = null;
 
 export async function findLinkedinUrl(p: LookupPerson, runId?: string | null): Promise<string | null> {
   if (!linkedinLookupAvailable()) return null;
-  const models = [...new Set([preferred, ...geminiModels()].filter((m): m is string => !!m))];
+  const models = [...new Set([preferred, ...lookupModels()].filter((m): m is string => !!m))];
   let last = "";
   for (const model of models) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": env.geminiKey },
-      body: JSON.stringify(lookupBody(p)),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": env.geminiKey },
+        body: JSON.stringify(lookupBody(p)),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+    } catch (e) {
+      // Timed out or the connection dropped: try the next model.
+      last = `LinkedIn lookup failed on ${model}: ${(e as Error).name === "TimeoutError" ? "no answer within 20 seconds" : (e as Error).message}`;
+      continue;
+    }
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
       last = `LinkedIn lookup failed on ${model} (${res.status}): ${err.error?.message ?? res.statusText}`;
@@ -78,11 +88,17 @@ export async function findLinkedinUrl(p: LookupPerson, runId?: string | null): P
   throw new Error(last);
 }
 
-/** Look several people up a few at a time. Failures count as "not found" and never stop the others. */
-export async function findLinkedinUrls<T extends LookupPerson & { id: string }>(people: T[], runId?: string | null, concurrency = 5) {
+/**
+ * Look several people up a few at a time. Failures count as "not found" and never stop the others.
+ * With a deadline, no new group starts after it, so a request stays inside the server's time limit.
+ */
+export async function findLinkedinUrls<T extends LookupPerson & { id: string }>(people: T[], runId?: string | null, concurrency = 5, deadline?: number) {
   const found = new Map<string, string>();
   let error: string | null = null;
+  let checked = 0;
   for (let i = 0; i < people.length; i += concurrency) {
+    if (deadline && Date.now() > deadline) break;
+    checked = Math.min(people.length, i + concurrency);
     await Promise.all(people.slice(i, i + concurrency).map(async (p) => {
       const url = await findLinkedinUrl(p, runId).catch((e: Error) => { error ??= e.message; return null; });
       if (url) found.set(p.id, url);
@@ -90,5 +106,5 @@ export async function findLinkedinUrls<T extends LookupPerson & { id: string }>(
     // Every lookup in the first group failed the same way (bad key, quota): stop rather than repeat it 50 times.
     if (i === 0 && !found.size && error) break;
   }
-  return Object.assign(found, { error });
+  return Object.assign(found, { error, checked });
 }
