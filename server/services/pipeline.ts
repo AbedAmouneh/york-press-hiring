@@ -341,9 +341,10 @@ async function findMissingLinkedin({ run, state, deadline }: Ctx): Promise<StepR
     .where(and(inArray(schema.roleCandidates.id, ids), isNull(schema.candidates.linkedinUrl), eq(schema.candidates.isSample, false)));
   const todo = rows.filter((r) => !checked.has(r.rcId));
   let found = 0;
-  for (let i = 0; i < todo.length; i += 10) {
+  // Five at a time (one parallel group, at most a minute even if every model is slow), so a slice never runs past the time budget.
+  for (let i = 0; i < todo.length; i += 5) {
     if (Date.now() > deadline) return "again";
-    const slice = todo.slice(i, i + 10);
+    const slice = todo.slice(i, i + 5);
     const urls = await findLinkedinUrls(slice.map((r) => ({ id: r.c.id, fullName: r.c.fullName, currentTitle: r.c.currentTitle, currentCompany: r.c.currentCompany, location: r.c.location })), run.id);
     for (const [candidateId, url] of urls) {
       await db.update(schema.candidates).set({ linkedinUrl: url }).where(and(eq(schema.candidates.id, candidateId), isNull(schema.candidates.linkedinUrl)));
