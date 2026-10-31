@@ -23,7 +23,7 @@ The code lives at **https://github.com/AbedAmouneh/york-press-hiring**. The loca
    | `SIGNALHIRE_WEBHOOK_SECRET` | another long random string |
    | `CRON_SECRET` | another long random string |
    | `DEMO_MODE` | `true` (creates demo accounts for each role) |
-   | `EMAIL_FROM` | `York Press Hiring <hiring@york-press.com>` |
+   | `EMAIL_FROM` | `York Press Careers <careers@york-press.com>` |
 
 4. Click **Deploy**. The first deploy will show an error page until the database exists — that's expected.
 
@@ -73,7 +73,7 @@ Add each key under **Vercel → Settings → Environment Variables**, then **Red
 
 ### Email: make outreach come from your york-press.com address
 
-Your mailboxes stay on **Rackspace**; Resend only *sends*. Replies go to each recruiter's normal inbox.
+Your mailboxes stay on **Rackspace**; Resend only *sends*. Every email comes from `careers@york-press.com` (a Rackspace alias that forwards to Abed). Outreach shows the recruiter's name, for example "Abed Amouneh at York Press", and replies go to that recruiter's normal inbox.
 
 1. In Resend: **Domains → Add domain → york-press.com**.
 2. Resend shows a few DNS records (DKIM, plus SPF/MX on a `send.` sub-domain). Add exactly those records where york-press.com's DNS is managed (Rackspace Cloud DNS or your domain registrar). Your IT contact can do this in 5 minutes. They don't change the records your Rackspace mailboxes use.
