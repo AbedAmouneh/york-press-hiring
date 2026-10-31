@@ -14,25 +14,28 @@ describe("slugMatchesName", () => {
 });
 
 describe("LinkedIn lookup", () => {
-  it("asks Google search for the person's name, title and employer, leaving out 'Freelance'", () => {
-    const body = lookupBody({ fullName: "Nour Haidar", currentTitle: "Illustrator", currentCompany: "Freelance", location: "Beirut, Lebanon" });
-    expect(body.tools).toEqual([{ googleSearch: {} }]);
-    expect(body.contents[0].parts[0].text).toBe('<person>Nour Haidar, Illustrator, Beirut, Lebanon</person>\nGoogle search to run: "Nour Haidar" Illustrator LinkedIn');
+  const answer = (text: string, queries: string[] = []) => ({
+    steps: [
+      ...(queries.length ? [{ type: "google_search_call", arguments: { queries } }] : []),
+      { type: "model_output", content: [{ type: "text", text }] },
+    ],
+  });
+
+  it("asks the Interactions API to run the Google search, leaving out 'Freelance' and storing nothing", () => {
+    const body = lookupBody({ fullName: "Nour Haidar", currentTitle: "Illustrator", currentCompany: "Freelance", location: "Beirut, Lebanon" }, "gemini-3.5-flash-lite");
+    expect(body).toMatchObject({ model: "gemini-3.5-flash-lite", tools: [{ type: "google_search" }], store: false });
+    expect(body.input).toContain("<person>Nour Haidar, Illustrator, Beirut, Lebanon</person>");
+    expect(body.input).toContain('Google search to run: "Nour Haidar" Illustrator LinkedIn');
   });
 
   it("keeps a searched link whose address matches the name", () => {
-    const out = readLookup({
-      candidates: [{ content: { parts: [{ text: "https://lb.linkedin.com/in/Nour-Haidar-7b2/" }] }, groundingMetadata: { webSearchQueries: ["Nour Haidar illustrator linkedin"] } }],
-    }, "Nour Haidar");
-    expect(out).toEqual({ url: "https://www.linkedin.com/in/nour-haidar-7b2", searches: 1 });
+    expect(readLookup(answer("https://lb.linkedin.com/in/Nour-Haidar-7b2/", ["Nour Haidar illustrator linkedin"]), "Nour Haidar"))
+      .toEqual({ url: "https://www.linkedin.com/in/nour-haidar-7b2", searches: 1 });
   });
 
   it("drops a link that wasn't searched for, belongs to someone else, or is missing", () => {
-    const fromMemory = { candidates: [{ content: { parts: [{ text: "https://www.linkedin.com/in/nour-haidar" }] } }] };
-    expect(readLookup(fromMemory, "Nour Haidar").url).toBeNull();
-    const wrongPerson = { candidates: [{ content: { parts: [{ text: "https://www.linkedin.com/in/sami-khoury" }] }, groundingMetadata: { webSearchQueries: ["q"] } }] };
-    expect(readLookup(wrongPerson, "Nour Haidar").url).toBeNull();
-    const none = { candidates: [{ content: { parts: [{ text: "NONE" }] }, groundingMetadata: { webSearchQueries: ["q"] } }] };
-    expect(readLookup(none, "Nour Haidar")).toEqual({ url: null, searches: 1 });
+    expect(readLookup(answer("https://www.linkedin.com/in/nour-haidar"), "Nour Haidar").url).toBeNull();
+    expect(readLookup(answer("https://www.linkedin.com/in/sami-khoury", ["q"]), "Nour Haidar").url).toBeNull();
+    expect(readLookup(answer("NONE", ["q"]), "Nour Haidar")).toEqual({ url: null, searches: 1 });
   });
 });
