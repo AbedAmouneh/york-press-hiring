@@ -16,6 +16,8 @@ import { publicUser } from "./access.js";
 import { searchProviders } from "../services/providers/select.js";
 import { previewRetention, RETENTION_MONTHS } from "../services/retention.js";
 import { signalhireBudget } from "../services/credit-budget.js";
+import { sendEmail } from "../services/email.js";
+import { signalhireCredits } from "../services/providers/signalhire.js";
 
 const AI_LABELS = { gemini: "Gemini", opencode: "OpenCode", anthropic: "Anthropic" } as const;
 
@@ -100,6 +102,29 @@ export const adminRoutes = new Hono<AppEnv>()
         appUrl: env.appUrl,
       },
     });
+  })
+  /** Sends one test email to the signed-in admin, to check the Resend key and the sender domain. */
+  .post("/settings/test-email", async (c) => {
+    const admin = requireRole(c, "admin");
+    const res = await sendEmail({
+      kind: "system",
+      to: admin.email,
+      subject: "Test email from York Press Hiring",
+      text: `Hi ${admin.name.split(" ")[0]},\n\nThis is a test email from York Press Hiring. If you can read it, email sending works.\n\nSent from: ${env.emailFrom}`,
+    });
+    return c.json({ ok: res.ok, mock: res.mock, to: admin.email, error: res.error ?? null });
+  })
+  /** Asks SignalHire for the current credit balance instead of waiting for the daily check. */
+  .post("/settings/signalhire-credits", async (c) => {
+    requireRole(c, "recruiter", "admin");
+    if (mock.signalhire) return c.json({ creditsLeft: null as number | null, error: null as string | null });
+    try {
+      const credits = await signalhireCredits();
+      if (credits != null) await updateSettings({ signalhireCreditsLeft: credits });
+      return c.json({ creditsLeft: credits, error: null as string | null });
+    } catch (e) {
+      return c.json({ creditsLeft: null as number | null, error: (e as Error).message });
+    }
   })
   .patch("/settings", json(SettingsPatch), async (c) => {
     requireRole(c, "recruiter", "admin");
