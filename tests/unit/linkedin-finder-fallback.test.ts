@@ -30,6 +30,16 @@ describe("LinkedIn lookup when a model has no quota", () => {
     expect(modelsCalled(fetch)).toEqual(["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.6-flash"]);
   });
 
+  it("asks the next model when one answers without searching, and finds nothing if none searches", async () => {
+    const fromMemory = { candidates: [{ content: { parts: [{ text: "https://www.linkedin.com/in/nour-haidar" }] } }] };
+    const fetch = vi.fn().mockResolvedValueOnce(reply(200, fromMemory)).mockResolvedValueOnce(reply(200, found));
+    vi.stubGlobal("fetch", fetch);
+    expect(await findLinkedinUrl({ fullName: "Nour Haidar" })).toBe("https://www.linkedin.com/in/nour-haidar-7b2");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => reply(200, fromMemory)));
+    expect(await findLinkedinUrl({ fullName: "Nour Haidar" })).toBeNull();
+  });
+
   it("moves on to the next model when one doesn't answer in time", async () => {
     const timeout = Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
     const fetch = vi.fn().mockRejectedValueOnce(timeout).mockResolvedValueOnce(reply(200, found));

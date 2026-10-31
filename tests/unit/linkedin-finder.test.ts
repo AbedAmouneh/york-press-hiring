@@ -17,7 +17,7 @@ describe("LinkedIn lookup", () => {
   it("asks Google search for the person's name, title and employer, leaving out 'Freelance'", () => {
     const body = lookupBody({ fullName: "Nour Haidar", currentTitle: "Illustrator", currentCompany: "Freelance", location: "Beirut, Lebanon" });
     expect(body.tools).toEqual([{ googleSearch: {} }]);
-    expect(body.contents[0].parts[0].text).toBe("<person>Nour Haidar, Illustrator, Beirut, Lebanon</person>");
+    expect(body.contents[0].parts[0].text).toBe('<person>Nour Haidar, Illustrator, Beirut, Lebanon</person>\nGoogle search to run: "Nour Haidar" Illustrator LinkedIn');
   });
 
   it("keeps a searched link whose address matches the name", () => {
