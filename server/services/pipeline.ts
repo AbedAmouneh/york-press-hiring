@@ -24,7 +24,8 @@ type Run = typeof schema.sourcingRuns.$inferSelect;
 type Request = typeof schema.roleRequests.$inferSelect;
 
 const TIME_BUDGET_MS = 230_000;
-const WEB_ENRICH_TOP = 20;
+/** Web research (Anthropic only) runs for the people most likely to be contacted: the Top 10. */
+const WEB_ENRICH_TOP = TOP_N;
 const REVEAL_WAIT_MS = 20 * 60_000;
 
 // ------------------------------------------------------------------ scheduling
