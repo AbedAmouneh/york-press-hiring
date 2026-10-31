@@ -119,7 +119,7 @@ function General() {
               <Button variant="outline" onClick={() => patch({ signalhireMonthlyLimit: limit.trim() === "" ? null : Number(limit) }, "Credit limit saved.")}>Save</Button>
             </div>
           </Field>
-          <SwitchRow id="ws" label="Claude web search on the top 20" hint={q.data.integrations.claude.via === "OpenCode" || q.data.integrations.claude.via === "Gemini" ? `Not available through ${q.data.integrations.claude.via}, so this step is skipped.` :"Looks for portfolios, GitHub and publications ($10 per 1,000 searches)."} checked={s.webSearchEnabled} onChange={(v) => patch({ webSearchEnabled: v }, "Saved.")} />
+          <SwitchRow id="ws" label="Claude web search on the Top 10" hint={q.data.integrations.claude.via === "OpenCode" || q.data.integrations.claude.via === "Gemini" ? `Not available through ${q.data.integrations.claude.via}, so this step is skipped.` :"Looks for portfolios, GitHub and publications ($10 per 1,000 searches)."} checked={s.webSearchEnabled} onChange={(v) => patch({ webSearchEnabled: v }, "Saved.")} />
           <SwitchRow id="sum" label="Weekly summary for Khalil" hint="Monday 09:00 Beirut: open roles, pipeline and spend." checked={s.weeklySummaryEnabled} onChange={(v) => patch({ weeklySummaryEnabled: v }, "Saved.")} />
         </CardContent>
       </Card>
