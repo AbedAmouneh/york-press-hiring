@@ -81,6 +81,31 @@ export const aiFeatures = {
 /** True when SignalHire can reach our webhook (a public https URL). */
 export const appIsPublic = () => env.appUrl.startsWith("https://") && !env.appUrl.includes("localhost");
 
+const SECRET_ENV = [
+  "ANTHROPIC_API_KEY", "OPENCODE_API_KEY", "GEMINI_API_KEY", "PDL_API_KEY", "SIGNALHIRE_API_KEY", "RESEND_API_KEY",
+  "SESSION_SECRET", "INTERNAL_SECRET", "SIGNALHIRE_WEBHOOK_SECRET", "CRON_SECRET", "BLOB_READ_WRITE_TOKEN",
+  "QSTASH_TOKEN", "QSTASH_CURRENT_SIGNING_KEY", "QSTASH_NEXT_SIGNING_KEY", "DATABASE_URL", "POSTGRES_URL",
+];
+/** Key shapes from our providers: Anthropic sk-ant-, OpenCode oc_sk_, Google AIza, Resend re_, bearer tokens. */
+// A pasted key can contain a space; long chunks after one are treated as part of it.
+const SECRET_SHAPES = /\b(?:sk-[A-Za-z0-9_-]{6,}|oc_sk_[A-Za-z0-9_-]{6,}|AIza[A-Za-z0-9_-]{20,}|re_[A-Za-z0-9_]{12,})(?: [A-Za-z0-9_-]{12,})*|Bearer\s+[A-Za-z0-9._~+/=-]{8,}/g;
+
+/**
+ * Removes API keys and secrets from text before it is saved, logged or shown, e.g. a provider error that echoes
+ * the key. Covers the configured values (also each part of a key with spaces in it) and common key shapes.
+ */
+export function redactSecrets(text: string): string {
+  let out = text;
+  for (const k of SECRET_ENV) {
+    const value = v(k);
+    if (value.length < 8) continue;
+    for (const part of new Set([value, ...value.split(/\s+/)])) {
+      if (part.length >= 8) out = out.split(part).join("[hidden]");
+    }
+  }
+  return out.replace(SECRET_SHAPES, "[hidden]");
+}
+
 export const TIMEZONE = "Asia/Beirut";
 export const POOL_SIZE = 50;
 export const TOP_N = 10;
