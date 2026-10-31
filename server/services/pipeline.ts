@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { waitUntil } from "@vercel/functions";
 import { getDb, schema } from "../db/client.js";
-import { aiFeatures, appIsPublic, env, mock, POOL_SIZE, TOP_N } from "../env.js";
+import { aiFeatures, appIsPublic, env, mock, POOL_SIZE, redactSecrets, TOP_N } from "../env.js";
 import type { RunState } from "../db/schema.js";
 import type { Weights } from "../../shared/types.js";
 import { buildBrief, collectScoreBatch, scoreBatch, submitScoreBatch, totalScore, webFindings, type ScoreResult } from "./claude.js";
@@ -162,7 +162,11 @@ export async function runPipeline(runId: string): Promise<RunOutcome> {
     }
     await finish(run, request, state, counters);
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
+    // A provider error can echo the API key (e.g. an invalid header value), so hide secrets before saving or showing it.
+    const raw = redactSecrets(e instanceof Error ? e.message : String(e));
+    const message = /invalid header value/i.test(raw)
+      ? `An API key in Vercel has a character that isn't allowed, often a space or line break. Paste the key again and redeploy. (${raw})`
+      : raw;
     captureError(e, { tags: { area: "pipeline", step, kind: run.kind }, extra: { runId, requestId: run.requestId } });
     log(state, `Failed at step "${step}": ${message}`);
     await save(runId, { step, state, ...counters, status: "failed", error: message, lockedUntil: null, finishedAt: new Date() });
