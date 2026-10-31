@@ -7,7 +7,7 @@ import { json } from "../validate.js";
 import { requireRole, type AppEnv } from "../auth.js";
 import { ROLES, type Weights } from "../../shared/types.js";
 import { SettingsPatch, TemplateInput, TemplatePatch, UserInviteInput, UserPatch } from "../../shared/schemas.js";
-import { env, mock } from "../env.js";
+import { env, mock, redactSecrets } from "../env.js";
 import { createUserWithPassword, inviteUser } from "../services/setup.js";
 import { getSettings, updateSettings } from "../services/settings.js";
 import { sentTodayCount } from "../services/outreach.js";
@@ -186,7 +186,7 @@ export const adminRoutes = new Hono<AppEnv>()
       .innerJoin(schema.roleRequests, eq(schema.roleRequests.id, schema.sourcingRuns.requestId))
       .orderBy(desc(schema.sourcingRuns.createdAt))
       .limit(50);
-    return c.json({ byProvider, runs: runs.map((r) => ({ ...r.run, state: undefined, title: r.title })) });
+    return c.json({ byProvider, runs: runs.map((r) => ({ ...r.run, error: r.run.error && redactSecrets(r.run.error), state: undefined, title: r.title })) });
   })
   .get("/outbox", async (c) => {
     requireRole(c, "recruiter", "admin");
