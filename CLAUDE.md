@@ -54,11 +54,12 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   `/api/internal/queue/runs`, retried on failure); without QStash they run in the background.
   A locked run answers 503 so QStash retries after the lock expires.
 - `server/services/claude.ts`: every Claude call, with mock heuristics when no key is set. With `OPENCODE_API_KEY`
-  the same Messages API calls go through OpenCode Console (`https://opencode.ai/inference/anthropic`, Bearer token);
-  it wins over `ANTHROPIC_API_KEY`. OpenCode has no Message Batches or web search tool, so `aiFeatures` in
-  `server/env.ts` turns those off (scoring runs directly, the web search step is skipped). With `GEMINI_API_KEY`
-  (wins over both unless `AI_PROVIDER` says otherwise) `structured()` and `scoreBatch()` send the same prompts and
-  JSON schemas to Gemini's generateContent with structured output (`server/services/gemini.ts`); same feature limits.
+  the same Messages API calls go through OpenCode Console (`https://opencode.ai/inference/anthropic`, Bearer token).
+  OpenCode has no Message Batches or web search tool, so `aiFeatures` in `server/env.ts` turns those off (scoring
+  runs directly, the web search step is skipped). With `GEMINI_API_KEY`, `structured()` and `scoreBatch()` can send
+  the same prompts and JSON schemas to Gemini's generateContent (`server/services/gemini.ts`); same feature limits.
+  Which one answers: `AI_PROVIDER` if its key is set, else Anthropic, then Gemini, then OpenCode (`env.aiProvider`).
+  Live uses Anthropic for AI and Gemini only for the LinkedIn lookup. Web research runs for the Top 10 only.
   Cost rules: anything shared across calls (request, scorecard, rules) goes in `cachedPrefix`
   and must not contain per-candidate data, or the cache stops hitting. Weekly refreshes score via
   the Message Batches API (half price) when QStash is on; first runs and manual refreshes score
@@ -69,7 +70,7 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   weekly and on PRs that touch the prompts. Add a case whenever a real scoring mistake is found.
 - `server/services/providers/`: PDL and SignalHire clients plus fictional mock data. SignalHire's search returns a
   preview only (no LinkedIn link, dates or education); a reveal (1 credit) returns the full profile, which is saved.
-- `server/services/linkedin-finder.ts`: with Gemini, finds each new candidate's LinkedIn link by Google search
+- `server/services/linkedin-finder.ts`: whenever `GEMINI_API_KEY` is set (`mock.gemini`), whichever service scores, finds each new candidate's LinkedIn link by Google search
   (Gemini Search grounding, 5,000 free searches a month) in the enrich step, plus a "Find LinkedIn profiles" button
   (`POST /requests/:id/linkedin`). A link is kept only if a search ran and its address carries the person's name.
   LinkedIn itself is never fetched. SignalHire stays for emails and phones.
