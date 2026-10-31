@@ -2,7 +2,7 @@
 // Candidate data never leaves through here: request bodies, cookies and headers are stripped,
 // and callers pass only ids and step names as context.
 import { waitUntil } from "@vercel/functions";
-import { env } from "./env.js";
+import { env, redactSecrets } from "./env.js";
 
 type SentryModule = typeof import("@sentry/node");
 let sentry: Promise<SentryModule | null> | null = null;
@@ -20,6 +20,9 @@ function load(): Promise<SentryModule | null> {
         stackFrameVariables: false, databaseQueryData: false, genAI: { inputs: false, outputs: false },
       },
       beforeSend(event) {
+        // Provider errors can echo an API key; strip secrets from messages and exception text.
+        if (event.message) event.message = redactSecrets(event.message);
+        for (const ex of event.exception?.values ?? []) if (ex.value) ex.value = redactSecrets(ex.value);
         if (event.request) {
           delete event.request.data;
           delete event.request.cookies;
