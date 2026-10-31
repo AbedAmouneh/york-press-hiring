@@ -45,7 +45,8 @@ export function lookupBody(p: LookupPerson, model: string) {
   };
 }
 
-type Step = { type?: string; arguments?: { queries?: string[] }; content?: { type?: string; text?: string }[] };
+type Citation = { type?: string; url?: string; title?: string };
+type Step = { type?: string; arguments?: { queries?: string[] }; content?: { type?: string; text?: string; annotations?: Citation[] }[] };
 export type LookupResponse = { steps?: Step[]; output_text?: string; error?: { message?: string } };
 
 /** The searches Gemini ran and the text it answered, from an interaction. */
@@ -134,7 +135,7 @@ export async function findLinkedinUrls<T extends LookupPerson & { id: string }>(
  * profile was found (no search, a timeout, an error). Returns no keys and only data the recruiter can already see.
  */
 export async function probeLookup(p: LookupPerson) {
-  const results: { model: string; status: number | null; ms: number; searches: number; queries: string[]; answer: string; error?: string }[] = [];
+  const results: { model: string; status: number | null; ms: number; searches: number; queries: string[]; answer: string; cited?: string[]; stepTypes?: string[]; error?: string }[] = [];
   for (const model of lookupModels()) {
     const started = Date.now();
     try {
@@ -146,7 +147,9 @@ export async function probeLookup(p: LookupPerson) {
       });
       const json = (await res.json().catch(() => ({}))) as LookupResponse;
       const { queries, text } = parseInteraction(json);
-      results.push({ model, status: res.status, ms: Date.now() - started, searches: queries.length, queries, answer: text.slice(0, 300), error: json.error?.message });
+      const cited = (json.steps ?? []).flatMap((st) => st.content ?? []).flatMap((c) => c.annotations ?? []).map((a) => `${a.title ?? ""} ${a.url ?? ""}`.trim()).slice(0, 8);
+      const stepTypes = (json.steps ?? []).map((st) => st.type ?? "?");
+      results.push({ model, status: res.status, ms: Date.now() - started, searches: queries.length, queries, answer: text.slice(0, 300), cited, stepTypes, error: json.error?.message });
     } catch (e) {
       results.push({ model, status: null, ms: Date.now() - started, searches: 0, queries: [], answer: "", error: (e as Error).message });
     }
