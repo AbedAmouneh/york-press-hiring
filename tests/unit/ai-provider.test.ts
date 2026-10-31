@@ -25,8 +25,8 @@ describe("which service answers Claude calls", () => {
     expect(aiFeatures).toMatchObject({ batches: true, webSearch: true });
   });
 
-  it("prefers OpenCode when its key is set, with a Bearer token and OpenCode's address", () => {
-    keys("sk-ant-test", "oc_sk_test");
+  it("uses OpenCode when it is the only key, with a Bearer token and OpenCode's address", () => {
+    keys("", "oc_sk_test");
     expect(env.aiProvider).toBe("opencode");
     expect(mock.claude).toBe(false);
     expect(clientOptions()).toEqual({ apiKey: null, authToken: "oc_sk_test", baseURL: "https://opencode.ai/inference/anthropic" });
@@ -43,8 +43,15 @@ describe("which service answers Claude calls", () => {
     expect(clientOptions()).toMatchObject({ baseURL: "https://opencode.ai/inference/go/anthropic" });
   });
 
-  it("prefers Gemini when its key is set, without batches or web search", () => {
+  it("prefers Anthropic when its key is set alongside the others", () => {
     keys("sk-ant-test", "oc_sk_test", "gm-test");
+    expect(env.aiProvider).toBe("anthropic");
+    expect(env.aiModel).toBe("claude-sonnet-5-5");
+    expect(aiFeatures).toMatchObject({ batches: true, webSearch: true });
+  });
+
+  it("uses Gemini when there is no Anthropic key, without batches or web search", () => {
+    keys("", "oc_sk_test", "gm-test");
     expect(env.aiProvider).toBe("gemini");
     expect(env.aiModel).toBe("gemini-3.8-flash");
     expect(aiFeatures).toMatchObject({ batches: false, webSearch: false });
@@ -52,8 +59,8 @@ describe("which service answers Claude calls", () => {
 
   it("lets AI_PROVIDER pick a service whose key is set, and ignores it otherwise", () => {
     keys("sk-ant-test", "oc_sk_test", "gm-test");
-    vi.stubEnv("AI_PROVIDER", "anthropic");
-    expect(env.aiProvider).toBe("anthropic");
+    vi.stubEnv("AI_PROVIDER", "gemini");
+    expect(env.aiProvider).toBe("gemini");
     keys("", "oc_sk_test", "gm-test");
     vi.stubEnv("AI_PROVIDER", "anthropic");
     expect(env.aiProvider).toBe("gemini");
@@ -63,5 +70,13 @@ describe("which service answers Claude calls", () => {
     keys("", "oc_sk_test");
     vi.stubEnv("VERCEL_ENV", "preview");
     expect(mock.claude).toBe(true);
+  });
+
+  it("keeps the Gemini LinkedIn lookup when Claude does the scoring", () => {
+    keys("sk-ant-test", "", "gm-test");
+    expect(env.aiProvider).toBe("anthropic");
+    expect(mock.gemini).toBe(false);
+    keys("sk-ant-test", "", "");
+    expect(mock.gemini).toBe(true);
   });
 });
