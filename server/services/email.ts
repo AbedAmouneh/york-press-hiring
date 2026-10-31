@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import { getDb, schema } from "../db/client.js";
-import { env, mock } from "../env.js";
+import { env, mock, redactSecrets } from "../env.js";
 
 export type EmailInput = {
   to: string;
@@ -43,7 +43,7 @@ export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; id?: 
     await db.insert(schema.usageLog).values({ provider: "resend", action: input.kind, units: 1 });
     return { ok: true, id: res.data?.id, mock: false };
   } catch (e) {
-    const error = e instanceof Error ? e.message : String(e);
+    const error = redactSecrets(e instanceof Error ? e.message : String(e));
     await db.insert(schema.emailLog).values({
       toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: input.text,
       kind: input.kind, mock: false, status: "failed", error,
