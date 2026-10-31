@@ -114,3 +114,34 @@ export async function findLinkedinUrls<T extends LookupPerson & { id: string }>(
   }
   return Object.assign(found, { error, checked });
 }
+
+/**
+ * Diagnostics: run one lookup on every model and report what each answered, so a recruiter can see why no
+ * profile was found (no search, a timeout, an error). Returns no keys and only data the recruiter can already see.
+ */
+export async function probeLookup(p: LookupPerson) {
+  const results: { model: string; status: number | null; ms: number; searches: number; queries: string[]; answer: string; error?: string }[] = [];
+  for (const model of lookupModels()) {
+    const started = Date.now();
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": env.geminiKey },
+        body: JSON.stringify(lookupBody(p)),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      const json = (await res.json().catch(() => ({}))) as LookupResponse & { error?: { message?: string } };
+      const cand = json.candidates?.[0];
+      results.push({
+        model, status: res.status, ms: Date.now() - started,
+        searches: cand?.groundingMetadata?.webSearchQueries?.length ?? 0,
+        queries: cand?.groundingMetadata?.webSearchQueries ?? [],
+        answer: (cand?.content?.parts ?? []).filter((x) => !x.thought).map((x) => x.text ?? "").join(" ").slice(0, 300),
+        error: json.error?.message,
+      });
+    } catch (e) {
+      results.push({ model, status: null, ms: Date.now() - started, searches: 0, queries: [], answer: "", error: (e as Error).message });
+    }
+  }
+  return results;
+}
