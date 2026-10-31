@@ -64,9 +64,9 @@ Add each key under **Vercel → Settings → Environment Variables**, then **Red
 
 | Service | Variable | Where to get it | What changes |
 |---|---|---|---|
-| Claude | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys | Real search briefs, scoring, personal lines, web search, CV scoring |
-| Google Gemini (instead of Claude) | `GEMINI_API_KEY` | aistudio.google.com/apikey | Briefs, scoring, personal lines and CV scoring through Gemini (`GEMINI_MODEL`, default `gemini-3.8-flash`). No web search or half-price batches. Wins over the Claude keys; set `AI_PROVIDER` to `opencode` or `anthropic` to choose otherwise. Settings shows "AI: Gemini". |
-| Claude through OpenCode (instead of the line above) | `OPENCODE_API_KEY` | opencode.ai/console → API keys (starts with `oc_sk_`) | The same, except web search and the half-price weekly batch scoring. Wins if both keys are set. Settings shows "Claude via OpenCode". |
+| Claude | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys (needs prepaid API credit; a Claude Team plan doesn't cover it) | Real search briefs, scoring, personal lines, web research on the Top 10, CV scoring, half-price weekly scoring. Used first whenever it is set. |
+| Google Gemini | `GEMINI_API_KEY` | aistudio.google.com/apikey (needs prepaid credit) | Finds each candidate's LinkedIn profile with Google search. If there is no Claude key, it also does the scoring (`GEMINI_MODEL`, default `gemini-3.8-flash`), without web research or half-price batches. |
+| Claude through OpenCode | `OPENCODE_API_KEY` | opencode.ai/console → API keys (starts with `oc_sk_`) | Used only when neither key above is set. No web research or half-price batches. Set `AI_PROVIDER` (`anthropic`, `gemini` or `opencode`) to choose a service explicitly. |
 | People Data Labs (optional) | `PDL_API_KEY` | dashboard.peopledatalabs.com → API keys | A second candidate source with fuller profiles (dates, education). Without it, SignalHire alone is searched |
 | SignalHire | `SIGNALHIRE_API_KEY` | signalhire.com/apiIntegrations | Real search + contact reveal for the Top 10 |
 | Resend (email) | `RESEND_API_KEY` | resend.com → API keys | Emails really send |
