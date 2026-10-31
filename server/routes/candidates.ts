@@ -55,12 +55,13 @@ export const candidateRoutes = new Hono<AppEnv>()
       .orderBy(desc(schema.roleCandidates.isTop10), asc(schema.roleCandidates.rank))
       .limit(50);
     const people = rows.map(({ c: p }) => ({ id: p.id, fullName: p.fullName, currentTitle: p.currentTitle, currentCompany: p.currentCompany, location: p.location }));
-    const urls = await findLinkedinUrls(people);
+    // Stop starting new lookups after 3.5 minutes so the request ends well inside the 5-minute function limit.
+    const urls = await findLinkedinUrls(people, null, 5, Date.now() + 210_000);
     for (const [candidateId, url] of urls) {
       await db.update(schema.candidates).set({ linkedinUrl: url }).where(and(eq(schema.candidates.id, candidateId), isNull(schema.candidates.linkedinUrl)));
     }
     if (!urls.size && urls.error) throw new HTTPException(502, { message: urls.error });
-    return c.json({ checked: people.length, found: urls.size });
+    return c.json({ checked: urls.checked, found: urls.size, remaining: people.length - urls.checked });
   })
   .get("/requests/:id/candidates", async (c) => {
     const user = c.get("user");
