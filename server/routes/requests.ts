@@ -13,6 +13,7 @@ import { assertWithinLimits, MESSAGE_LIMITS, recordHit } from "../services/rate-
 import { decisionNotice } from "../services/decision-notice.js";
 import { startRun } from "../services/pipeline.js";
 import { json, query } from "../validate.js";
+import { redactSecrets } from "../env.js";
 
 async function event(requestId: string, user: SessionUser | null, action: string, comment?: string | null) {
   const db = await getDb();
@@ -223,7 +224,8 @@ export const requestRoutes = new Hono<AppEnv>()
     const r = await loadRequest(c.req.param("id"), c.get("user"));
     const db = await getDb();
     const runs = await db.select().from(schema.sourcingRuns).where(eq(schema.sourcingRuns.requestId, r.id)).orderBy(desc(schema.sourcingRuns.createdAt));
-    return c.json({ runs });
+    // Older runs may hold an error that echoed an API key: hide it on the way out too.
+    return c.json({ runs: runs.map((run) => ({ ...run, error: run.error && redactSecrets(run.error), state: JSON.parse(redactSecrets(JSON.stringify(run.state))) as typeof run.state })) });
   })
   .patch("/requests/:id/weights", json(WeightsInput), async (c) => {
     const user = requireRole(c, "recruiter", "admin");
