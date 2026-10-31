@@ -39,7 +39,7 @@ export const env = {
   get pdlKey() { return v("PDL_API_KEY"); },
   get signalhireKey() { return v("SIGNALHIRE_API_KEY"); },
   get resendKey() { return v("RESEND_API_KEY"); },
-  get emailFrom() { return v("EMAIL_FROM") || "York Press Hiring <hiring@york-press.com>"; },
+  get emailFrom() { return v("EMAIL_FROM") || "York Press Careers <careers@york-press.com>"; },
   get demoMode() { return v("DEMO_MODE").toLowerCase() === "true"; },
   get onVercel() { return !!v("VERCEL"); },
   get vercelEnv() { return v("VERCEL_ENV"); }, // production | preview | development
