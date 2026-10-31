@@ -10,7 +10,7 @@ vi.mock("../../server/env.js", async (importOriginal) => {
 });
 vi.mock("../../server/services/settings.js", () => ({ logUsage: vi.fn() }));
 
-const { findLinkedinUrl } = await import("../../server/services/linkedin-finder.js");
+const { findLinkedinUrl, probeLookup } = await import("../../server/services/linkedin-finder.js");
 
 const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 const found = { candidates: [{ content: { parts: [{ text: "https://www.linkedin.com/in/nour-haidar-7b2" }] }, groundingMetadata: { webSearchQueries: ["q"] } }] };
@@ -51,5 +51,18 @@ describe("LinkedIn lookup when a model has no quota", () => {
   it("names the model and reason when every model fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => reply(429, { error: { message: "You exceeded your current quota" } })));
     await expect(findLinkedinUrl({ fullName: "Nour Haidar" })).rejects.toThrow(/failed on gemini-3\.8-flash \(429\): You exceeded your current quota/);
+  });
+
+  it("reports what every model answered for the diagnostics button", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(reply(200, { candidates: [{ content: { parts: [{ text: "NONE" }] } }] }))
+      .mockResolvedValueOnce(reply(200, found))
+      .mockRejectedValueOnce(Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" })));
+    const out = await probeLookup({ fullName: "Nour Haidar" });
+    expect(out.map((r) => [r.model, r.searches, r.answer.slice(0, 4), r.error ?? null])).toEqual([
+      ["gemini-3.5-flash-lite", 0, "NONE", null],
+      ["gemini-3.6-flash", 1, "http", null],
+      ["gemini-3.8-flash", 0, "", "The operation was aborted due to timeout"],
+    ]);
   });
 });
