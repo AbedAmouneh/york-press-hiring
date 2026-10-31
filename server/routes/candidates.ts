@@ -13,7 +13,7 @@ import { updateSettings } from "../services/settings.js";
 import { readCv } from "../services/cv-store.js";
 import { revealAvailable } from "../services/providers/select.js";
 import { signalhireBudget } from "../services/credit-budget.js";
-import { findLinkedinUrls, linkedinLookupAvailable } from "../services/linkedin-finder.js";
+import { findLinkedinUrls, linkedinLookupAvailable, probeLookup } from "../services/linkedin-finder.js";
 
 const canSeeContacts = (u: SessionUser, r: typeof schema.roleRequests.$inferSelect) => isStaff(u) || r.hiringManagerId === u.id;
 
@@ -62,6 +62,13 @@ export const candidateRoutes = new Hono<AppEnv>()
     }
     if (!urls.size && urls.error) throw new HTTPException(502, { message: urls.error });
     return c.json({ checked: urls.checked, found: urls.size, remaining: people.length - urls.checked });
+  })
+  /** Diagnostics for one candidate: what each Gemini model answered to the LinkedIn search. */
+  .post("/role-candidates/:id/linkedin-probe", async (c) => {
+    const user = requireRole(c, "recruiter", "admin");
+    const { c: p } = await loadRc(c.req.param("id"), user);
+    if (!linkedinLookupAvailable()) throw new HTTPException(400, { message: "LinkedIn lookup needs the Gemini key (GEMINI_API_KEY)." });
+    return c.json({ person: p.fullName, results: await probeLookup(p) });
   })
   .get("/requests/:id/candidates", async (c) => {
     const user = c.get("user");
