@@ -52,5 +52,12 @@ export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; id?: 
   }
 }
 
-/** "Name <address>" for a recruiter, used as the From of outreach emails. */
-export const senderFor = (u: { name: string; email: string }) => `${u.name.replace(/[<>"]/g, "")} <${u.email}>`;
+/** The bare address inside EMAIL_FROM, e.g. careers@york-press.com. */
+export const fromAddress = () => env.emailFrom.match(/<([^>]+)>/)?.[1] ?? env.emailFrom.trim();
+
+/**
+ * From of outreach emails: the recruiter's name on the shared careers address, e.g.
+ * "Abed Amouneh at York Press <careers@york-press.com>". Replies go to the recruiter (Reply-To).
+ * Special characters are dropped so the name never needs quoting.
+ */
+export const senderFor = (u: { name: string }) => `${u.name.replace(/[<>",;:@()[\]\\]/g, "").trim()} at York Press <${fromAddress()}>`;
