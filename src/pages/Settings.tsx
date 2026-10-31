@@ -6,6 +6,7 @@ import type { InferRequestType } from "hono/client";
 import { useSearchParams } from "react-router-dom";
 import { Ban, Briefcase, FileText, MapPin, SlidersHorizontal, Wallet } from "lucide-react";
 import { call, rpc } from "@/lib/rpc";
+import { can, useMe } from "@/lib/auth";
 import type { Template } from "@/lib/types";
 import { cn, fmtDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
@@ -67,6 +68,8 @@ function General() {
   const [cap, setCap] = useState("");
   const [w, setW] = useState<Weights>(DEFAULT_WEIGHTS);
   const [limit, setLimit] = useState("");
+  const [busy, setBusy] = useState<"email" | "credits" | null>(null);
+  const isAdmin = can(useMe().data?.user, "admin");
   useEffect(() => { if (q.data) { setCap(String(q.data.settings.dailySendCap)); setLimit(q.data.settings.signalhireMonthlyLimit == null ? "" : String(q.data.settings.signalhireMonthlyLimit)); setW(q.data.settings.defaultWeights ?? DEFAULT_WEIGHTS); } }, [q.data]);
   if (!q.data) return <Spinner />;
   const s = q.data.settings;
@@ -77,6 +80,23 @@ function General() {
       toast(msg);
       qc.invalidateQueries({ queryKey: ["settings"] });
     } catch (e) { toast((e as Error).message, "error"); }
+  }
+  async function testEmail() {
+    setBusy("email");
+    try {
+      const r = await call(rpc.settings["test-email"].$post());
+      if (!r.ok) toast(`Test email failed: ${r.error}`, "error");
+      else toast(r.mock ? `Saved to the outbox (email is in test mode), not sent to ${r.to}.` : `Test email sent to ${r.to}.`);
+    } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(null); }
+  }
+  async function refreshCredits() {
+    setBusy("credits");
+    try {
+      const r = await call(rpc.settings["signalhire-credits"].$post());
+      if (r.error) toast(`SignalHire: ${r.error}`, "error");
+      else toast(r.creditsLeft != null ? `SignalHire: ${r.creditsLeft} credits left.` : "SignalHire didn't report a balance.");
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(null); }
   }
   const total = Object.values(w).reduce((a, b) => a + b, 0);
   return (
@@ -108,8 +128,18 @@ function General() {
         <CardContent className="grid gap-3 text-sm">
           <div className="flex justify-between gap-2"><span>{i.claude.via === "Gemini" ? "AI: Gemini" : `Claude${i.claude.via ? ` via ${i.claude.via}` : " API"}`} <span className="text-muted-foreground">· {i.claude.model}</span></span><Live live={i.claude.live} /></div>
           <div className="flex justify-between gap-2"><span>People Data Labs <span className="text-muted-foreground">· search</span></span><Live live={i.pdl.live} inUse={i.pdl.inUse} /></div>
-          <div className="flex justify-between gap-2"><span>SignalHire <span className="text-muted-foreground">· search + contacts{i.signalhire.creditsLeft != null ? ` · ${i.signalhire.creditsLeft} credits left` : ""}</span></span><Live live={i.signalhire.live} inUse={i.signalhire.inUse} /></div>
-          <div className="flex justify-between gap-2"><span>Email (Resend) <span className="text-muted-foreground">· {i.email.from}</span></span><Live live={i.email.live} /></div>
+          <div className="flex justify-between gap-2">
+            <span>SignalHire <span className="text-muted-foreground">· search + contacts{i.signalhire.creditsLeft != null ? ` · ${i.signalhire.creditsLeft} credits left` : ""}</span>
+              {i.signalhire.live && <Button size="sm" variant="link" className="h-auto px-1.5 py-0" disabled={busy === "credits"} onClick={refreshCredits}>Refresh</Button>}
+            </span>
+            <Live live={i.signalhire.live} inUse={i.signalhire.inUse} />
+          </div>
+          <div className="flex justify-between gap-2">
+            <span>Email (Resend) <span className="text-muted-foreground">· {i.email.from}</span>
+              {isAdmin && <Button size="sm" variant="link" className="h-auto px-1.5 py-0" disabled={busy === "email"} onClick={testEmail}>Send test</Button>}
+            </span>
+            <Live live={i.email.live} />
+          </div>
           <div className="flex justify-between gap-2"><span>Database</span><Badge tone={i.database.live ? "good" : "warn"} dot>{i.database.live ? "Postgres" : "Local file"}</Badge></div>
           <div className="flex justify-between gap-2"><span>LinkedIn messaging</span><Badge tone="info">Claude in Chrome · approval required</Badge></div>
           <p className="text-xs text-muted-foreground">Add API keys in Vercel → Project → Settings → Environment Variables, then redeploy. See SETUP_GUIDE.md.</p>
