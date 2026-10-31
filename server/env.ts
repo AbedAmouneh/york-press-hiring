@@ -18,20 +18,20 @@ export const env = {
   /** OpenCode Console key (oc_sk_…). When set, Claude is reached through OpenCode instead of Anthropic directly. */
   get opencodeKey() { return v("OPENCODE_API_KEY"); },
   get opencodeBaseUrl() { return (v("OPENCODE_BASE_URL") || "https://opencode.ai/inference/anthropic").replace(/\/$/, ""); },
-  /** Google Gemini key. When set, Gemini answers the AI calls (see aiProvider). */
+  /** Google Gemini key. Used for the LinkedIn lookup (Google Search), and for all AI calls when it is the only AI key. */
   get geminiKey() { return v("GEMINI_API_KEY"); },
   get geminiModel() { return v("GEMINI_MODEL") || "gemini-3.8-flash"; },
   /** Gemini thinking level: low by default (fast, cheap), or minimal/medium/high where the model supports it. */
   get geminiThinking() { return v("GEMINI_THINKING").toLowerCase() || "low"; },
   /**
    * Which service answers the AI calls. AI_PROVIDER picks one explicitly (if its key is set);
-   * otherwise Gemini, then OpenCode, then Anthropic, whichever has a key first.
+   * otherwise Anthropic (the only one with half-price batches and web search), then Gemini, then OpenCode.
    */
   get aiProvider(): "gemini" | "opencode" | "anthropic" | null {
     const keys = { gemini: v("GEMINI_API_KEY"), opencode: v("OPENCODE_API_KEY"), anthropic: v("ANTHROPIC_API_KEY") };
     const pick = v("AI_PROVIDER").toLowerCase();
     if (pick in keys && keys[pick as keyof typeof keys]) return pick as keyof typeof keys;
-    return keys.gemini ? "gemini" : keys.opencode ? "opencode" : keys.anthropic ? "anthropic" : null;
+    return keys.anthropic ? "anthropic" : keys.gemini ? "gemini" : keys.opencode ? "opencode" : null;
   },
   get claudeModel() { return v("CLAUDE_MODEL") || "claude-sonnet-5-5"; },
   /** The model answering AI calls, for display and the usage log. */
@@ -61,6 +61,8 @@ const previewSafe = () => env.isPreview && !env.previewUsesRealServices;
 
 export const mock = {
   get claude() { return !env.aiProvider || previewSafe(); },
+  /** Gemini's Google Search (LinkedIn lookup) works whenever its key is set, whichever service scores. */
+  get gemini() { return !env.geminiKey || previewSafe(); },
   get pdl() { return !env.pdlKey || previewSafe(); },
   get signalhire() { return !env.signalhireKey || previewSafe(); },
   get email() { return !env.resendKey || previewSafe(); },
