@@ -1,6 +1,8 @@
 // Central place for configuration. Every provider runs in mock mode when its key is missing.
 
 const v = (k: string) => (process.env[k] ?? "").trim();
+/** API keys never contain whitespace; a key pasted across two lines in Vercel would otherwise break every request. */
+const key = (k: string) => v(k).replace(/\s+/g, "");
 
 export const env = {
   get databaseUrl() { return v("DATABASE_URL") || v("POSTGRES_URL"); },
@@ -14,12 +16,12 @@ export const env = {
   get internalSecret() { return v("INTERNAL_SECRET") || "dev-internal-secret"; },
   get webhookSecret() { return v("SIGNALHIRE_WEBHOOK_SECRET") || "dev-webhook-secret"; },
   get cronSecret() { return v("CRON_SECRET"); },
-  get anthropicKey() { return v("ANTHROPIC_API_KEY"); },
+  get anthropicKey() { return key("ANTHROPIC_API_KEY"); },
   /** OpenCode Console key (oc_sk_…). When set, Claude is reached through OpenCode instead of Anthropic directly. */
-  get opencodeKey() { return v("OPENCODE_API_KEY"); },
+  get opencodeKey() { return key("OPENCODE_API_KEY"); },
   get opencodeBaseUrl() { return (v("OPENCODE_BASE_URL") || "https://opencode.ai/inference/anthropic").replace(/\/$/, ""); },
   /** Google Gemini key. Used for the LinkedIn lookup (Google Search), and for all AI calls when it is the only AI key. */
-  get geminiKey() { return v("GEMINI_API_KEY"); },
+  get geminiKey() { return key("GEMINI_API_KEY"); },
   get geminiModel() { return v("GEMINI_MODEL") || "gemini-3.8-flash"; },
   /** Gemini thinking level: low by default (fast, cheap), or minimal/medium/high where the model supports it. */
   get geminiThinking() { return v("GEMINI_THINKING").toLowerCase() || "low"; },
@@ -28,7 +30,7 @@ export const env = {
    * otherwise Anthropic (the only one with half-price batches and web search), then Gemini, then OpenCode.
    */
   get aiProvider(): "gemini" | "opencode" | "anthropic" | null {
-    const keys = { gemini: v("GEMINI_API_KEY"), opencode: v("OPENCODE_API_KEY"), anthropic: v("ANTHROPIC_API_KEY") };
+    const keys = { gemini: key("GEMINI_API_KEY"), opencode: key("OPENCODE_API_KEY"), anthropic: key("ANTHROPIC_API_KEY") };
     const pick = v("AI_PROVIDER").toLowerCase();
     if (pick in keys && keys[pick as keyof typeof keys]) return pick as keyof typeof keys;
     return keys.anthropic ? "anthropic" : keys.gemini ? "gemini" : keys.opencode ? "opencode" : null;
@@ -36,9 +38,9 @@ export const env = {
   get claudeModel() { return v("CLAUDE_MODEL") || "claude-sonnet-5-5"; },
   /** The model answering AI calls, for display and the usage log. */
   get aiModel() { return env.aiProvider === "gemini" ? env.geminiModel : env.claudeModel; },
-  get pdlKey() { return v("PDL_API_KEY"); },
-  get signalhireKey() { return v("SIGNALHIRE_API_KEY"); },
-  get resendKey() { return v("RESEND_API_KEY"); },
+  get pdlKey() { return key("PDL_API_KEY"); },
+  get signalhireKey() { return key("SIGNALHIRE_API_KEY"); },
+  get resendKey() { return key("RESEND_API_KEY"); },
   get emailFrom() { return v("EMAIL_FROM") || "York Press Careers <careers@york-press.com>"; },
   get demoMode() { return v("DEMO_MODE").toLowerCase() === "true"; },
   get onVercel() { return !!v("VERCEL"); },
