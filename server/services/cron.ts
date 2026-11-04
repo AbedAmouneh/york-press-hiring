@@ -8,6 +8,8 @@ import { localWeekday } from "./dates.js";
 import { signalhireCredits } from "./providers/signalhire.js";
 import { pruneRateLimits } from "./rate-limit.js";
 import { runRetention } from "./retention.js";
+import { runLearning } from "./learning.js";
+import { captureError } from "../monitoring.js";
 
 /** 48h reminder for requests waiting on Khalil. */
 export async function sendApprovalReminders() {
@@ -91,6 +93,11 @@ export async function runDaily(now = new Date()) {
   } catch { /* ignore */ }
   await pruneRateLimits(now);
   out.retention = await runRetention(now);
+  try {
+    out.learning = await runLearning();
+  } catch (e) {
+    captureError(e, { tags: { area: "learning" } });
+  }
   if (localWeekday(now) === 1) {
     out.weeklyRefresh = await weeklyRefresh();
     out.weeklySummary = await weeklySummary();
