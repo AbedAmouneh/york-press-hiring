@@ -16,9 +16,13 @@ export type HomeMessage = { channel: string; status: string };
 export const STAGES = ["Approved", "Sourcing", "Top 10 ready", "Outreach"] as const;
 
 /** How far a role has got, 1 to 4 (index into STAGES plus one). 0 for requests that aren't roles yet. */
-export function stageOf(r: { status: RequestStatus; stats: { contacted: number } }) {
+export function stageOf(r: { status: RequestStatus; stats: { screened: number; contacted: number } }) {
   if (r.status === "sourcing") return 2;
-  if (r.status === "open" || r.status === "closed") return r.stats.contacted > 0 ? 4 : 3;
+  if (r.status === "open" || r.status === "closed") {
+    if (r.stats.contacted > 0) return 4;
+    // A role whose search hasn't found anyone yet (or failed) is only approved, not "Top 10 ready".
+    return r.stats.screened > 0 ? 3 : 1;
+  }
   return 0;
 }
 
