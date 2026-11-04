@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { env, mock } from "../env.js";
-import { CRITERIA, type CriterionKey, type Weights } from "../../shared/types.js";
+import { CRITERIA, type CriterionKey, type MustHaveEvidence, type Weights } from "../../shared/types.js";
 import type { SearchBrief, ScoreBreakdown, WebFinding } from "../db/schema.js";
 import { logUsage } from "./settings.js";
 import { rng } from "./providers/mock.js";
@@ -39,6 +39,8 @@ export type CandidateForAI = {
   totalYears?: number | null;
   openToWork?: boolean | null;
   webFindings?: WebFinding[] | null;
+  /** Facts computed in code (years from dates, level, skills seen in work history, fit). */
+  facts?: string[];
 };
 
 export type ScoreResult = {
@@ -49,6 +51,8 @@ export type ScoreResult = {
   gaps: string;
   redFlags: string;
   relevantYears: number;
+  /** One entry per must-have. Older answers (batches, mock) may not have it. */
+  evidence?: MustHaveEvidence[];
 };
 
 let client: Anthropic | null = null;
@@ -257,8 +261,20 @@ const SCORE_SCHEMA: Record<string, unknown> = {
           gaps: { type: "string" },
           redFlags: { type: "string" },
           relevantYears: { type: "number" },
+          evidence: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                mustHave: { type: "string" },
+                level: { type: "string", enum: ["proven", "claimed", "missing"] },
+                evidence: { type: "string" },
+              },
+              required: ["mustHave", "level", "evidence"],
+            },
+          },
         },
-        required: ["key", "breakdown", "dealBreakerMissing", "why", "gaps", "redFlags", "relevantYears"],
+        required: ["key", "breakdown", "dealBreakerMissing", "why", "gaps", "redFlags", "relevantYears", "evidence"],
       },
     },
   },
@@ -278,6 +294,10 @@ ${scorecard}
 
 Rules:
 - Score each criterion from 0 up to its maximum.
+- evidence: one entry per must-have, in the request's order. level "proven" = the work history (titles, role descriptions, projects, web findings) shows they did it; "claimed" = only listed as a skill or in a headline; "missing" = no sign of it. evidence = a short quote or reason, max 15 words.
+- must: award points mainly for proven must-haves; a claimed-only must-have is worth at most half; a missing one is worth nothing.
+- Each candidate has "facts" computed from the profile data (years from dates, level, where skills appear, location and language fit). Trust them for dates and counts; still judge quality yourself.
+- seniority and exp: compare with the requested level and years; being clearly above the level is a weaker fit, not a better one.
 - dealBreakerMissing = true only if the profile clearly fails a listed deal-breaker.
 - why: 1-2 sentences on why this person is worth contacting, citing specific evidence.
 - gaps: 1 sentence on what is missing versus the request.
