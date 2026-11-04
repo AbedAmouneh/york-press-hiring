@@ -79,5 +79,24 @@ export type ExperienceItem = {
 };
 export type EducationItem = { school: string; degree?: string | null; field?: string | null; start?: string | null; end?: string | null };
 
+/** Facts computed in code from a candidate's profile for one role (see server/services/signals.ts). */
+export type Signals = {
+  relevantYears: number | null;
+  totalYears: number | null;
+  level: "below" | "match" | "above" | "unknown";
+  shortStints: number;
+  medianTenureMonths: number | null;
+  datedProfile: boolean;
+  skillsInWork: string[];
+  skillsListedOnly: string[];
+  skillsMissing: string[];
+  locationFit: "match" | "mismatch" | "unknown";
+  languageFit: "match" | "missing" | "unknown";
+  reachable: { email: boolean; phone: boolean; linkedin: boolean };
+};
+
+/** How strongly the profile shows each must-have, as judged by Claude with a short quote or reason. */
+export type MustHaveEvidence = { mustHave: string; level: "proven" | "claimed" | "missing"; evidence: string };
+
 export const OUTREACH_STATUSES = ["queued", "awaiting_approval", "approved", "sent", "failed", "cancelled", "skipped"] as const;
 export type OutreachStatus = (typeof OUTREACH_STATUSES)[number];
