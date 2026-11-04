@@ -613,8 +613,20 @@ async function stepOutreach({ run, request, state }: Ctx): Promise<StepResult> {
   log(state, `Outreach: ${q.email} email(s) queued, ${q.linkedin} LinkedIn message(s) awaiting approval; ${drained.paused ? "sending is paused" : `${drained.sent} sent now`}.`);
 }
 
+/** SignalHire credits spent on contact reveals for a run, including results that came back through the webhook. */
+export async function creditsSpentOnRun(runId: string) {
+  const db = await getDb();
+  const [{ used }] = await db
+    .select({ used: sql<number>`coalesce(sum(${schema.contactReveals.creditsUsed}), 0)::int` })
+    .from(schema.contactReveals)
+    .where(eq(schema.contactReveals.runId, runId));
+  return Number(used);
+}
+
 async function finish(run: Run, request: Request, state: RunState, counters: Record<string, number>) {
   const db = await getDb();
+  // Contacts that arrived later through the webhook were paid for too: count every credit spent for this run.
+  counters.signalhireCredits = Math.max(counters.signalhireCredits ?? 0, await creditsSpentOnRun(run.id));
   log(state, "Run finished.");
   await save(run.id, { step: "done", state, ...counters, status: "done", lockedUntil: null, finishedAt: new Date() });
   if (request.status === "sourcing" || request.status === "open") {
