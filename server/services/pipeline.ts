@@ -19,14 +19,19 @@ import { notifyRoles, notifyUsers } from "./notify.js";
 import { captureError } from "../monitoring.js";
 import { enqueueRun, queueEnabled } from "./queue.js";
 
-const STEPS = ["brief", "search", "enrich", "score", "rank", "reveal", "outreach", "done"] as const;
+const STEPS = ["brief", "search", "enrich", "score", "rank", "reveal", "deep", "outreach", "done"] as const;
 type Step = (typeof STEPS)[number];
 type Run = typeof schema.sourcingRuns.$inferSelect;
 type Request = typeof schema.roleRequests.$inferSelect;
 
 const TIME_BUDGET_MS = 230_000;
-/** Web research (Anthropic only) runs for the people most likely to be contacted: the Top 10. */
-const WEB_ENRICH_TOP = TOP_N;
+/**
+ * The shortlist gets a deep check before anyone is contacted: SignalHire's full profile (dates, education, role
+ * descriptions, contacts), web research, and a second scoring on that full data. Search previews have no dates, so
+ * the first scoring can't verify years or level; checking a few more than the Top 10 lets better-documented people
+ * move up. On the Unlimited plan the extra reveals cost nothing beyond the monthly limit set in Settings.
+ */
+export const SHORTLIST = TOP_N + 5;
 const REVEAL_WAIT_MS = 20 * 60_000;
 
 // ------------------------------------------------------------------ scheduling
@@ -191,6 +196,7 @@ const STEP_FNS: Record<Exclude<Step, "done">, (ctx: Ctx) => Promise<StepResult>>
   score: stepScore,
   rank: stepRank,
   reveal: stepReveal,
+  deep: stepDeep,
   outreach: stepOutreach,
 };
 
@@ -364,8 +370,11 @@ async function findMissingLinkedin({ run, state, deadline }: Ctx): Promise<StepR
 }
 
 async function stepEnrich(ctx: Ctx): Promise<StepResult> {
-  if ((await findMissingLinkedin(ctx)) === "again") return "again";
-  const { run, state, counters, deadline } = ctx;
+  return findMissingLinkedin(ctx);
+}
+
+/** Web research for shortlist rows that don't have it yet. Returns "again" when time runs out. */
+async function webResearch({ run, state, counters, deadline }: Ctx, rows: ScoreRow[]): Promise<StepResult> {
   const settings = await getSettings();
   if (mock.claude || !settings.webSearchEnabled || !aiFeatures.webSearch) {
     if (mock.claude) log(state, "Web search skipped (mock mode).");
@@ -373,23 +382,17 @@ async function stepEnrich(ctx: Ctx): Promise<StepResult> {
     return;
   }
   const db = await getDb();
-  const ids = state.newRoleCandidateIds ?? [];
-  if (!ids.length) return;
-  const rows = await db
-    .select({ rc: schema.roleCandidates, c: schema.candidates })
-    .from(schema.roleCandidates)
-    .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
-    .where(inArray(schema.roleCandidates.id, ids))
-    .orderBy(desc(schema.roleCandidates.prescore))
-    .limit(WEB_ENRICH_TOP);
-  for (const { rc, c } of rows) {
-    if (rc.webFindings) continue;
+  let checked = 0;
+  for (const row of rows) {
+    if (row.rc.webFindings) continue;
     if (Date.now() > deadline) return "again";
-    const res = await webFindings({ ...toAI(c, rc), fullName: c.fullName }, run.id).catch(() => ({ findings: [], searches: 0 }));
+    const res = await webFindings({ ...toAI(row.c, row.rc), fullName: row.c.fullName }, run.id).catch(() => ({ findings: [], searches: 0 }));
     counters.webSearches += res.searches;
-    await db.update(schema.roleCandidates).set({ webFindings: res.findings }).where(eq(schema.roleCandidates.id, rc.id));
+    row.rc = { ...row.rc, webFindings: res.findings };
+    await db.update(schema.roleCandidates).set({ webFindings: res.findings }).where(eq(schema.roleCandidates.id, row.rc.id));
+    checked++;
   }
-  log(state, `Web search checked the top ${rows.length} profiles.`);
+  if (checked) log(state, `Web search checked ${checked} shortlisted profile(s).`);
 }
 
 const SCORE_CHUNK = 5;
@@ -503,7 +506,8 @@ async function stepScore(ctx: Ctx): Promise<StepResult> {
   log(state, `Scored ${ids.length} candidates.`);
 }
 
-async function stepRank({ run, request, state, counters }: Ctx) {
+/** Rank everyone scored for the role and flag the Top 10. Returns how many people were ranked. */
+async function rerank({ run, request, state, counters }: Ctx) {
   const db = await getDb();
   const all = await db
     .select({ id: schema.roleCandidates.id, wasTop: schema.roleCandidates.isTop10 })
@@ -519,7 +523,32 @@ async function stepRank({ run, request, state, counters }: Ctx) {
     await db.update(schema.roleCandidates).set({ rank: i + 1, isTop10: isTop, ...(newContender ? { newContender: true } : {}) }).where(eq(schema.roleCandidates.id, all[i].id));
   }
   counters.newContenders = contenders;
-  log(state, run.kind === "initial" ? `Ranked ${all.length} candidates; Top ${Math.min(TOP_N, all.length)} flagged.` : `${contenders} new contender(s) entered the Top ${TOP_N}.`);
+  return all.length;
+}
+
+async function stepRank(ctx: Ctx) {
+  const n = await rerank(ctx);
+  log(ctx.state, ctx.run.kind === "initial"
+    ? `Ranked ${n} candidates; the top ${Math.min(SHORTLIST, n)} go to a deep check.`
+    : `${ctx.counters.newContenders} new candidate(s) reached the Top ${TOP_N}; checking them in depth.`);
+}
+
+/**
+ * The people this run checks in depth: the top 15 for the first run; for later runs, new people who reached the
+ * top 15. Only people nobody has contacted yet.
+ */
+async function shortlistRows(run: Run, request: Request, state: RunState): Promise<ScoreRow[]> {
+  const db = await getDb();
+  const rc = schema.roleCandidates;
+  const rows = await db
+    .select({ rc, c: schema.candidates })
+    .from(rc)
+    .innerJoin(schema.candidates, eq(schema.candidates.id, rc.candidateId))
+    .where(and(eq(rc.requestId, request.id), isNotNull(rc.rank), lt(rc.rank, SHORTLIST + 1), eq(rc.status, "new")))
+    .orderBy(rc.rank);
+  if (run.kind === "initial") return rows;
+  const newIds = new Set(state.newRoleCandidateIds ?? []);
+  return rows.filter(({ rc: r }) => newIds.has(r.id));
 }
 
 /** Top-10 people to reach out to in this run: all of them for the first run, only new contenders afterwards. */
@@ -538,7 +567,7 @@ async function stepReveal({ run, request, state, counters }: Ctx) {
   if (!settings.signalhireRevealEnabled) { log(state, "Contact reveal is turned off in Settings."); return; }
   if (!revealAvailable()) { log(state, "SignalHire isn't set up, so contact details weren't looked up."); return; }
   const db = await getDb();
-  const targets = (await outreachTargets(run, request.id)).filter(({ c }) => !c.email);
+  const targets = (await shortlistRows(run, request, state)).filter(({ c }) => !c.email);
   const existing = targets.length
     ? await db.select({ rcId: schema.contactReveals.roleCandidateId }).from(schema.contactReveals).where(inArray(schema.contactReveals.roleCandidateId, targets.map((t) => t.rc.id)))
     : [];
@@ -604,6 +633,46 @@ export async function applyRevealResults(results: RevealResult[], isMock = false
   }
   await logUsage({ provider: "signalhire", action: "reveal", units: credits, mock: isMock });
   return credits;
+}
+
+/**
+ * Deep check: wait for SignalHire's full profiles, research the shortlist on the web, score it again on the full
+ * data, then rank again so the Top 10 that gets contacted is judged on dates, role descriptions and evidence rather
+ * than search previews.
+ */
+async function stepDeep(ctx: Ctx): Promise<StepResult> {
+  const { run, request, state, deadline } = ctx;
+  const db = await getDb();
+  const pending = await db
+    .select({ id: schema.contactReveals.id })
+    .from(schema.contactReveals)
+    .where(and(eq(schema.contactReveals.runId, run.id), eq(schema.contactReveals.status, "pending"), gt(schema.contactReveals.requestedAt, new Date(Date.now() - REVEAL_WAIT_MS))));
+  if (pending.length) {
+    log(state, `Waiting for ${pending.length} full profile(s) from SignalHire.`);
+    return "waiting";
+  }
+  const rows = await shortlistRows(run, request, state);
+  if (!rows.length) { log(state, "Nobody new to check in depth."); return; }
+  if ((await webResearch(ctx, rows)) === "again") return "again";
+  const weights = weightsFor(request, await getSettings());
+  const done = new Set(state.deepScored ?? []);
+  const todo = rows.filter(({ rc }) => !done.has(rc.id));
+  for (let i = 0; i < todo.length; i += SCORE_CHUNK) {
+    if (Date.now() > deadline) return "again";
+    const part = todo.slice(i, i + SCORE_CHUNK);
+    await saveScores(part, await scoreBatch(toReq(request), weights, part.map((row) => scoringInput(row, request)), run.id), weights, request);
+    for (const { rc } of part) done.add(rc.id);
+    state.deepScored = [...done];
+  }
+  const before = new Set(rows.filter(({ rc }) => rc.isTop10).map(({ rc }) => rc.id));
+  await rerank(ctx);
+  const after = await db
+    .select({ id: schema.roleCandidates.id })
+    .from(schema.roleCandidates)
+    .where(and(eq(schema.roleCandidates.requestId, request.id), eq(schema.roleCandidates.isTop10, true)));
+  const movedIn = after.filter((a) => !before.has(a.id)).length;
+  state.deepScored = undefined;
+  log(state, `Checked ${rows.length} shortlisted people in depth and scored them again on their full profiles${movedIn ? `; ${movedIn} moved into the Top ${TOP_N}` : "; the Top 10 held"}.`);
 }
 
 async function stepOutreach({ run, request, state }: Ctx): Promise<StepResult> {
