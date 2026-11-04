@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { json } from "../validate.js";
@@ -17,6 +17,7 @@ import { searchProviders } from "../services/providers/select.js";
 import { previewRetention, RETENTION_MONTHS } from "../services/retention.js";
 import { signalhireBudget } from "../services/credit-budget.js";
 import { sendEmail } from "../services/email.js";
+import { MIN_EACH_CLASS, MIN_LABELS, runLearning } from "../services/learning.js";
 import { signalhireCredits } from "../services/providers/signalhire.js";
 
 const AI_LABELS = { gemini: "Gemini", opencode: "OpenCode", anthropic: "Anthropic" } as const;
@@ -130,6 +131,31 @@ export const adminRoutes = new Hono<AppEnv>()
     requireRole(c, "recruiter", "admin");
     const body = c.req.valid("json");
     return c.json({ settings: await updateSettings({ ...body, defaultWeights: body.defaultWeights as Weights | undefined }) });
+  })
+  // ---------------------------------------------------------------- learning from decisions
+  .get("/learning", async (c) => {
+    requireRole(c, "recruiter", "admin", "ceo");
+    const db = await getDb();
+    const t = schema.learnedWeights;
+    const rows = await db.select().from(t).orderBy(desc(t.createdAt)).limit(30);
+    const decided = await db
+      .select({ department: schema.roleRequests.department, yes: sql<number>`count(*) filter (where ${schema.roleCandidates.hmDecision} = 'yes' or ${schema.roleCandidates.status} in ('interview','hired'))::int`, no: sql<number>`count(*) filter (where ${schema.roleCandidates.hmDecision} = 'no')::int` })
+      .from(schema.roleCandidates)
+      .innerJoin(schema.roleRequests, eq(schema.roleRequests.id, schema.roleCandidates.requestId))
+      .where(isNotNull(schema.roleCandidates.scoreBreakdown))
+      .groupBy(schema.roleRequests.department);
+    return c.json({ learned: rows, decided, minLabels: MIN_LABELS, minEachClass: MIN_EACH_CLASS });
+  })
+  .post("/learning/run", async (c) => {
+    requireRole(c, "recruiter", "admin");
+    return c.json({ results: await runLearning() });
+  })
+  .post("/learning/:id/undo", async (c) => {
+    requireRole(c, "recruiter", "admin");
+    const db = await getDb();
+    const [row] = await db.update(schema.learnedWeights).set({ active: false, undoneAt: new Date() }).where(eq(schema.learnedWeights.id, c.req.param("id"))).returning();
+    if (!row) throw new HTTPException(404, { message: "Not found." });
+    return c.json({ ok: true });
   })
   // ---------------------------------------------------------------- data retention
   .get("/retention", async (c) => {
