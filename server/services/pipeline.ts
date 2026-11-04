@@ -13,7 +13,7 @@ import { getSettings, logUsage, updateSettings, weightsFor } from "./settings.js
 import { signalhireBudget } from "./credit-budget.js";
 import { findLinkedinUrls, linkedinLookupAvailable } from "./linkedin-finder.js";
 import { toAI, toReq } from "./mappers.js";
-import { computeSignals, signalFacts } from "./signals.js";
+import { applyGuardrails, computeSignals, signalFacts } from "./signals.js";
 import { learnedWeightsFor } from "./learning.js";
 import { drainEmailQueue, isSuppressed, queueOutreach } from "./outreach.js";
 import { notifyRoles, notifyUsers } from "./notify.js";
@@ -437,13 +437,15 @@ async function saveScores(rows: ScoreRow[], results: ScoreResult[], weights: Wei
       await db.update(schema.roleCandidates).set({ scoredAt: new Date(), signals, gaps: "Needs review: the scorer returned no result." }).where(eq(schema.roleCandidates.id, rc.id));
       continue;
     }
-    const { breakdown, score } = totalScore(r.breakdown, weights, r.dealBreakerMissing);
+    const guarded = applyGuardrails(r.breakdown, weights, signals);
+    const { breakdown, score } = totalScore(guarded.breakdown, weights, r.dealBreakerMissing);
+    const adjusted = guarded.notes.length ? ` Score adjusted: ${guarded.notes.join("; ")}.` : "";
     await db.update(schema.roleCandidates).set({
       score,
       scoreBreakdown: breakdown,
       dealBreakerMissing: r.dealBreakerMissing,
       whyRecommended: r.why,
-      gaps: r.dealBreakerMissing ? `Deal-breaker not met (score capped at 40). ${r.gaps}` : r.gaps,
+      gaps: (r.dealBreakerMissing ? `Deal-breaker not met (score capped at 40). ${r.gaps}` : r.gaps) + adjusted,
       redFlags: r.redFlags || null,
       relevantYears: signals.relevantYears ?? r.relevantYears,
       signals,
