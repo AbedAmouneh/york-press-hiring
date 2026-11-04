@@ -90,7 +90,7 @@ const SECRET_ENV = [
 ];
 /** Key shapes from our providers: Anthropic sk-ant-, OpenCode oc_sk_, Google AIza, Resend re_, bearer tokens. */
 // A pasted key can contain a space; long chunks after one are treated as part of it.
-const SECRET_SHAPES = /\b(?:sk-[A-Za-z0-9_-]{6,}|oc_sk_[A-Za-z0-9_-]{6,}|AIza[A-Za-z0-9_-]{20,}|re_[A-Za-z0-9_]{12,})(?: [A-Za-z0-9_-]{12,})*|Bearer\s+[A-Za-z0-9._~+/=-]{8,}/g;
+const SECRET_SHAPES = /\b(?:sk-[A-Za-z0-9_-]{6,}|oc_sk_[A-Za-z0-9_-]{6,}|AIza[A-Za-z0-9_-]{20,}|re_[A-Za-z0-9_]{12,})(?:\s+[A-Za-z0-9_-]{12,})*|Bearer\s+[A-Za-z0-9._~+/=-]{8,}/g;
 
 /**
  * Removes API keys and secrets from text before it is saved, logged or shown, e.g. a provider error that echoes
@@ -106,6 +106,16 @@ export function redactSecrets(text: string): string {
     }
   }
   return out.replace(SECRET_SHAPES, "[hidden]");
+}
+
+/** redactSecrets applied to every string inside a JSON value (e.g. a run's saved log). */
+export function redactDeep<T>(value: T): T {
+  if (typeof value === "string") return redactSecrets(value) as T;
+  if (Array.isArray(value)) return value.map(redactDeep) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactDeep(v)])) as T;
+  }
+  return value;
 }
 
 export const TIMEZONE = "Asia/Beirut";
