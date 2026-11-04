@@ -95,10 +95,31 @@ type ToolCall = {
   maxTokens?: number;
 };
 
+const UNSUPPORTED = ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf", "minLength", "maxLength", "maxItems", "uniqueItems"];
+
 /**
- * Build the request for a forced tool call. When `cachedPrefix` is given it goes first in the user
- * message with a cache breakpoint, so the tools, system prompt and prefix are read from cache
- * (about a tenth of the price) on every later call that shares them.
+ * A JSON schema in the shape structured outputs accept: every object closed with additionalProperties: false,
+ * and constraints the API can't enforce dropped (we clamp and check values in code anyway). Exported for tests.
+ */
+export function strictSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(strictSchema);
+  if (!schema || typeof schema !== "object") return schema;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(schema)) {
+    if (UNSUPPORTED.includes(k) || (k === "minItems" && typeof v === "number" && v > 1)) continue;
+    out[k] = k === "properties" && v && typeof v === "object"
+      ? Object.fromEntries(Object.entries(v).map(([p, s]) => [p, strictSchema(s)]))
+      : strictSchema(v);
+  }
+  if (out.type === "object") out.additionalProperties = false;
+  return out;
+}
+
+/**
+ * Build a request whose answer is JSON matching `schema` (structured outputs). Newer Claude models don't allow
+ * forcing a tool call, so the schema goes in output_config instead of a tool. When `cachedPrefix` is given it goes
+ * first in the user message with a cache breakpoint, so the system prompt and prefix are read from cache (about a
+ * tenth of the price) on every later call that shares them.
  */
 export function toolParams(opts: ToolCall): Anthropic.MessageCreateParamsNonStreaming {
   const rest: Anthropic.ContentBlockParam[] = typeof opts.content === "string" ? [{ type: "text", text: opts.content }] : opts.content;
@@ -110,15 +131,22 @@ export function toolParams(opts: ToolCall): Anthropic.MessageCreateParamsNonStre
     max_tokens: opts.maxTokens ?? 4000,
     system: opts.system,
     messages: [{ role: "user", content }],
-    tools: [{ name: opts.toolName, description: "Return the result.", input_schema: opts.schema as Anthropic.Tool.InputSchema }],
-    tool_choice: { type: "tool", name: opts.toolName },
+    output_config: { format: { type: "json_schema", schema: strictSchema(opts.schema) as Record<string, unknown> } },
   };
 }
 
+/** The JSON answer of a structured-output request (or the input of a tool call, from older batches). */
 export function readTool<T>(msg: Anthropic.Message, toolName: string): T {
-  const block = msg.content.find((b) => b.type === "tool_use");
-  if (!block || block.type !== "tool_use") throw new Error(`Claude returned no ${toolName} result`);
-  return block.input as T;
+  const tool = msg.content.find((b) => b.type === "tool_use");
+  if (tool && tool.type === "tool_use") return tool.input as T;
+  if (msg.stop_reason === "max_tokens") throw new Error(`Claude's ${toolName} answer was cut off (too long)`);
+  if (msg.stop_reason === "refusal") throw new Error(`Claude declined to give a ${toolName} result`);
+  const text = msg.content.filter((b) => b.type === "text").map((b) => (b as Anthropic.TextBlock).text).join("");
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Claude returned no ${toolName} result`);
+  }
 }
 
 /** Token counts for the usage log, including prompt-cache reads and writes. */
@@ -210,6 +238,33 @@ function mockBrief(r: Req): SearchBrief {
 
 const SCORE_TOOL = "submit_scores";
 
+const SCORE_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    results: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          key: { type: "string" },
+          breakdown: {
+            type: "object",
+            properties: Object.fromEntries(CRITERIA.map((c) => [c.key, { type: "number" }])),
+            required: CRITERIA.map((c) => c.key),
+          },
+          dealBreakerMissing: { type: "boolean" },
+          why: { type: "string" },
+          gaps: { type: "string" },
+          redFlags: { type: "string" },
+          relevantYears: { type: "number" },
+        },
+        required: ["key", "breakdown", "dealBreakerMissing", "why", "gaps", "redFlags", "relevantYears"],
+      },
+    },
+  },
+  required: ["results"],
+};
+
 /** The scoring request for up to a handful of candidates. The request, scorecard and rules are cached. */
 export function scoreParams(r: Req, weights: Weights, items: CandidateForAI[]) {
   const scorecard = CRITERIA.map((c) => `- ${c.key} (${c.label}): 0-${weights[c.key]} points`).join("\n");
@@ -234,32 +289,7 @@ ${JSON.stringify(items, null, 1)}
 
 Return one result per candidate, using the same "key".`,
     toolName: SCORE_TOOL,
-    schema: {
-      type: "object",
-      properties: {
-        results: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              key: { type: "string" },
-              breakdown: {
-                type: "object",
-                properties: Object.fromEntries(CRITERIA.map((c) => [c.key, { type: "number" }])),
-                required: CRITERIA.map((c) => c.key),
-              },
-              dealBreakerMissing: { type: "boolean" },
-              why: { type: "string" },
-              gaps: { type: "string" },
-              redFlags: { type: "string" },
-              relevantYears: { type: "number" },
-            },
-            required: ["key", "breakdown", "dealBreakerMissing", "why", "gaps", "redFlags", "relevantYears"],
-          },
-        },
-      },
-      required: ["results"],
-    },
+    schema: SCORE_SCHEMA,
   });
 }
 
@@ -269,11 +299,10 @@ export async function scoreBatch(r: Req, weights: Weights, items: CandidateForAI
   if (mock.claude) return items.map((c) => mockScore(r, weights, c));
   if (env.aiProvider === "gemini") {
     const p = scoreParams(r, weights, items);
-    const tool = p.tools![0] as Anthropic.Tool;
     const { data, usage } = await geminiStructured<{ results: ScoreResult[] }>({
       system: p.system as string,
       parts: geminiParts({ content: p.messages[0].content }),
-      schema: tool.input_schema as Record<string, unknown>,
+      schema: SCORE_SCHEMA,
       maxTokens: p.max_tokens,
     });
     await logUsage({ runId: runId ?? null, provider: "claude", action: "score", units: 1, ...usage });
