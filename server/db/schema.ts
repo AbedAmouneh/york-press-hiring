@@ -118,6 +118,8 @@ export type RunState = {
   newRoleCandidateIds?: string[];
   /** Role candidates already looked up on LinkedIn in this run, so a resumed run doesn't search them again. */
   linkedinChecked?: string[];
+  /** Shortlisted role candidates already scored again in the deep check, so a resumed run doesn't repeat them. */
+  deepScored?: string[];
   /** A Claude Message Batch in flight (weekly runs): chunk custom_id → role-candidate ids. */
   scoreBatch?: { id: string; submittedAt: string; chunks: Record<string, string[]> };
 };
