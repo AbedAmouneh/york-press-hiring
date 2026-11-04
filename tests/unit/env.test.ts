@@ -26,6 +26,15 @@ describe("app URL", () => {
   });
 });
 
+describe("API keys", () => {
+  it("drop spaces and line breaks pasted inside a key", () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", " sk-ant-api03-abc\n def ");
+    vi.stubEnv("GEMINI_API_KEY", "AIza abc");
+    expect(env.anthropicKey).toBe("sk-ant-api03-abcdef");
+    expect(env.geminiKey).toBe("AIzaabc");
+  });
+});
+
 describe("pull-request previews", () => {
   it("use sample data and the mock outbox even when real keys are present", () => {
     liveKeys();
