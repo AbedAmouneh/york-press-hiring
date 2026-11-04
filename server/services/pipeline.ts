@@ -166,7 +166,9 @@ export async function runPipeline(runId: string): Promise<RunOutcome> {
     const raw = redactSecrets(e instanceof Error ? e.message : String(e));
     const message = /invalid header value/i.test(raw)
       ? `An API key in Vercel has a character that isn't allowed, often a space or line break. Paste the key again and redeploy. (${raw})`
-      : raw;
+      : /invalid x-api-key|authentication_error/i.test(raw)
+        ? `Anthropic rejected the Claude API key. Create a new key at console.anthropic.com (it starts with sk-ant-api03-), paste it as ANTHROPIC_API_KEY in Vercel and redeploy. (${raw})`
+        : raw;
     captureError(e, { tags: { area: "pipeline", step, kind: run.kind }, extra: { runId, requestId: run.requestId } });
     log(state, `Failed at step "${step}": ${message}`);
     await save(runId, { step, state, ...counters, status: "failed", error: message, lockedUntil: null, finishedAt: new Date() });
