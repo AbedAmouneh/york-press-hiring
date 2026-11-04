@@ -85,6 +85,13 @@
       "when": 1793258144686,
       "tag": "0011_must-change-password",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793817008613,
+      "tag": "0012_candidate-evidence",
+      "breakpoints": true
     }
   ]
 }
