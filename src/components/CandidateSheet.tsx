@@ -17,6 +17,40 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 const href = (u: string) => (u.startsWith("http") ? u : `https://${u}`);
+
+const LEVEL_TEXT = { below: "Below the level", match: "Right level", above: "Above the level" } as const;
+const EVIDENCE_STYLE = { proven: "border-success/40 bg-success/10", claimed: "border-chip-amber/50 bg-chip-amber/10", missing: "border-destructive/30 bg-destructive/5" } as const;
+const EVIDENCE_TEXT = { proven: "Proven", claimed: "Only claimed", missing: "Missing" } as const;
+
+/** Facts computed from the profile, and how strongly each must-have is shown. */
+function Evidence({ rc }: { rc: CandidateDetail["roleCandidate"] }) {
+  const s = rc.signals;
+  const ev = rc.evidence ?? [];
+  if (!s && !ev.length) return null;
+  const facts = s ? [
+    s.level !== "unknown" ? LEVEL_TEXT[s.level] : null,
+    s.datedProfile && s.relevantYears != null ? `${s.relevantYears} yrs in similar roles` : !s.datedProfile ? "Years not verified (no dates)" : null,
+    s.shortStints ? `${s.shortStints} job${s.shortStints === 1 ? "" : "s"} under 12 months` : null,
+    s.locationFit === "mismatch" ? "Outside the role's location" : s.locationFit === "match" ? "In the role's location" : null,
+    s.languageFit === "missing" ? "Missing a required language" : null,
+  ].filter(Boolean) as string[] : [];
+  return (
+    <section className="grid gap-2 text-sm">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Evidence</h3>
+      {!!facts.length && <div className="flex flex-wrap gap-1.5">{facts.map((f) => <Badge key={f}>{f}</Badge>)}</div>}
+      {!!ev.length && (
+        <ul className="grid gap-1.5">
+          {ev.map((e) => (
+            <li key={e.mustHave} className={cn("rounded-md border px-2.5 py-1.5", EVIDENCE_STYLE[e.level])}>
+              <span className="font-medium">{e.mustHave}</span> <span className="text-xs text-muted-foreground">· {EVIDENCE_TEXT[e.level]}</span>
+              {e.evidence && <div className="text-xs text-muted-foreground">{e.evidence}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 const emptyToNull = (v: unknown) => (v === "" ? null : v);
 
 /** Status, hiring manager decision, comment and follow-up date for one candidate. */
@@ -153,6 +187,7 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
                 </div>
                 {d.roleCandidate.dealBreakerMissing && <p className="mt-2 text-sm text-destructive">A deal-breaker isn't met, so the score is capped at 40.</p>}
               </section>
+              <Evidence rc={d.roleCandidate} />
               <section className="grid gap-3 text-sm">
                 <div><h3 className={label}>Why recommended</h3>{d.roleCandidate.whyRecommended ?? "–"}</div>
                 <div><h3 className={label}>Gaps</h3>{d.roleCandidate.gaps ?? "–"}</div>
