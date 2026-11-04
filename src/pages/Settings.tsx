@@ -61,6 +61,67 @@ function Retention() {
   );
 }
 
+/** What the scorecard learned from hiring-manager decisions, with undo. Runs by itself every day. */
+function Learning() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const q = useQuery({ queryKey: ["learning"], queryFn: () => call(rpc.learning.$get()) });
+  const [busy, setBusy] = useState(false);
+  if (!q.data) return null;
+  const active = q.data.learned.filter((l) => l.active);
+  const refresh = () => qc.invalidateQueries({ queryKey: ["learning"] });
+  async function learnNow() {
+    setBusy(true);
+    try {
+      const r = await call(rpc.learning.run.$post());
+      const changed = r.results.filter((x) => x.changed);
+      toast(changed.length ? `Updated ${changed.map((x) => (x.department === "*" ? "all departments" : x.department)).join(", ")}.` : "Nothing to change yet.");
+      refresh();
+    } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); }
+  }
+  async function undo(id: string) {
+    await call(rpc.learning[":id"].undo.$post({ param: { id } }));
+    toast("Undone. New roles use the previous weights.");
+    refresh();
+  }
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader><CardTitle>Learning from decisions</CardTitle></CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        <p className="text-muted-foreground">
+          Every day the scorecard learns from hiring managers' Yes/No and from who gets an interview, so new roles rank people
+          the way your team picks them. It needs {q.data.minLabels} decisions per department (at least {q.data.minEachClass} yes and {q.data.minEachClass} no),
+          moves each weight by at most 5 points at a time and only changes when it ranks past decisions better. It only looks at the
+          scorecard criteria, never at who the person is.
+        </p>
+        {!!q.data.decided.length && (
+          <div className="flex flex-wrap gap-1.5">
+            {q.data.decided.map((d) => <Badge key={d.department}>{d.department}: {d.yes} yes · {d.no} no</Badge>)}
+          </div>
+        )}
+        {active.map((l) => (
+          <div key={l.id} className="rounded-lg border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">{l.department === "*" ? "All departments" : l.department}</span>
+              <Button size="sm" variant="ghost" onClick={() => undo(l.id)}>Undo</Button>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              From {l.labels} decisions on {fmtDateTime(l.createdAt)} · ranks them right {Math.round(l.accuracyAfter * 100)}% of the time (was {Math.round(l.accuracyBefore * 100)}%)
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {CRITERIA.filter((c) => l.weights[c.key] !== l.previous[c.key]).map((c) => (
+                <Badge key={c.key}>{c.label}: {l.previous[c.key]} → {l.weights[c.key]}</Badge>
+              ))}
+            </div>
+          </div>
+        ))}
+        {!active.length && <p className="text-muted-foreground">Nothing learned yet. Use Yes / No on Top-10 candidates and it starts on its own.</p>}
+        <div><Button size="sm" variant="outline" disabled={busy} onClick={learnNow}>Learn now</Button></div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function General() {
   const qc = useQueryClient();
   const toast = useToast();
@@ -146,6 +207,7 @@ function General() {
         </CardContent>
       </Card>
       <Retention />
+      <Learning />
       <Card className="lg:col-span-2">
         <CardHeader><CardTitle>Default scorecard weights</CardTitle></CardHeader>
         <CardContent className="grid gap-3">
