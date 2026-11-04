@@ -156,7 +156,8 @@ export const requestRoutes = new Hono<AppEnv>()
     const [r] = await db.insert(schema.roleRequests).values({
       ...input,
       requesterId: user.id,
-      hiringManagerId: input.hiringManagerId ?? (hasRole(user, "hm", "manager") ? user.id : null),
+      // "Me" on the form sends no hiring manager: the requester is the hiring manager.
+      hiringManagerId: input.hiringManagerId ?? user.id,
       status: submit ? "submitted" : "draft",
       submittedAt: submit ? new Date() : null,
       applyToken: randomToken(12),
@@ -173,7 +174,9 @@ export const requestRoutes = new Hono<AppEnv>()
     const input = c.req.valid("json");
     await assertLocation(input.locationId);
     const db = await getDb();
-    await db.update(schema.roleRequests).set({ ...input, updatedAt: new Date() }).where(eq(schema.roleRequests.id, r.id));
+    // "Me" (null) means the requester, as when the request was created.
+    const hm = input.hiringManagerId === null ? { hiringManagerId: r.requesterId } : {};
+    await db.update(schema.roleRequests).set({ ...input, ...hm, updatedAt: new Date() }).where(eq(schema.roleRequests.id, r.id));
     await event(r.id, user, "edited");
     return c.json({ ok: true });
   })
