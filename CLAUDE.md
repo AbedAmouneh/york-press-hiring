@@ -54,6 +54,12 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   web research and a second scoring (`deep`), and only then is the Top 10 contacted. Scoring gets facts computed in
   code (`server/services/signals.ts`: years from dates, level, stability, where must-haves appear, fit) and returns
   proven / claimed / missing evidence per must-have; both are stored on role_candidates.
+- `server/services/learning.ts`: the scorecard learns from decisions (hiring manager Yes = 1, No = 0; interview or
+  hired = 1). Daily (cron) it tunes the criterion weights per department and across departments to rank past
+  decisions better (pairwise accuracy), in whole points, at most ±5 per cycle and ±10 from the defaults, only with
+  12+ decisions (3+ each way) and a 2-point accuracy gain. New roles freeze the learned weights into
+  `role_requests.scorecard_weights` on their first run; recruiters get a notification and can undo in Settings.
+  Inputs are only the criterion shares, never anything about the person.
   Slices are queued with QStash (`server/services/queue.ts`, signed calls to
   `/api/internal/queue/runs`, retried on failure); without QStash they run in the background.
   A locked run answers 503 so QStash retries after the lock expires.
