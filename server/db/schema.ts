@@ -318,6 +318,24 @@ export const settings = pgTable("settings", {
   updatedAt: ts("updated_at").notNull().defaultNow(),
 });
 
+/**
+ * Scorecard weights learned from hiring-manager decisions, per department ("*" = all departments). The newest
+ * active row is used for new roles; undoing switches it off. Holds no personal data.
+ */
+export const learnedWeights = pgTable("learned_weights", {
+  id: id(),
+  department: text("department").notNull(),
+  weights: jsonb("weights").$type<Weights>().notNull(),
+  previous: jsonb("previous").$type<Weights>().notNull(),
+  labels: integer("labels").notNull(),
+  positives: integer("positives").notNull(),
+  accuracyBefore: real("accuracy_before").notNull(),
+  accuracyAfter: real("accuracy_after").notNull(),
+  active: boolean("active").notNull().default(true),
+  undoneAt: ts("undone_at"),
+  createdAt: createdAt(),
+}, (t) => [index("learned_weights_department_idx").on(t.department, t.createdAt)]);
+
 export const notifications = pgTable("notifications", {
   id: id(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
