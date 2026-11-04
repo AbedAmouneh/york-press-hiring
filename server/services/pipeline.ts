@@ -49,6 +49,15 @@ export async function startRun(requestId: string, kind: "initial" | "weekly" | "
     kick(active[0].id);
     return active[0].id;
   }
+  // Until one run has finished, a re-run is still the first run: it checks the top 15 and contacts the Top 10.
+  if (kind !== "initial") {
+    const [finished] = await db
+      .select({ id: schema.sourcingRuns.id })
+      .from(schema.sourcingRuns)
+      .where(and(eq(schema.sourcingRuns.requestId, requestId), eq(schema.sourcingRuns.status, "done")))
+      .limit(1);
+    if (!finished) kind = "initial";
+  }
   const [run] = await db.insert(schema.sourcingRuns).values({ requestId, kind, state: { log: [] } }).returning();
   if (kind === "initial") {
     await db.update(schema.roleRequests).set({ status: "sourcing", updatedAt: new Date() }).where(eq(schema.roleRequests.id, requestId));
