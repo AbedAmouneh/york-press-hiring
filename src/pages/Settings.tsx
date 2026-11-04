@@ -112,14 +112,14 @@ function General() {
               <Button variant="outline" onClick={() => patch({ dailySendCap: Number(cap) }, "Daily cap saved.")}>Save</Button>
             </div>
           </Field>
-          <SwitchRow id="rv" label="Reveal Top-10 contacts with SignalHire" hint="Uses 1 credit per person found." checked={s.signalhireRevealEnabled} onChange={(v) => patch({ signalhireRevealEnabled: v }, "Saved.")} />
+          <SwitchRow id="rv" label="Check the top 15 with SignalHire" hint="Loads their full profile and contacts before the Top 10 is chosen. 1 credit per person found." checked={s.signalhireRevealEnabled} onChange={(v) => patch({ signalhireRevealEnabled: v }, "Saved.")} />
           <Field label="SignalHire monthly credit limit" hint={`Used this month: ${i.signalhire.spentThisMonth}. Leave empty for no limit.`} htmlFor="shl">
             <div className="flex gap-2">
               <Input id="shl" type="number" min={0} placeholder="No limit" value={limit} onChange={(e) => setLimit(e.target.value)} />
               <Button variant="outline" onClick={() => patch({ signalhireMonthlyLimit: limit.trim() === "" ? null : Number(limit) }, "Credit limit saved.")}>Save</Button>
             </div>
           </Field>
-          <SwitchRow id="ws" label="Claude web search on the Top 10" hint={q.data.integrations.claude.via === "OpenCode" || q.data.integrations.claude.via === "Gemini" ? `Not available through ${q.data.integrations.claude.via}, so this step is skipped.` :"Looks for portfolios, GitHub and publications ($10 per 1,000 searches)."} checked={s.webSearchEnabled} onChange={(v) => patch({ webSearchEnabled: v }, "Saved.")} />
+          <SwitchRow id="ws" label="Claude web search on the top 15" hint={q.data.integrations.claude.via === "OpenCode" || q.data.integrations.claude.via === "Gemini" ? `Not available through ${q.data.integrations.claude.via}, so this step is skipped.` :"Looks for portfolios, GitHub and publications ($10 per 1,000 searches)."} checked={s.webSearchEnabled} onChange={(v) => patch({ webSearchEnabled: v }, "Saved.")} />
           <SwitchRow id="sum" label="Weekly summary for Khalil" hint="Monday 09:00 Beirut: open roles, pipeline and spend." checked={s.weeklySummaryEnabled} onChange={(v) => patch({ weeklySummaryEnabled: v }, "Saved.")} />
         </CardContent>
       </Card>
