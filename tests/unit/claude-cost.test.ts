@@ -24,7 +24,8 @@ const req = {
 };
 const cand = (key: string): CandidateForAI => ({ key, currentTitle: "Editor", experience: [], education: [], skills: ["Copy editing"], certifications: [], languages: [] });
 const scoreMessage = (keys: string[]) => ({
-  content: [{ type: "tool_use", name: "submit_scores", input: { results: keys.map((key) => ({ key, breakdown: { must: 30 }, dealBreakerMissing: false, why: "w", gaps: "g", redFlags: "", relevantYears: 5 })) } }],
+  stop_reason: "end_turn",
+  content: [{ type: "text", text: JSON.stringify({ results: keys.map((key) => ({ key, breakdown: { must: 30 }, dealBreakerMissing: false, why: "w", gaps: "g", redFlags: "", relevantYears: 5 })) }) }],
   usage: { input_tokens: 200, output_tokens: 300, cache_read_input_tokens: 1800, cache_creation_input_tokens: 0 },
 });
 
@@ -47,7 +48,7 @@ describe("prompt caching", () => {
     const a = scoreParams(req, DEFAULT_WEIGHTS, [cand("a")]);
     const b = scoreParams(req, DEFAULT_WEIGHTS, [cand("b"), cand("c")]);
     expect(b.system).toEqual(a.system);
-    expect(b.tools).toEqual(a.tools);
+    expect(b.output_config).toEqual(a.output_config);
     expect((b.messages[0].content as unknown[])[0]).toEqual((a.messages[0].content as unknown[])[0]);
   });
 
@@ -64,9 +65,12 @@ describe("prompt caching", () => {
 describe("batch scoring", () => {
   it("sends one request per chunk, keyed by chunk id", async () => {
     expect(await submitScoreBatch(req, DEFAULT_WEIGHTS, [{ id: "chunk-0", items: [cand("a")] }, { id: "chunk-1", items: [cand("b")] }])).toBe("batch_1");
-    const { requests } = (sdk.batchCreate.mock.calls[0] as unknown as [{ requests: { custom_id: string; params: { tool_choice: unknown } }[] }])[0];
+    const { requests } = (sdk.batchCreate.mock.calls[0] as unknown as [{ requests: { custom_id: string; params: { tool_choice?: unknown; output_config: { format: { type: string; schema: { additionalProperties: unknown } } } } }[] }])[0];
     expect(requests.map((r) => r.custom_id)).toEqual(["chunk-0", "chunk-1"]);
-    expect(requests[0].params.tool_choice).toEqual({ type: "tool", name: "submit_scores" });
+    // Newer Claude models reject a forced tool_choice, so scores come back as structured JSON instead.
+    expect(requests[0].params.tool_choice).toBeUndefined();
+    expect(requests[0].params.output_config.format.type).toBe("json_schema");
+    expect(requests[0].params.output_config.format.schema.additionalProperties).toBe(false);
   });
 
   it("reports a batch that is still running", async () => {
