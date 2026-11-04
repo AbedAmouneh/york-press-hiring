@@ -1,6 +1,6 @@
 // Errors are saved, shown on role pages and sent to Sentry, so they must never carry an API key.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { redactSecrets } from "../../server/env.js";
+import { redactDeep, redactSecrets } from "../../server/env.js";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -16,6 +16,11 @@ describe("redactSecrets", () => {
     const out = redactSecrets(text);
     expect(out).not.toMatch(/sk-ant|AIza|re_1234|oc_sk_|abc\.def/);
     expect(out.match(/\[hidden\]/g)).toHaveLength(5);
+  });
+
+  it("hides an old key split by a line break inside a saved run log", () => {
+    const log = { log: [{ text: 'Failed: Headers.append: "sk-ant-usr-1hDwiXcbc7gY_3Kewi\nyRirOtr7Lis94sAbRpVEGAkRcYf3eZ" is an invalid header value.' }], n: 3 };
+    expect(redactDeep(log)).toEqual({ log: [{ text: 'Failed: Headers.append: "[hidden]" is an invalid header value.' }], n: 3 });
   });
 
   it("keeps the rest of a message readable", () => {
