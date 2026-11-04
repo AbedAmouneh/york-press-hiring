@@ -1,7 +1,7 @@
 // Facts about a candidate that code can work out exactly from the profile, so ranking doesn't depend on an AI
 // doing date arithmetic or keyword spotting. Shown on the candidate card, given to Claude as facts, and used as
 // features by the learning step. Never uses name, photo, age, gender or nationality.
-import type { ExperienceItem, Signals } from "../../shared/types.js";
+import type { CriterionKey, ExperienceItem, Signals, Weights } from "../../shared/types.js";
 
 type Profile = {
   headline?: string | null;
@@ -164,6 +164,27 @@ export function computeSignals(p: Profile, role: Role, now = new Date()): Signal
     languageFit,
     reachable: { email: !!p.email, phone: !!p.phone, linkedin: !!p.linkedinUrl },
   };
+}
+
+/**
+ * Rules applied in code after scoring, so the facts that can be computed exactly always count the same way:
+ * clearly above or below the requested level limits seniority and experience points, three or more short jobs
+ * limit trajectory, and being outside the location of an on-site role gives no location points.
+ * Returns the adjusted points and a short note for each rule that changed something.
+ */
+export function applyGuardrails(breakdown: Partial<Weights>, weights: Weights, s: Signals): { breakdown: Partial<Weights>; notes: string[] } {
+  const out = { ...breakdown };
+  const notes: string[] = [];
+  const cap = (k: CriterionKey, share: number) => {
+    const max = Math.floor(weights[k] * share);
+    if ((out[k] ?? 0) > max) { out[k] = max; return true; }
+    return false;
+  };
+  if (s.level === "above" && [cap("seniority", 0.3), cap("exp", 0.6)].some(Boolean)) notes.push("well above the requested level");
+  if (s.level === "below" && [cap("seniority", 0.3), cap("exp", 0.5)].some(Boolean)) notes.push("below the requested level");
+  if (s.shortStints >= 3 && cap("trajectory", 0.4)) notes.push(`${s.shortStints} jobs shorter than a year recently`);
+  if (s.locationFit === "mismatch" && cap("remote", 0)) notes.push("outside the role's location");
+  return { breakdown: out, notes };
 }
 
 /** The facts as short sentences for Claude. Facts, not instructions: Claude still judges the evidence. */
