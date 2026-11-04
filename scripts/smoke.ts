@@ -209,6 +209,13 @@ ok(retention.months === 24 && retention.nextRun.candidates === 0, "retention pre
 const daily = await admin("GET", "/cron/daily");
 ok(daily.retention && daily.retention.candidates === 0, "the daily job runs the retention step");
 
+// ---------------------------------------------------------------- learning from decisions
+ok(Array.isArray(daily.learning), "the daily job runs the learning step");
+const learning = await admin("GET", "/learning");
+ok(Array.isArray(learning.learned) && learning.minLabels === 12, "the learning status is readable");
+const roleWeightsNow = (await admin("GET", `/requests/${id}`)).request.scorecardWeights;
+ok(roleWeightsNow && Object.values(roleWeightsNow).reduce((a: number, b: any) => a + b, 0) === 100, "a sourced role keeps the scorecard it was scored with");
+
 // ---------------------------------------------------------------- connection checks
 const testMail = await admin("POST", "/settings/test-email");
 ok(testMail.ok && testMail.mock, "the admin's test email lands in the outbox while email is in test mode");
