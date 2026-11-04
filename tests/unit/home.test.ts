@@ -10,8 +10,12 @@ describe("stageOf", () => {
   it("follows the role from sourcing to outreach", () => {
     expect(stageOf(req({ status: "draft" }))).toBe(0);
     expect(stageOf(req({ status: "sourcing" }))).toBe(2);
-    expect(stageOf(req({ status: "open" }))).toBe(3);
-    expect(stageOf(req({ status: "open", stats: { ...stats, contacted: 2 } }))).toBe(4);
+    expect(stageOf(req({ status: "open", stats: { ...stats, screened: 48 } }))).toBe(3);
+    expect(stageOf(req({ status: "open", stats: { ...stats, screened: 48, contacted: 2 } }))).toBe(4);
+  });
+
+  it("doesn't call a role with nobody screened yet 'Top 10 ready'", () => {
+    expect(stageOf(req({ status: "open" }))).toBe(1);
   });
 });
 
