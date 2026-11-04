@@ -279,5 +279,10 @@ const { seedDemoUsers } = await import("../server/services/setup.js");
 await seedDemoUsers();
 ok((await team()).find((u) => u.email === "demo.hm@york-press.test")?.active, "with DEMO_MODE on, switched-off demo accounts come back (test copies)");
 
+// ---------------------------------------------------------------- no CEO approver
+for (const u of (await team()).filter((x) => x.active && x.roles.includes("ceo"))) await second("PATCH", `/users/${u.id}`, { active: false });
+await second("POST", "/requests?submit=true", { title: "Nobody to approve", department: "Editorial", seniority: "Mid" });
+ok((await second("GET", "/notifications")).notifications.some((n: any) => n.title === "Nobody can approve Nobody to approve: add a CEO approver"), "with no CEO approver, admins are told nobody can approve the request");
+
 console.log("\nAll smoke checks passed.");
 process.exit(0);
