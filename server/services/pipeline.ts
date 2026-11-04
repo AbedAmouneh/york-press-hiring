@@ -445,6 +445,41 @@ async function saveScores(rows: ScoreRow[], results: ScoreResult[], weights: Wei
 }
 
 /**
+ * Score a few people in one call and save the results. If the answer is cut off (rich profiles, many must-haves)
+ * or leaves people out, score them again in smaller groups instead of failing the run. Exported for tests.
+ */
+export async function scoreRows(rows: ScoreRow[], request: Request, weights: Weights, runId: string | null): Promise<void> {
+  if (!rows.length) return;
+  let results: ScoreResult[];
+  try {
+    results = await scoreBatch(toReq(request), weights, rows.map((row) => scoringInput(row, request)), runId);
+  } catch (e) {
+    if (rows.length > 1 && /cut off/.test((e as Error).message)) {
+      const half = Math.ceil(rows.length / 2);
+      await scoreRows(rows.slice(0, half), request, weights, runId);
+      await scoreRows(rows.slice(half), request, weights, runId);
+      return;
+    }
+    throw e;
+  }
+  const answered = new Set(results.map((r) => r.key));
+  const missing = rows.filter(({ rc }) => !answered.has(rc.id));
+  if (missing.length && missing.length < rows.length) {
+    await saveScores(rows.filter(({ rc }) => answered.has(rc.id)), results, weights, request);
+    await scoreRows(missing, request, weights, runId);
+    return;
+  }
+  // Everyone answered, or a single person the scorer skipped (saved as "needs review").
+  if (missing.length === rows.length && rows.length > 1) {
+    const half = Math.ceil(rows.length / 2);
+    await scoreRows(rows.slice(0, half), request, weights, runId);
+    await scoreRows(rows.slice(half), request, weights, runId);
+    return;
+  }
+  await saveScores(rows, results, weights, request);
+}
+
+/**
  * Weekly refreshes aren't urgent, so they score through the Message Batches API at half price.
  * The run waits and the queue checks back every few minutes. Needs the queue (QStash) to poll.
  */
@@ -517,7 +552,7 @@ async function stepScore(ctx: Ctx): Promise<StepResult> {
     if (Date.now() > deadline) return "again";
     const rows = await unscored(ids, SCORE_CHUNK);
     if (!rows.length) break;
-    await saveScores(rows, await scoreBatch(toReq(request), weights, rows.map((row) => scoringInput(row, request)), run.id), weights, request);
+    await scoreRows(rows, request, weights, run.id);
   }
   log(state, `Scored ${ids.length} candidates.`);
 }
@@ -676,7 +711,7 @@ async function stepDeep(ctx: Ctx): Promise<StepResult> {
   for (let i = 0; i < todo.length; i += SCORE_CHUNK) {
     if (Date.now() > deadline) return "again";
     const part = todo.slice(i, i + SCORE_CHUNK);
-    await saveScores(part, await scoreBatch(toReq(request), weights, part.map((row) => scoringInput(row, request)), run.id), weights, request);
+    await scoreRows(part, request, weights, run.id);
     for (const { rc } of part) done.add(rc.id);
     state.deepScored = [...done];
   }
