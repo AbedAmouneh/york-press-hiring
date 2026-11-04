@@ -13,6 +13,7 @@ import { getSettings, logUsage, updateSettings, weightsFor } from "./settings.js
 import { signalhireBudget } from "./credit-budget.js";
 import { findLinkedinUrls, linkedinLookupAvailable } from "./linkedin-finder.js";
 import { toAI, toReq } from "./mappers.js";
+import { computeSignals, signalFacts } from "./signals.js";
 import { drainEmailQueue, isSuppressed, queueOutreach } from "./outreach.js";
 import { notifyRoles, notifyUsers } from "./notify.js";
 import { captureError } from "../monitoring.js";
@@ -397,6 +398,11 @@ const BATCH_GIVE_UP_MS = 24 * 3600_000;
 
 type ScoreRow = { rc: typeof schema.roleCandidates.$inferSelect; c: typeof schema.candidates.$inferSelect };
 
+/** What the scorer sees: the profile (no name) plus facts computed in code from it. */
+function scoringInput({ c, rc }: ScoreRow, request: Request) {
+  return { ...toAI(c, rc), facts: signalFacts(computeSignals(c, request)) };
+}
+
 async function unscored(ids: string[], limit?: number): Promise<ScoreRow[]> {
   if (!ids.length) return [];
   const db = await getDb();
@@ -408,13 +414,14 @@ async function unscored(ids: string[], limit?: number): Promise<ScoreRow[]> {
   return limit ? q.limit(limit) : q;
 }
 
-async function saveScores(rows: ScoreRow[], results: ScoreResult[], weights: Weights) {
+async function saveScores(rows: ScoreRow[], results: ScoreResult[], weights: Weights, request: Request) {
   const db = await getDb();
   const byKey = new Map(results.map((r) => [r.key, r]));
-  for (const { rc } of rows) {
+  for (const { rc, c } of rows) {
+    const signals = computeSignals(c, request);
     const r = byKey.get(rc.id);
     if (!r) {
-      await db.update(schema.roleCandidates).set({ scoredAt: new Date(), gaps: "Needs review: the scorer returned no result." }).where(eq(schema.roleCandidates.id, rc.id));
+      await db.update(schema.roleCandidates).set({ scoredAt: new Date(), signals, gaps: "Needs review: the scorer returned no result." }).where(eq(schema.roleCandidates.id, rc.id));
       continue;
     }
     const { breakdown, score } = totalScore(r.breakdown, weights, r.dealBreakerMissing);
@@ -425,7 +432,9 @@ async function saveScores(rows: ScoreRow[], results: ScoreResult[], weights: Wei
       whyRecommended: r.why,
       gaps: r.dealBreakerMissing ? `Deal-breaker not met (score capped at 40). ${r.gaps}` : r.gaps,
       redFlags: r.redFlags || null,
-      relevantYears: r.relevantYears,
+      relevantYears: signals.relevantYears ?? r.relevantYears,
+      signals,
+      evidence: r.evidence?.length ? r.evidence : null,
       scoredAt: new Date(),
     }).where(eq(schema.roleCandidates.id, rc.id));
   }
@@ -448,7 +457,7 @@ async function batchScore({ run, request, state }: Ctx, weights: Weights): Promi
     for (let i = 0; i < rows.length; i += SCORE_CHUNK) {
       const part = rows.slice(i, i + SCORE_CHUNK);
       const id = `chunk-${i / SCORE_CHUNK}`;
-      chunks.push({ id, items: part.map(({ c, rc }) => toAI(c, rc)) });
+      chunks.push({ id, items: part.map((row) => scoringInput(row, request)) });
       map[id] = part.map(({ rc }) => rc.id);
     }
     const batchId = await submitScoreBatch(toReq(request), weights, chunks);
@@ -470,7 +479,7 @@ async function batchScore({ run, request, state }: Ctx, weights: Weights): Promi
     for (const [chunkId, rcIds] of Object.entries(chunks)) {
       const results = outcome.results.get(chunkId);
       if (!results) { failed += rcIds.length; continue; }
-      await saveScores(await unscored(rcIds), results, weights);
+      await saveScores(await unscored(rcIds), results, weights, request);
     }
     log(state, failed ? `Batch scoring done; ${failed} candidates will be scored directly.` : "Batch scoring done.");
   }
@@ -489,7 +498,7 @@ async function stepScore(ctx: Ctx): Promise<StepResult> {
     if (Date.now() > deadline) return "again";
     const rows = await unscored(ids, SCORE_CHUNK);
     if (!rows.length) break;
-    await saveScores(rows, await scoreBatch(toReq(request), weights, rows.map(({ c, rc }) => toAI(c, rc)), run.id), weights);
+    await saveScores(rows, await scoreBatch(toReq(request), weights, rows.map((row) => scoringInput(row, request)), run.id), weights, request);
   }
   log(state, `Scored ${ids.length} candidates.`);
 }
