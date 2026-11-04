@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { computeSignals, mentions, mustHaveTerms, signalFacts } from "../../server/services/signals.js";
+import { applyGuardrails, computeSignals, mentions, mustHaveTerms, signalFacts } from "../../server/services/signals.js";
+import { DEFAULT_WEIGHTS } from "../../shared/types.js";
 
 const now = new Date("2026-11-01");
 const role = {
@@ -83,6 +84,20 @@ describe("computeSignals", () => {
     expect(s.relevantYears).toBeNull();
     expect(s.totalYears).toBe(4);
     expect(signalFacts(s)[0]).toMatch(/no dates/);
+  });
+
+  it("limits seniority and experience points for someone far above the level, and explains it", () => {
+    const head = computeSignals(person({
+      currentTitle: "Head of Frontend",
+      experience: [{ title: "Head of Frontend", company: "Big", start: "2010-01", end: null }],
+    }), role, now);
+    const full = { must: 30, exp: 20, industry: 10, seniority: 10, trajectory: 8, remote: 5, signals: 4 };
+    const g = applyGuardrails(full, DEFAULT_WEIGHTS, head);
+    expect(g.breakdown.seniority).toBe(3);
+    expect(g.breakdown.exp).toBe(12);
+    expect(g.breakdown.must).toBe(30);
+    expect(g.notes).toEqual(["well above the requested level"]);
+    expect(applyGuardrails(full, DEFAULT_WEIGHTS, computeSignals(person(), role, now)).notes).toEqual([]);
   });
 
   it("only checks location for on-site or hybrid roles", () => {
