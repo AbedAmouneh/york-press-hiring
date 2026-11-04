@@ -14,6 +14,7 @@ import { signalhireBudget } from "./credit-budget.js";
 import { findLinkedinUrls, linkedinLookupAvailable } from "./linkedin-finder.js";
 import { toAI, toReq } from "./mappers.js";
 import { computeSignals, signalFacts } from "./signals.js";
+import { learnedWeightsFor } from "./learning.js";
 import { drainEmailQueue, isSuppressed, queueOutreach } from "./outreach.js";
 import { notifyRoles, notifyUsers } from "./notify.js";
 import { captureError } from "../monitoring.js";
@@ -489,9 +490,24 @@ async function batchScore({ run, request, state }: Ctx, weights: Weights): Promi
   state.scoreBatch = undefined;
 }
 
+/**
+ * The scorecard for this role. The first run fixes it on the role: what was learned for the department (or across
+ * departments), else the default. Later runs reuse it so all of the role's scores stay comparable.
+ */
+async function roleWeights(request: Request, run: Run): Promise<Weights> {
+  if (request.scorecardWeights) return request.scorecardWeights;
+  // A role scored before this existed used the defaults; keep them so its old and new scores stay comparable.
+  const learned = run.kind === "initial" ? await learnedWeightsFor(request.department) : null;
+  const weights = learned ?? weightsFor(request, await getSettings());
+  const db = await getDb();
+  await db.update(schema.roleRequests).set({ scorecardWeights: weights }).where(eq(schema.roleRequests.id, request.id));
+  request.scorecardWeights = weights;
+  return weights;
+}
+
 async function stepScore(ctx: Ctx): Promise<StepResult> {
   const { run, request, state, deadline } = ctx;
-  const weights = weightsFor(request, await getSettings());
+  const weights = await roleWeights(request, run);
   const ids = state.newRoleCandidateIds ?? [];
   if (useBatchScoring(run) || state.scoreBatch) {
     if ((await batchScore(ctx, weights)) === "waiting") return "waiting";
@@ -654,7 +670,7 @@ async function stepDeep(ctx: Ctx): Promise<StepResult> {
   const rows = await shortlistRows(run, request, state);
   if (!rows.length) { log(state, "Nobody new to check in depth."); return; }
   if ((await webResearch(ctx, rows)) === "again") return "again";
-  const weights = weightsFor(request, await getSettings());
+  const weights = await roleWeights(request, run);
   const done = new Set(state.deepScored ?? []);
   const todo = rows.filter(({ rc }) => !done.has(rc.id));
   for (let i = 0; i < todo.length; i += SCORE_CHUNK) {
