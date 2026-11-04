@@ -49,7 +49,11 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   Locally the built-in database still migrates itself on start. Migrations must be additive or
   backwards compatible: the old version keeps serving until the new build goes live.
 - `server/services/pipeline.ts`: resumable sourcing run (brief, search, enrich, score, rank,
-  reveal, outreach). Each step is saved so a run can continue after Vercel's 300 s limit.
+  reveal, deep, outreach). Each step is saved so a run can continue after Vercel's 300 s limit.
+  The first scoring sees search previews (no dates); the top 15 (`SHORTLIST`) then get SignalHire's full profile,
+  web research and a second scoring (`deep`), and only then is the Top 10 contacted. Scoring gets facts computed in
+  code (`server/services/signals.ts`: years from dates, level, stability, where must-haves appear, fit) and returns
+  proven / claimed / missing evidence per must-have; both are stored on role_candidates.
   Slices are queued with QStash (`server/services/queue.ts`, signed calls to
   `/api/internal/queue/runs`, retried on failure); without QStash they run in the background.
   A locked run answers 503 so QStash retries after the lock expires.
@@ -59,7 +63,7 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   runs directly, the web search step is skipped). With `GEMINI_API_KEY`, `structured()` and `scoreBatch()` can send
   the same prompts and JSON schemas to Gemini's generateContent (`server/services/gemini.ts`); same feature limits.
   Which one answers: `AI_PROVIDER` if its key is set, else Anthropic, then Gemini, then OpenCode (`env.aiProvider`).
-  Live uses Anthropic for AI and Gemini only for the LinkedIn lookup. Web research runs for the Top 10 only.
+  Live uses Anthropic for AI and Gemini only for the LinkedIn lookup. Web research runs for the shortlist (top 15) only.
   Cost rules: anything shared across calls (request, scorecard, rules) goes in `cachedPrefix`
   and must not contain per-candidate data, or the cache stops hitting. Weekly refreshes score via
   the Message Batches API (half price) when QStash is on; first runs and manual refreshes score
