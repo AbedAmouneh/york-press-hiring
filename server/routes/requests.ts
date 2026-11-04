@@ -59,6 +59,16 @@ export async function serializeRequests(rows: (typeof schema.roleRequests.$infer
 }
 
 async function notifyKhalil(id: string, title: string, dept: string, by: string) {
+  // Without an active CEO approver the request would wait forever: tell the admins instead.
+  if (!(await usersWithRoles(["ceo"])).length) {
+    await notifyRoles(["admin"], {
+      type: "approval_needed",
+      title: `Nobody can approve ${title}: add a CEO approver`,
+      link: "/admin/users",
+      emailBody: `${by} submitted ${title} (${dept}), but no active user has the CEO approver role, so nobody can approve it. Add Khalil (or another approver) in Users with the CEO approver role.`,
+    });
+    return;
+  }
   await notifyRoles(["ceo"], {
     type: "approval_needed",
     title: `New request awaiting approval: ${title}`,
