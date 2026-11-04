@@ -1,0 +1,182 @@
+// Facts about a candidate that code can work out exactly from the profile, so ranking doesn't depend on an AI
+// doing date arithmetic or keyword spotting. Shown on the candidate card, given to Claude as facts, and used as
+// features by the learning step. Never uses name, photo, age, gender or nationality.
+import type { ExperienceItem, Signals } from "../../shared/types.js";
+
+type Profile = {
+  headline?: string | null;
+  currentTitle?: string | null;
+  location?: string | null;
+  experience: ExperienceItem[];
+  skills: string[];
+  languages: string[];
+  totalYears?: number | null;
+  email?: string | null;
+  phone?: string | null;
+  linkedinUrl?: string | null;
+};
+
+type Role = {
+  title: string;
+  seniority: string;
+  mustHaves: string[];
+  minYears: number | null;
+  idealYears: number | null;
+  languages: string[];
+  locationPolicy: string;
+  searchLocations: string[];
+};
+
+const STOP = new Set(["and", "or", "with", "the", "for", "in", "of", "a", "an", "to", "experience", "years", "year", "strong", "good", "knowledge", "skills", "practical", "web", "apps", "using", "integration", "based", "driven"]);
+
+/** "TypeScript and JavaScript" → ["typescript", "javascript"]; "REST API integration" → ["rest api integration"]. */
+export function mustHaveTerms(mustHave: string): string[] {
+  return mustHave
+    .toLowerCase()
+    .replace(/\(.*?\)/g, " ")
+    .split(/,|;|\/|\band\b|\bor\b/)
+    .map((s) => s.replace(/[^a-z0-9+#. -]/g, " ").replace(/\s+/g, " ").trim())
+    .filter((s) => s && !/^\d/.test(s) && !STOP.has(s));
+}
+
+const words = (s: string) => s.toLowerCase().split(/[^a-z0-9+#.]+/).filter((w) => w.length > 1 && !STOP.has(w));
+
+/** True when the text contains the term, or all of the term's significant words (for multi-word terms). */
+export function mentions(text: string, term: string) {
+  const t = text.toLowerCase();
+  if (t.includes(term)) return true;
+  const w = words(term);
+  return w.length > 1 && w.every((x) => t.includes(x));
+}
+
+/** "2019-03" or "2019" → months since year 0. Null when missing or unreadable. */
+function monthOf(d?: string | null): number | null {
+  if (!d) return null;
+  const m = /^(\d{4})(?:-(\d{1,2}))?/.exec(d.trim());
+  if (!m) return null;
+  return Number(m[1]) * 12 + (m[2] ? Number(m[2]) - 1 : 0);
+}
+
+const nowMonth = (now: Date) => now.getFullYear() * 12 + now.getMonth();
+
+/** Merge overlapping [start, end) month ranges and return the total length in months. */
+function coveredMonths(ranges: [number, number][]) {
+  const sorted = ranges.filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0]);
+  let total = 0;
+  let cur: [number, number] | null = null;
+  for (const r of sorted) {
+    if (!cur || r[0] > cur[1]) {
+      if (cur) total += cur[1] - cur[0];
+      cur = [r[0], r[1]];
+    } else cur[1] = Math.max(cur[1], r[1]);
+  }
+  if (cur) total += cur[1] - cur[0];
+  return total;
+}
+
+/** Expected years for a level when the request gives none. */
+const LEVEL_YEARS: [RegExp, number, number][] = [
+  [/entry|intern|trainee|graduate/i, 0, 1],
+  [/junior/i, 0, 2],
+  [/mid/i, 2, 5],
+  [/senior/i, 5, 10],
+  [/lead|principal|staff/i, 7, 15],
+  [/manager|head|director/i, 5, 20],
+];
+
+const JUNIOR_TITLE = /\b(intern|trainee|junior|jr\.?|graduate|apprentice)\b/i;
+const SENIOR_TITLE = /\b(senior|sr\.?|lead|principal|staff|head|director|vp|chief|manager)\b/i;
+
+export function computeSignals(p: Profile, role: Role, now = new Date()): Signals {
+  const today = nowMonth(now);
+  const dated = p.experience
+    // A finished role's end month counts in full (Jun–Dec is 7 months); a current one runs to this month.
+    .map((e) => {
+      const end = e.end ? monthOf(e.end) : today;
+      return { e, s: monthOf(e.start), end: e.end && end != null ? end + 1 : end };
+    })
+    .filter((x): x is { e: ExperienceItem; s: number; end: number } => x.s != null && x.end != null && x.end >= x.s);
+
+  // Relevant years: dated roles whose title shares a meaningful word with the role title.
+  const roleWords = words(role.title).filter((w) => !/^(developer|engineer|specialist|officer|manager)$/.test(w) || words(role.title).length === 1);
+  const relevantRanges = dated.filter(({ e }) => roleWords.some((w) => e.title.toLowerCase().includes(w))).map(({ s, end }) => [s, end] as [number, number]);
+  const relevantYears = dated.length ? Math.round((coveredMonths(relevantRanges) / 12) * 10) / 10 : null;
+  const totalYears = dated.length ? Math.round((coveredMonths(dated.map(({ s, end }) => [s, end])) / 12) * 10) / 10 : (p.totalYears ?? null);
+
+  // Stability: finished jobs shorter than 12 months that ended in the last six years.
+  const finished = dated.filter(({ e }) => !!e.end);
+  const shortStints = finished.filter(({ s, end }) => end - s < 12 && today - end <= 72).length;
+  const tenures = finished.map(({ s, end }) => end - s).sort((a, b) => a - b);
+  const medianTenureMonths = tenures.length ? tenures[Math.floor(tenures.length / 2)] : null;
+
+  // Level: years against the request's band, nudged by the current title.
+  const band = LEVEL_YEARS.find(([re]) => re.test(role.seniority));
+  const min = role.minYears ?? band?.[1] ?? null;
+  const max = role.idealYears != null ? Math.max(role.idealYears + 3, min ?? 0) : band?.[2] ?? null;
+  const years = relevantYears ?? totalYears;
+  const title = `${p.currentTitle ?? ""} ${p.headline ?? ""}`;
+  const wantsSenior = /senior|lead|principal|manager|head|director/i.test(role.seniority);
+  let level: Signals["level"] = "unknown";
+  if (years != null && min != null) {
+    if (years < Math.max(0, min - 1) || (JUNIOR_TITLE.test(title) && !/entry|junior|intern/i.test(role.seniority))) level = "below";
+    else if (max != null && years > max + 4 && SENIOR_TITLE.test(title) && !wantsSenior) level = "above";
+    else level = "match";
+  } else if (JUNIOR_TITLE.test(title) && !/entry|junior|intern/i.test(role.seniority)) level = "below";
+
+  // Must-haves: seen in the work itself (titles and role summaries) beats only being listed as a skill.
+  const workText = [p.headline ?? "", p.currentTitle ?? "", ...p.experience.map((e) => `${e.title} ${e.summary ?? ""}`)].join(" \n ");
+  const skillText = p.skills.join(" \n ");
+  const skillsInWork: string[] = [];
+  const skillsListedOnly: string[] = [];
+  const skillsMissing: string[] = [];
+  for (const m of role.mustHaves) {
+    const terms = mustHaveTerms(m);
+    if (!terms.length) continue;
+    if (terms.some((t) => mentions(workText, t))) skillsInWork.push(m);
+    else if (terms.some((t) => mentions(skillText, t))) skillsListedOnly.push(m);
+    else skillsMissing.push(m);
+  }
+
+  // Location only matters for on-site or hybrid roles with known countries.
+  const onSite = /on-?site|hybrid/i.test(role.locationPolicy);
+  const places = role.searchLocations.map((x) => x.toLowerCase().trim()).filter(Boolean);
+  const locationFit: Signals["locationFit"] = !onSite || !places.length || !p.location
+    ? "unknown"
+    : places.some((x) => p.location!.toLowerCase().includes(x)) ? "match" : "mismatch";
+
+  const needLangs = role.languages.map((l) => l.toLowerCase().trim()).filter(Boolean);
+  const hasLangs = p.languages.map((l) => l.toLowerCase());
+  const languageFit: Signals["languageFit"] = !needLangs.length || !hasLangs.length
+    ? "unknown"
+    : needLangs.every((l) => hasLangs.some((h) => h.includes(l))) ? "match" : "missing";
+
+  return {
+    relevantYears,
+    totalYears,
+    level,
+    shortStints,
+    medianTenureMonths,
+    datedProfile: dated.length > 0,
+    skillsInWork,
+    skillsListedOnly,
+    skillsMissing,
+    locationFit,
+    languageFit,
+    reachable: { email: !!p.email, phone: !!p.phone, linkedin: !!p.linkedinUrl },
+  };
+}
+
+/** The facts as short sentences for Claude. Facts, not instructions: Claude still judges the evidence. */
+export function signalFacts(s: Signals): string[] {
+  const out: string[] = [];
+  if (s.datedProfile) out.push(`Computed from dated roles: ${s.totalYears ?? "?"} years total, ${s.relevantYears ?? "?"} years in roles with a matching title.`);
+  else out.push("The profile has no dates, so years are not verified.");
+  if (s.level !== "unknown") out.push(`Level compared with the request: ${s.level}.`);
+  if (s.shortStints) out.push(`${s.shortStints} finished job(s) shorter than 12 months in the last six years.`);
+  if (s.skillsInWork.length) out.push(`Must-haves seen in their work history: ${s.skillsInWork.join("; ")}.`);
+  if (s.skillsListedOnly.length) out.push(`Must-haves only listed as skills, not shown in work history: ${s.skillsListedOnly.join("; ")}.`);
+  if (s.skillsMissing.length) out.push(`Must-haves not found anywhere in the profile: ${s.skillsMissing.join("; ")}.`);
+  if (s.locationFit !== "unknown") out.push(`Location fit for this on-site/hybrid role: ${s.locationFit}.`);
+  if (s.languageFit !== "unknown") out.push(`Required languages: ${s.languageFit}.`);
+  return out;
+}
