@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { CandidateStatus, EducationItem, ExperienceItem, HmDecision, OutreachStatus, RequestStatus, Role, Weights } from "../../shared/types.js";
+import type { CandidateStatus, EducationItem, ExperienceItem, HmDecision, MustHaveEvidence, OutreachStatus, RequestStatus, Role, Signals, Weights } from "../../shared/types.js";
 
 const id = () => uuid("id").primaryKey().default(sql`gen_random_uuid()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -206,6 +206,10 @@ export const roleCandidates = pgTable("role_candidates", {
   redFlags: text("red_flags"),
   relevantYears: real("relevant_years"),
   webFindings: jsonb("web_findings").$type<WebFinding[]>(),
+  /** Facts computed in code from the profile (years, level, stability, proven skills, fit). */
+  signals: jsonb("signals").$type<Signals>(),
+  /** Per must-have: proven in the work, only claimed, or missing, with a short quote or reason. */
+  evidence: jsonb("evidence").$type<MustHaveEvidence[]>(),
   personalLine: text("personal_line"),
   status: text("status").$type<CandidateStatus>().notNull().default("new"),
   hmDecision: text("hm_decision").$type<HmDecision>(),
