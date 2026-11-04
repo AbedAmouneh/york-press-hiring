@@ -285,7 +285,8 @@ const SCORE_SCHEMA: Record<string, unknown> = {
 export function scoreParams(r: Req, weights: Weights, items: CandidateForAI[]) {
   const scorecard = CRITERIA.map((c) => `- ${c.key} (${c.label}): 0-${weights[c.key]} points`).join("\n");
   return toolParams({
-    maxTokens: 6000,
+    // Up to 5 people with evidence for every must-have: leave room so answers aren't cut off.
+    maxTokens: 12000,
     system: `You screen candidates for York Press against a weighted 100-point scorecard. Be evidence-based: award points only for what the profile shows. ${FAIRNESS_RULE} ${DATA_RULE}`,
     cachedPrefix: `${requestBlock(r)}
 
