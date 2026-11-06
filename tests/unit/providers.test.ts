@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normalizeLinkedin, titleCase, totalYearsFromExperience, yearsBetween } from "../../server/services/providers/types.js";
 import { buildPdlQuery, countriesFrom, mapPdl } from "../../server/services/providers/pdl.js";
-import { parseCandidate, titleBoolean } from "../../server/services/providers/signalhire.js";
+import { parseCandidate, searchLadder, titleBoolean } from "../../server/services/providers/signalhire.js";
 import type { SearchBrief } from "../../server/db/schema.js";
 
 describe("profile helpers", () => {
@@ -101,6 +101,21 @@ describe("People Data Labs", () => {
 describe("SignalHire", () => {
   it("turns titles into a Boolean search", () => {
     expect(titleBoolean(["Senior Editor", "Copywriter", "Head of (Content)"])).toBe("(Senior AND Editor) OR Copywriter OR (Head AND Content)");
+    expect(titleBoolean(["Backend Engineer (Python/Django)"])).toBe("(Backend AND Engineer AND Python AND Django)");
+  });
+
+  it("searches from precise to broad, always requiring the core skill before dropping it", () => {
+    const steps = searchLadder({ titles: ["Django Developer", "Backend Developer"], coreKeywords: ["Django", "Django REST Framework"], skills: ["Python"] });
+    expect(steps).toEqual([
+      { currentTitle: "(Django AND Developer) OR (Backend AND Developer)", keywords: 'Django OR "Django REST Framework"' },
+      { currentPastTitle: "(Django AND Developer) OR (Backend AND Developer)", keywords: 'Django OR "Django REST Framework"' },
+      { keywords: 'Django OR "Django REST Framework"' },
+      { currentTitle: "(Django AND Developer) OR (Backend AND Developer)" },
+    ]);
+  });
+
+  it("uses the first skill as the core skill for briefs made before core keywords existed", () => {
+    expect(searchLadder({ titles: ["Editor"], skills: ["Copy editing", "InDesign"] })[0]).toEqual({ currentTitle: "Editor", keywords: '"Copy editing"' });
   });
 
   it("picks the best-rated contact details from a reveal", () => {
