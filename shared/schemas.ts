@@ -179,6 +179,7 @@ export const SettingsPatch = z.object({
   signalhireMonthlyLimit: z.number().int().min(0).max(100_000).nullable().optional(),
   webSearchEnabled: z.boolean().optional(),
   weeklySummaryEnabled: z.boolean().optional(),
+  minOutreachScore: z.number().int().min(0).max(100).optional(),
   defaultWeights: WeightsInput.optional(),
 });
 
