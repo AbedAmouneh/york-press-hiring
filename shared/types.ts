@@ -90,6 +90,8 @@ export type Signals = {
   skillsInWork: string[];
   skillsListedOnly: string[];
   skillsMissing: string[];
+  /** Office software, degrees, soft skills: not checked and never a gap. Missing on signals saved before it existed. */
+  basicMustHaves?: string[];
   locationFit: "match" | "mismatch" | "unknown";
   languageFit: "match" | "missing" | "unknown";
   reachable: { email: boolean; phone: boolean; linkedin: boolean };
