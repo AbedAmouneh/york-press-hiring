@@ -221,7 +221,8 @@ async function stepBrief({ run, request, state }: Ctx) {
       .where(and(eq(schema.sourcingRuns.requestId, request.id), eq(schema.sourcingRuns.status, "done")))
       .orderBy(desc(schema.sourcingRuns.createdAt))
       .limit(1);
-    if (prev?.state?.brief) {
+    // Briefs made before core keywords existed are rebuilt once, so later runs search the broader way too.
+    if (prev?.state?.brief?.coreKeywords?.length) {
       state.brief = prev.state.brief;
       log(state, "Reused the saved search brief.");
       return;
