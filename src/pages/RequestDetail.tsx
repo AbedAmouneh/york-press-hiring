@@ -11,6 +11,7 @@ import { RequestStatusBadge } from "@/components/Status";
 import { Button } from "@/components/ui/button";
 import { Avatar, Badge, DeptDot, Field, FormError, Spinner, useToast } from "@/components/kit";
 import { COMMENT_MAX, DecisionInput } from "../../shared/schemas";
+import { splitMustHaves } from "../../shared/must-haves";
 import { Card } from "@/components/ui/card";
 import { Discussion } from "@/components/Discussion";
 import { Textarea } from "@/components/ui/textarea";
@@ -155,6 +156,8 @@ export default function RequestDetail() {
     }
   }
 
+  const musts = splitMustHaves(r.mustHaves);
+
   return (
     <>
       <Link to={isCeo ? "/approvals" : "/requests"} className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> {isCeo ? "Approvals" : "Requests"}</Link>
@@ -199,7 +202,8 @@ export default function RequestDetail() {
 
           <Section title="Requirements">
             <div className="grid gap-3 text-sm">
-              <div><div className="mb-1 text-xs text-muted-foreground">Must-haves</div><Chips items={r.mustHaves} /></div>
+              <div><div className="mb-1 text-xs text-muted-foreground">Must-haves</div><Chips items={musts.core} /></div>
+              {!!musts.basic.length && <div><div className="mb-1 text-xs text-muted-foreground" title="Office software, degrees and soft skills are rarely on profiles, so they never lower a score.">Basic (not scored)</div><Chips items={musts.basic} /></div>}
               {!!r.niceToHaves.length && <div><div className="mb-1 text-xs text-muted-foreground">Nice-to-haves</div><Chips items={r.niceToHaves} /></div>}
               {!!r.dealBreakers.length && <div><div className="mb-1 text-xs text-muted-foreground">Deal-breakers</div><Chips items={r.dealBreakers} /></div>}
               {!!r.targetCompanies.length && <div><div className="mb-1 text-xs text-muted-foreground">Target companies</div><Chips items={r.targetCompanies} /></div>}

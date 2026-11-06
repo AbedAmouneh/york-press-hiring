@@ -265,7 +265,7 @@ export default function RequestForm() {
           <Card>
             <CardHeader><CardTitle><Step n={3} /> Requirements</CardTitle></CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-3">
-              <Field label="Must-haves" hint="One per line" htmlFor="must" error={errors.mustHaves?.message}><Textarea id="must" rows={5} {...reg("mustHaves")} /></Field>
+              <Field label="Must-haves" hint="One per line. Office, degrees and soft skills never lower a score." htmlFor="must" error={errors.mustHaves?.message}><Textarea id="must" rows={5} {...reg("mustHaves")} /></Field>
               <Field label="Nice-to-haves" hint="One per line" htmlFor="nice" error={errors.niceToHaves?.message}><Textarea id="nice" rows={5} {...reg("niceToHaves")} /></Field>
               <Field label="Deal-breakers" hint="Caps the score at 40" htmlFor="deal" error={errors.dealBreakers?.message}><Textarea id="deal" rows={5} {...reg("dealBreakers")} /></Field>
               <Field label="Minimum years" htmlFor="miny" error={errors.minYears?.message}><Input id="miny" inputMode="numeric" {...reg("minYears")} /></Field>
