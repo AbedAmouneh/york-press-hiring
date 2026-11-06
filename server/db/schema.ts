@@ -126,6 +126,8 @@ export type RunState = {
 export type SearchBrief = {
   titles: string[];
   skills: string[];
+  /** 1–3 skills a matching person must mention (e.g. Django). Missing in briefs made before this existed. */
+  coreKeywords?: string[];
   keywords: string[];
   seniorityLevels: string[];
   locations: string[];
@@ -315,6 +317,8 @@ export const settings = pgTable("settings", {
   // Most SignalHire credits the app may spend in a calendar month. Null means no limit.
   signalhireMonthlyLimit: integer("signalhire_monthly_limit"),
   weeklySummaryEnabled: boolean("weekly_summary_enabled").notNull().default(true),
+  /** Top-10 candidates below this score are not contacted automatically. */
+  minOutreachScore: integer("min_outreach_score").notNull().default(50),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 });
 
