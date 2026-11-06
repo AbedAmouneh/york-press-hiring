@@ -15,7 +15,8 @@ export function mustHaveTerms(mustHave: string): string[] {
     .replace(/\b\d+\s*\+?\s*(?:years?|yrs?)\b(?:\s+(?:of\s+)?(?:professional\s+|hands-on\s+)?experience\b)?(?:\s+(?:of|in|with|using)\b)?/g, " ")
     .split(/,|;|\/|\band\b|\bor\b/)
     .map((s) => s.replace(/[^a-z0-9+#. -]/g, " ").replace(/\s+/g, " ").trim())
-    .filter((s) => s && !/^\d/.test(s) && !STOP.has(s));
+    // Drop leftovers that are only numbers ("2+"), but keep skills that start with one ("2D animation").
+    .filter((s) => s && !/^[\d\s+.-]*$/.test(s) && !STOP.has(s));
 }
 
 /** Describing words removed before deciding whether a term is basic ("excellent written English" → "english"). */
