@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { env, mock } from "../env.js";
 import { CRITERIA, type CriterionKey, type MustHaveEvidence, type Weights } from "../../shared/types.js";
+import { splitMustHaves } from "../../shared/must-haves.js";
 import type { SearchBrief, ScoreBreakdown, WebFinding } from "../db/schema.js";
 import { logUsage } from "./settings.js";
 import { rng } from "./providers/mock.js";
@@ -73,11 +74,13 @@ const FAIRNESS_RULE =
   "Never consider or comment on age, gender, nationality, ethnicity, religion, marital status, photo, disability or any other protected characteristic, and never infer them from names, schools, locations or dates. Location matters only for the remote/time-zone criterion as the request defines it.";
 
 function requestBlock(r: Req) {
+  const { core, basic } = splitMustHaves(r.mustHaves);
   return `<job_request>
 Title: ${r.title}
 Department: ${r.department}
 Seniority: ${r.seniority}
-Must-haves: ${r.mustHaves.join("; ") || "—"}
+Must-haves: ${core.join("; ") || "—"}
+Basic requirements: ${basic.join("; ") || "—"}
 Nice-to-haves: ${r.niceToHaves.join("; ") || "—"}
 Deal-breakers: ${r.dealBreakers.join("; ") || "none"}
 Experience: ${r.minYears ?? "?"}+ years, ideally ${r.idealYears ?? "?"}
@@ -196,7 +199,7 @@ export async function buildBrief(r: Req, runId?: string | null): Promise<SearchB
 Return:
 - titles: 5-8 job titles exactly as people write them on their profiles, plain words without brackets or slashes, from specific to broad (for a Django role: "Django Developer", "Python Developer", "Backend Developer", "Backend Engineer", "Software Engineer"). No generic words alone.
 - coreKeywords: 1-3 skills or tools a matching person must mention on their profile, the single most defining one first (for a Django role: "Django"). Never soft skills, degrees or office software.
-- skills: 5-10 concrete skills/tools from the must-haves.
+- skills: 5-10 concrete skills/tools from the must-haves (not the basic requirements).
 - keywords: 3-6 extra keywords (industry, domain).
 - seniorityLevels: from [Junior, Mid-Level, Senior, Lead, Head, Directors, VP].
 - locations: countries to search. Use the request's searchable locations: ${r.searchLocations.join(", ") || "none given (global)"}. Empty array means global.
@@ -227,7 +230,7 @@ Return:
 function mockBrief(r: Req): SearchBrief {
   const base = r.title.replace(/^(senior|junior|lead)\s+/i, "");
   const titles = [...new Set([r.title, `Senior ${base}`, `Lead ${base}`, base, `${base} Specialist`])].slice(0, 5);
-  const words = r.mustHaves.flatMap((m) => m.split(/[,;/]| and /i)).map((s) => s.trim()).filter((s) => s && !/^\d/.test(s));
+  const words = splitMustHaves(r.mustHaves).core.flatMap((m) => m.split(/[,;/]| and /i)).map((s) => s.trim()).filter((s) => s && !/^\d/.test(s));
   return {
     titles,
     coreKeywords: words.slice(0, 1),
@@ -237,7 +240,7 @@ function mockBrief(r: Req): SearchBrief {
     locations: r.searchLocations,
     excludeCompanies: ["York Press", ...r.avoidCompanies],
     targetCompanies: r.targetCompanies,
-    summary: `${r.seniority} ${r.title} with ${r.minYears ?? 3}+ years and ${r.mustHaves.slice(0, 2).join(" and ") || "relevant skills"}.`,
+    summary: `${r.seniority} ${r.title} with ${r.minYears ?? 3}+ years and ${splitMustHaves(r.mustHaves).core.slice(0, 2).join(" and ") || "relevant skills"}.`,
   };
 }
 
@@ -298,8 +301,9 @@ ${scorecard}
 
 Rules:
 - Score each criterion from 0 up to its maximum.
-- evidence: one entry per must-have, in the request's order. level "proven" = the work history (titles, role descriptions, projects, web findings) shows they did it; "claimed" = only listed as a skill or in a headline; "missing" = no sign of it. evidence = a short quote or reason, max 15 words.
-- must: award points mainly for proven must-haves; a claimed-only must-have is worth at most half; a missing one is worth nothing.
+- evidence: one entry per must-have (not the basic requirements), in the request's order. level "proven" = the work history (titles, role descriptions, projects, web findings) shows they did it; "claimed" = only listed as a skill or in a headline; "missing" = no sign of it. evidence = a short quote or reason, max 15 words.
+- must: score the must-haves only. Award points mainly for proven ones; a claimed-only must-have is worth at most half; a missing one is worth nothing.
+- Basic requirements (office software, degrees, soft skills, language ability) are rarely written on profiles. Never take points off or list them as gaps because they aren't mentioned; only note one if the profile clearly contradicts it.
 - Each candidate has "facts" computed from the profile data (years from dates, level, where skills appear, location and language fit). Trust them for dates and counts; still judge quality yourself.
 - seniority and exp: compare with the requested level and years; being clearly above the level is a weaker fit, not a better one.
 - dealBreakerMissing = true only if the profile clearly fails a listed deal-breaker.
@@ -399,7 +403,7 @@ function mockScore(r: Req, weights: Weights, c: CandidateForAI): ScoreResult {
   const years = c.totalYears ?? 0;
   const yearsFit = r.minYears ? Math.min(1, years / Math.max(r.idealYears ?? r.minYears, 1)) : 0.7;
   const f: Record<CriterionKey, number> = {
-    must: Math.min(1, 0.35 + overlap(r.mustHaves) * 0.8 + noise() * 0.15),
+    must: Math.min(1, 0.35 + overlap(splitMustHaves(r.mustHaves).core) * 0.8 + noise() * 0.15),
     exp: Math.min(1, 0.3 + yearsFit * 0.6 + noise() * 0.1),
     industry: 0.4 + noise() * 0.55,
     seniority: Math.min(1, 0.4 + overlap([r.title, r.seniority]) * 0.6 + noise() * 0.1),
