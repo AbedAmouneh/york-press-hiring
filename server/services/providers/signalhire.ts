@@ -77,14 +77,38 @@ async function call(path: string, init: { method?: string; body?: unknown } = {}
   return { json, creditsLeft: credits ? Number(credits) : null };
 }
 
-/** "(Senior AND Editor) OR (Commissioning AND Editor)" from a list of titles. */
+/** "(Senior AND Editor) OR (Commissioning AND Editor)" from a list of titles. Slashes split words ("Python/Django"). */
 export function titleBoolean(titles: string[]) {
   return titles
     .slice(0, 8)
-    .map((t) => t.replace(/[()"]/g, " ").split(/\s+/).filter((w) => w.length > 1 && !/^(and|or|not|of|the)$/i.test(w)))
+    .map((t) => t.replace(/[()"/|,&]/g, " ").split(/\s+/).filter((w) => w.length > 1 && !/^(and|or|not|of|the)$/i.test(w)))
     .filter((words) => words.length)
     .map((words) => (words.length > 1 ? `(${words.join(" AND ")})` : words[0]))
     .join(" OR ");
+}
+
+/** A Boolean term for one keyword: multi-word keywords become a quoted phrase. */
+const term = (k: string) => {
+  const clean = k.replace(/[()"]/g, " ").replace(/\s+/g, " ").trim();
+  return clean.includes(" ") ? `"${clean}"` : clean;
+};
+
+/**
+ * The searches to try, from precise to broad, until enough people are found. Titles alone miss people whose title
+ * doesn't name the technology ("Backend Developer" who works in Django); keywords alone find people who only mention
+ * it once. So: role titles AND the core skill, then any past or current matching title AND the core skill, then the
+ * core skill alone, then the role titles alone. Exported for tests.
+ */
+export function searchLadder(brief: { titles: string[]; skills: string[]; coreKeywords?: string[] }) {
+  const core = (brief.coreKeywords?.length ? brief.coreKeywords : brief.skills.slice(0, 1)).slice(0, 3);
+  const coreQuery = core.length ? core.map(term).join(" OR ") : null;
+  const titles = titleBoolean(brief.titles);
+  const steps: Record<string, string>[] = [];
+  if (titles && coreQuery) steps.push({ currentTitle: titles, keywords: coreQuery });
+  if (titles && coreQuery) steps.push({ currentPastTitle: titles, keywords: coreQuery });
+  if (coreQuery) steps.push({ keywords: coreQuery });
+  if (titles) steps.push({ currentTitle: titles });
+  return steps;
 }
 
 type SHProfile = { uid: string; fullName: string; location?: string | null; experience?: { company?: string | null; title?: string | null }[]; skills?: string[]; openToWork?: boolean };
@@ -115,19 +139,25 @@ export const signalhireProvider: CandidateSearchProvider = {
       return { profiles: mockProfiles("SignalHire", brief, size, seed + 7).map((p) => ({ ...p, email: null })), total: size, billedRecords: 0, searches: 1, mock: true };
     }
     const countries = countriesFrom(brief.locations).map((c) => c.replace(/\b\w/g, (m) => m.toUpperCase()));
-    const body: Record<string, unknown> = { currentTitle: titleBoolean(brief.titles), size: Math.min(size, 100) };
-    if (countries.length) body.location = countries;
-    if (brief.skills.length) body.keywords = brief.skills.slice(0, 4).map((s) => (s.includes(" ") ? `(${s.split(/\s+/).join(" AND ")})` : s)).join(" OR ");
-    let { json, creditsLeft } = await call("/candidate/searchByQuery", { body });
-    let profiles: SHProfile[] = json?.profiles ?? [];
-    // Too narrow with skills? Retry with titles only.
-    if (!profiles.length && body.keywords) {
-      delete body.keywords;
-      ({ json, creditsLeft } = await call("/candidate/searchByQuery", { body }));
-      profiles = json?.profiles ?? [];
+    // Searches are free (a daily quota), so step from precise to broad until the pool is full.
+    const found = new Map<string, SHProfile>();
+    let searches = 0;
+    let total = 0;
+    for (const step of searchLadder(brief)) {
+      if (found.size >= size) break;
+      const body: Record<string, unknown> = { ...step, size: Math.min(size, 100) };
+      if (countries.length) body.location = countries;
+      const { json, creditsLeft } = await call("/candidate/searchByQuery", { body });
+      searches++;
+      if (creditsLeft != null) lastCreditsLeft = creditsLeft;
+      total = Math.max(total, json?.total ?? 0);
+      for (const p of (json?.profiles ?? []) as SHProfile[]) {
+        if (found.size >= size) break;
+        if (!found.has(p.uid)) found.set(p.uid, p);
+      }
     }
-    if (creditsLeft != null) lastCreditsLeft = creditsLeft;
-    return { profiles: profiles.map(mapSearchProfile), total: json?.total ?? profiles.length, billedRecords: 0, searches: body.keywords ? 1 : 2, mock: false };
+    const profiles = [...found.values()];
+    return { profiles: profiles.map(mapSearchProfile), total: Math.max(total, profiles.length), billedRecords: 0, searches, mock: false };
   },
 };
 
