@@ -29,11 +29,13 @@ type Role = {
 
 const STOP = new Set(["and", "or", "with", "the", "for", "in", "of", "a", "an", "to", "experience", "years", "year", "strong", "good", "knowledge", "skills", "practical", "web", "apps", "using", "integration", "based", "driven"]);
 
-/** "TypeScript and JavaScript" → ["typescript", "javascript"]; "REST API integration" → ["rest api integration"]. */
+/** "TypeScript and JavaScript" → ["typescript", "javascript"]; "3+ years of Python" → ["python"]. */
 export function mustHaveTerms(mustHave: string): string[] {
   return mustHave
     .toLowerCase()
     .replace(/\(.*?\)/g, " ")
+    // A leading "3+ years of" would otherwise make the whole term look like a number and drop it.
+    .replace(/\b\d+\s*\+?\s*(?:years?|yrs?)\b(?:\s+(?:of\s+)?(?:professional\s+|hands-on\s+)?experience\b)?(?:\s+(?:of|in|with|using)\b)?/g, " ")
     .split(/,|;|\/|\band\b|\bor\b/)
     .map((s) => s.replace(/[^a-z0-9+#. -]/g, " ").replace(/\s+/g, " ").trim())
     .filter((s) => s && !/^\d/.test(s) && !STOP.has(s));
