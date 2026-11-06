@@ -194,7 +194,8 @@ export async function buildBrief(r: Req, runId?: string | null): Promise<SearchB
     content: `${requestBlock(r)}
 
 Return:
-- titles: 4-8 job titles people in this role actually hold (synonyms, adjacent titles at the right seniority). No generic words alone.
+- titles: 5-8 job titles exactly as people write them on their profiles, plain words without brackets or slashes, from specific to broad (for a Django role: "Django Developer", "Python Developer", "Backend Developer", "Backend Engineer", "Software Engineer"). No generic words alone.
+- coreKeywords: 1-3 skills or tools a matching person must mention on their profile, the single most defining one first (for a Django role: "Django"). Never soft skills, degrees or office software.
 - skills: 5-10 concrete skills/tools from the must-haves.
 - keywords: 3-6 extra keywords (industry, domain).
 - seniorityLevels: from [Junior, Mid-Level, Senior, Lead, Head, Directors, VP].
@@ -207,6 +208,7 @@ Return:
       type: "object",
       properties: {
         titles: { type: "array", items: { type: "string" } },
+        coreKeywords: { type: "array", items: { type: "string" } },
         skills: { type: "array", items: { type: "string" } },
         keywords: { type: "array", items: { type: "string" } },
         seniorityLevels: { type: "array", items: { type: "string" } },
@@ -215,7 +217,7 @@ Return:
         targetCompanies: { type: "array", items: { type: "string" } },
         summary: { type: "string" },
       },
-      required: ["titles", "skills", "keywords", "seniorityLevels", "locations", "excludeCompanies", "targetCompanies", "summary"],
+      required: ["titles", "coreKeywords", "skills", "keywords", "seniorityLevels", "locations", "excludeCompanies", "targetCompanies", "summary"],
     },
   });
   if (!out.excludeCompanies.some((c) => /york press/i.test(c))) out.excludeCompanies.unshift("York Press");
@@ -228,6 +230,7 @@ function mockBrief(r: Req): SearchBrief {
   const words = r.mustHaves.flatMap((m) => m.split(/[,;/]| and /i)).map((s) => s.trim()).filter((s) => s && !/^\d/.test(s));
   return {
     titles,
+    coreKeywords: words.slice(0, 1),
     skills: words.slice(0, 8),
     keywords: [r.department, ...r.niceToHaves].slice(0, 5),
     seniorityLevels: [/senior|lead|manager/i.test(r.seniority) ? "Senior" : "Mid-Level"],
