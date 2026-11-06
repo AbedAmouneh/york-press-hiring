@@ -34,6 +34,12 @@ describe("mustHaveTerms", () => {
     expect(mustHaveTerms("REST API integration")).toEqual(["rest api integration"]);
   });
 
+  it("keeps the skill when a must-have starts with a number of years", () => {
+    expect(mustHaveTerms("3+ years of Python")).toEqual(["python"]);
+    expect(mustHaveTerms("5 years experience in Django and PostgreSQL")).toEqual(["django", "postgresql"]);
+    expect(mustHaveTerms("2+ years of professional experience with React")).toEqual(["react"]);
+  });
+
   it("matches multi-word terms when all their words appear", () => {
     expect(mentions("Integrated REST APIs for the API integration layer", "rest api integration")).toBe(true);
     expect(mentions("Built forms", "rest api integration")).toBe(false);
