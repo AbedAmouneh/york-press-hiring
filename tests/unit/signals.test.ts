@@ -40,6 +40,11 @@ describe("mustHaveTerms", () => {
     expect(mustHaveTerms("2+ years of professional experience with React")).toEqual(["react"]);
   });
 
+  it("keeps skills that start with a digit", () => {
+    expect(mustHaveTerms("2D animation")).toEqual(["2d animation"]);
+    expect(mustHaveTerms("3D basics")).toEqual(["3d basics"]);
+  });
+
   it("matches multi-word terms when all their words appear", () => {
     expect(mentions("Integrated REST APIs for the API integration layer", "rest api integration")).toBe(true);
     expect(mentions("Built forms", "rest api integration")).toBe(false);
