@@ -48,6 +48,7 @@ function Evidence({ rc }: { rc: CandidateDetail["roleCandidate"] }) {
           ))}
         </ul>
       )}
+      {!!s?.basicMustHaves?.length && <p className="text-xs text-muted-foreground">Not scored (rarely on profiles): {s.basicMustHaves.join(", ")}</p>}
     </section>
   );
 }
