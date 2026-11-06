@@ -202,6 +202,59 @@ const hopper: CandidateForAI = {
   skills: ["Python", "SQL", "Airflow", "dbt", "GCP", "BigQuery"],
 };
 
+// ---------------------------------------------------------------- Django Backend Developer
+// Real mistake (Nov 2026): office software and a degree among the must-haves pulled every developer down, and
+// Python-only people scored close to proven Django developers.
+
+const djangoRequest: Req = {
+  title: "Django Backend Developer",
+  department: "Product & Technology",
+  seniority: "Mid",
+  jdText: "Build and maintain the Django REST APIs behind our exam and e-learning platforms. Stack: Python, Django, PostgreSQL, Celery, Docker.",
+  mustHaves: ["Django / Django REST Framework (3+ years)", "Python", "PostgreSQL", "Microsoft Office, Word and PowerPoint (2+ years)", "Bachelor's degree in Computer Science or related"],
+  niceToHaves: ["Celery", "Education products"],
+  dealBreakers: [],
+  minYears: 3,
+  idealYears: 5,
+  languages: ["English"],
+  locationPolicy: "Remote, global",
+  searchLocations: [],
+  timeZone: null,
+  targetCompanies: [],
+  avoidCompanies: [],
+};
+
+const djangoDev: CandidateForAI = {
+  ...base,
+  key: "dj-strong",
+  headline: "Backend Developer | Django, DRF, PostgreSQL",
+  currentTitle: "Backend Developer",
+  currentCompany: "Tidewater Learning",
+  location: "Amman, Jordan",
+  totalYears: 5,
+  experience: [
+    { title: "Backend Developer", company: "Tidewater Learning", start: "2022-03", end: null, summary: "Django REST Framework APIs for an exam platform; PostgreSQL schema design; Celery jobs." },
+    { title: "Python Developer", company: "Copperleaf Apps", start: "2020-06", end: "2022-02", summary: "Django sites and admin tools on PostgreSQL." },
+  ],
+  education: [],
+  skills: ["Python", "Django", "Django REST Framework", "PostgreSQL", "Celery", "Docker"],
+};
+
+const pythonOnly: CandidateForAI = {
+  ...base,
+  key: "dj-python-only",
+  headline: "Python Developer | Data pipelines",
+  currentTitle: "Python Developer",
+  currentCompany: "Glenmoor Analytics",
+  location: "Cairo, Egypt",
+  totalYears: 5,
+  experience: [
+    { title: "Python Developer", company: "Glenmoor Analytics", start: "2021-01", end: null, summary: "pandas data pipelines and FastAPI services on MySQL." },
+  ],
+  education: [{ school: "Cairo University", degree: "BSc", field: "Computer Science" }],
+  skills: ["Python", "pandas", "FastAPI", "MySQL", "Microsoft Office"],
+};
+
 export const ROLES: EvalRole[] = [
   {
     id: "senior-commissioning-editor",
@@ -230,6 +283,15 @@ export const ROLES: EvalRole[] = [
       { kind: "above", higher: "de-strong", lower: "de-junior", margin: 25, why: "seniority and depth" },
       { kind: "redFlag", key: "de-hopper", expected: true, why: "four jobs of 6 months or less in two years" },
       { kind: "redFlag", key: "de-strong", expected: false, why: "steady tenures" },
+    ],
+  },
+  {
+    id: "django-basic-requirements",
+    request: djangoRequest,
+    candidates: [djangoDev, pythonOnly],
+    checks: [
+      { kind: "band", key: "dj-strong", min: 70, max: 100, why: "proven Django, DRF and PostgreSQL; Office and a degree not being listed is no gap" },
+      { kind: "above", higher: "dj-strong", lower: "dj-python-only", margin: 15, why: "Django is the core skill; Python alone is not enough" },
     ],
   },
 ];
