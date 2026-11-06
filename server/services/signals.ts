@@ -2,6 +2,7 @@
 // doing date arithmetic or keyword spotting. Shown on the candidate card, given to Claude as facts, and used as
 // features by the learning step. Never uses name, photo, age, gender or nationality.
 import type { CriterionKey, ExperienceItem, Signals, Weights } from "../../shared/types.js";
+import { mustHaveTerms, splitMustHaves, STOP } from "../../shared/must-haves.js";
 
 type Profile = {
   headline?: string | null;
@@ -27,19 +28,7 @@ type Role = {
   searchLocations: string[];
 };
 
-const STOP = new Set(["and", "or", "with", "the", "for", "in", "of", "a", "an", "to", "experience", "years", "year", "strong", "good", "knowledge", "skills", "practical", "web", "apps", "using", "integration", "based", "driven"]);
-
-/** "TypeScript and JavaScript" → ["typescript", "javascript"]; "3+ years of Python" → ["python"]. */
-export function mustHaveTerms(mustHave: string): string[] {
-  return mustHave
-    .toLowerCase()
-    .replace(/\(.*?\)/g, " ")
-    // A leading "3+ years of" would otherwise make the whole term look like a number and drop it.
-    .replace(/\b\d+\s*\+?\s*(?:years?|yrs?)\b(?:\s+(?:of\s+)?(?:professional\s+|hands-on\s+)?experience\b)?(?:\s+(?:of|in|with|using)\b)?/g, " ")
-    .split(/,|;|\/|\band\b|\bor\b/)
-    .map((s) => s.replace(/[^a-z0-9+#. -]/g, " ").replace(/\s+/g, " ").trim())
-    .filter((s) => s && !/^\d/.test(s) && !STOP.has(s));
-}
+export { mustHaveTerms };
 
 const words = (s: string) => s.toLowerCase().split(/[^a-z0-9+#.]+/).filter((w) => w.length > 1 && !STOP.has(w));
 
@@ -125,13 +114,15 @@ export function computeSignals(p: Profile, role: Role, now = new Date()): Signal
     else level = "match";
   } else if (JUNIOR_TITLE.test(title) && !/entry|junior|intern/i.test(role.seniority)) level = "below";
 
-  // Must-haves: seen in the work itself (titles and role summaries) beats only being listed as a skill.
+  // Core must-haves: seen in the work itself (titles and role summaries) beats only being listed as a skill.
+  // Basic ones (office software, degrees, soft skills) are rarely written down, so they are never counted as missing.
+  const { core, basic } = splitMustHaves(role.mustHaves);
   const workText = [p.headline ?? "", p.currentTitle ?? "", ...p.experience.map((e) => `${e.title} ${e.summary ?? ""}`)].join(" \n ");
   const skillText = p.skills.join(" \n ");
   const skillsInWork: string[] = [];
   const skillsListedOnly: string[] = [];
   const skillsMissing: string[] = [];
-  for (const m of role.mustHaves) {
+  for (const m of core) {
     const terms = mustHaveTerms(m);
     if (!terms.length) continue;
     if (terms.some((t) => mentions(workText, t))) skillsInWork.push(m);
@@ -162,6 +153,7 @@ export function computeSignals(p: Profile, role: Role, now = new Date()): Signal
     skillsInWork,
     skillsListedOnly,
     skillsMissing,
+    basicMustHaves: basic,
     locationFit,
     languageFit,
     reachable: { email: !!p.email, phone: !!p.phone, linkedin: !!p.linkedinUrl },
@@ -199,6 +191,7 @@ export function signalFacts(s: Signals): string[] {
   if (s.skillsInWork.length) out.push(`Must-haves seen in their work history: ${s.skillsInWork.join("; ")}.`);
   if (s.skillsListedOnly.length) out.push(`Must-haves only listed as skills, not shown in work history: ${s.skillsListedOnly.join("; ")}.`);
   if (s.skillsMissing.length) out.push(`Must-haves not found anywhere in the profile: ${s.skillsMissing.join("; ")}.`);
+  if (s.basicMustHaves?.length) out.push(`Basic requirements not checked (profiles rarely list them; not a gap): ${s.basicMustHaves.join("; ")}.`);
   if (s.locationFit !== "unknown") out.push(`Location fit for this on-site/hybrid role: ${s.locationFit}.`);
   if (s.languageFit !== "unknown") out.push(`Required languages: ${s.languageFit}.`);
   return out;
