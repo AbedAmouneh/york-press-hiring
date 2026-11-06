@@ -54,6 +54,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   web research and a second scoring (`deep`), and only then is the Top 10 contacted. Scoring gets facts computed in
   code (`server/services/signals.ts`: years from dates, level, stability, where must-haves appear, fit) and returns
   proven / claimed / missing evidence per must-have; both are stored on role_candidates.
+  Must-haves are split by `shared/must-haves.ts` into core skills and basic requirements (office software, degrees,
+  soft skills, plain language ability). Only core ones are checked and scored; basic ones are shown as "not scored"
+  and never count as gaps, for every role. A role that lists only basic ones scores them all as core.
 - `server/services/learning.ts`: the scorecard learns from decisions (hiring manager Yes = 1, No = 0; interview or
   hired = 1). Daily (cron) it tunes the criterion weights per department and across departments to rank past
   decisions better (pairwise accuracy), in whole points, at most ±5 per cycle and ±10 from the defaults, only with
