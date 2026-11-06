@@ -129,9 +129,10 @@ function General() {
   const [cap, setCap] = useState("");
   const [w, setW] = useState<Weights>(DEFAULT_WEIGHTS);
   const [limit, setLimit] = useState("");
+  const [minScore, setMinScore] = useState("");
   const [busy, setBusy] = useState<"email" | "credits" | null>(null);
   const isAdmin = can(useMe().data?.user, "admin");
-  useEffect(() => { if (q.data) { setCap(String(q.data.settings.dailySendCap)); setLimit(q.data.settings.signalhireMonthlyLimit == null ? "" : String(q.data.settings.signalhireMonthlyLimit)); setW(q.data.settings.defaultWeights ?? DEFAULT_WEIGHTS); } }, [q.data]);
+  useEffect(() => { if (q.data) { setCap(String(q.data.settings.dailySendCap)); setLimit(q.data.settings.signalhireMonthlyLimit == null ? "" : String(q.data.settings.signalhireMonthlyLimit)); setMinScore(String(q.data.settings.minOutreachScore)); setW(q.data.settings.defaultWeights ?? DEFAULT_WEIGHTS); } }, [q.data]);
   if (!q.data) return <Spinner />;
   const s = q.data.settings;
   const i = q.data.integrations;
@@ -171,6 +172,12 @@ function General() {
             <div className="flex gap-2">
               <Input id="cap" type="number" min={0} value={cap} onChange={(e) => setCap(e.target.value)} />
               <Button variant="outline" onClick={() => patch({ dailySendCap: Number(cap) }, "Daily cap saved.")}>Save</Button>
+            </div>
+          </Field>
+          <Field label="Minimum score to contact" hint="Top-10 candidates below this aren't contacted automatically. You can still contact them by hand." htmlFor="minscore">
+            <div className="flex gap-2">
+              <Input id="minscore" type="number" min={0} max={100} value={minScore} onChange={(e) => setMinScore(e.target.value)} />
+              <Button variant="outline" onClick={() => patch({ minOutreachScore: Number(minScore) }, "Minimum score saved.")}>Save</Button>
             </div>
           </Field>
           <SwitchRow id="rv" label="Check the top 15 with SignalHire" hint="Loads their full profile and contacts before the Top 10 is chosen. 1 credit per person found." checked={s.signalhireRevealEnabled} onChange={(v) => patch({ signalhireRevealEnabled: v }, "Saved.")} />
