@@ -62,6 +62,13 @@ describe("computeSignals", () => {
     expect(s.skillsMissing).toEqual([]);
   });
 
+  it("never counts basic requirements like office software or a degree as missing", () => {
+    const s = computeSignals(person(), { ...role, mustHaves: [...role.mustHaves, "Microsoft Office, Word and PowerPoint", "Bachelor's degree in Computer Science"] }, now);
+    expect(s.skillsMissing).toEqual([]);
+    expect(s.basicMustHaves).toEqual(["Microsoft Office, Word and PowerPoint", "Bachelor's degree in Computer Science"]);
+    expect(signalFacts(s).join(" ")).toMatch(/Basic requirements not checked/);
+  });
+
   it("flags short finished jobs, the wrong level and location for an on-site role", () => {
     const s = computeSignals(person({
       currentTitle: "Junior Frontend Developer",
