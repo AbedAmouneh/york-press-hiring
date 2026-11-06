@@ -629,7 +629,9 @@ async function stepReveal({ run, request, state, counters }: Ctx) {
   if (!settings.signalhireRevealEnabled) { log(state, "Contact reveal is turned off in Settings."); return; }
   if (!revealAvailable()) { log(state, "SignalHire isn't set up, so contact details weren't looked up."); return; }
   const db = await getDb();
-  const targets = (await shortlistRows(run, request, state)).filter(({ c }) => !c.email);
+  // Don't spend credits on people far below the bar: a full profile rarely lifts a score by more than 10 points.
+  const floor = settings.minOutreachScore - 10;
+  const targets = (await shortlistRows(run, request, state)).filter(({ c, rc }) => !c.email && (rc.score ?? 0) >= floor);
   const existing = targets.length
     ? await db.select({ rcId: schema.contactReveals.roleCandidateId }).from(schema.contactReveals).where(inArray(schema.contactReveals.roleCandidateId, targets.map((t) => t.rc.id)))
     : [];
@@ -747,7 +749,20 @@ async function stepOutreach({ run, request, state }: Ctx): Promise<StepResult> {
     log(state, `Waiting for ${pending.length} contact result(s) from SignalHire.`);
     return "waiting";
   }
-  const targets = await outreachTargets(run, request.id);
+  const all = await outreachTargets(run, request.id);
+  // Only good matches are contacted automatically; weaker Top-10 people stay on the list for a recruiter to decide.
+  const { minOutreachScore } = await getSettings();
+  const targets = all.filter(({ rc }) => (rc.score ?? 0) >= minOutreachScore);
+  const held = all.length - targets.length;
+  if (held) log(state, `${held} of the Top ${TOP_N} scored below ${minOutreachScore}, so they weren't contacted automatically.`);
+  if (run.kind === "initial" && targets.length < 3) {
+    await notifyRoles(["recruiter"], {
+      type: "few_matches",
+      title: `${request.title}: only ${targets.length} strong match${targets.length === 1 ? "" : "es"}`,
+      link: `/roles/${request.id}`,
+      emailBody: `The search for ${request.title} found only ${targets.length} candidate(s) scoring ${minOutreachScore} or more. Check the requirements (a must-have that few people list, like office software, narrows the field), widen the location, or contact the others by hand from the role page.`,
+    });
+  }
   const q = await queueOutreach(request.id, targets.map((t) => t.rc.id), run.id);
   const drained = await drainEmailQueue();
   log(state, `Outreach: ${q.email} email(s) queued, ${q.linkedin} LinkedIn message(s) awaiting approval; ${drained.paused ? "sending is paused" : `${drained.sent} sent now`}.`);
