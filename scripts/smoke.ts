@@ -277,6 +277,15 @@ form.set("consent", "true");
 form.set("cv", new File([cvText], "rana-cv.txt", { type: "text/plain" }));
 const applied = await app.fetch(new Request(`http://localhost/api/public/apply/${applyToken}`, { method: "POST", body: form }));
 ok(applied.ok, "a candidate uploaded a CV on the apply page");
+{
+  const fake = new FormData();
+  fake.set("name", "Fake Pdf");
+  fake.set("email", "fake.pdf@example.test");
+  fake.set("consent", "true");
+  fake.set("cv", new File(["not really a pdf"], "cv.pdf", { type: "application/pdf" }));
+  const res = await app.fetch(new Request(`http://localhost/api/public/apply/${applyToken}`, { method: "POST", body: fake }));
+  ok(res.status === 400 && (await res.json()).error.includes("isn't a real PDF"), "a file pretending to be a PDF is refused");
+}
 const { applications } = await admin("GET", `/requests/${id}/applications`);
 ok(applications.length === 1 && applications[0].score != null, "the CV is listed and scored");
 const download = await admin.raw("GET", `/applications/${applications[0].id}/cv`);
