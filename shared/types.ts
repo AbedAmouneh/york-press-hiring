@@ -100,5 +100,5 @@ export type Signals = {
 /** How strongly the profile shows each must-have, as judged by Claude with a short quote or reason. */
 export type MustHaveEvidence = { mustHave: string; level: "proven" | "claimed" | "missing"; evidence: string };
 
-export const OUTREACH_STATUSES = ["queued", "awaiting_approval", "approved", "sent", "failed", "cancelled", "skipped"] as const;
+export const OUTREACH_STATUSES = ["queued", "sending", "awaiting_approval", "approved", "sent", "failed", "cancelled", "skipped"] as const;
 export type OutreachStatus = (typeof OUTREACH_STATUSES)[number];
