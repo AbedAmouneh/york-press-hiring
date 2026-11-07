@@ -12,7 +12,7 @@ import { applyRevealResults } from "../services/pipeline.js";
 import { updateSettings } from "../services/settings.js";
 import { readCv } from "../services/cv-store.js";
 import { revealAvailable } from "../services/providers/select.js";
-import { signalhireBudget } from "../services/credit-budget.js";
+import { reserveReveals, settleReveals } from "../services/credit-budget.js";
 import { findLinkedinUrls, linkedinLookupAvailable, probeLookup } from "../services/linkedin-finder.js";
 
 const canSeeContacts = (u: SessionUser, r: typeof schema.roleRequests.$inferSelect) => isStaff(u) || r.hiringManagerId === u.id;
@@ -166,12 +166,19 @@ export const candidateRoutes = new Hono<AppEnv>()
     if (!revealAvailable()) throw new HTTPException(400, { message: "SignalHire isn't set up yet, so contact details can't be looked up." });
     const item = cand.linkedinUrl ?? cand.signalhireUid;
     if (!item) throw new HTTPException(400, { message: "No LinkedIn URL or SignalHire ID to look this person up." });
-    const budget = await signalhireBudget();
-    if (budget.allowed < 1) throw new HTTPException(400, { message: `This month's SignalHire limit of ${budget.limit} credits is used up. An admin can raise it in Settings.` });
-    const db = await getDb();
+    // Hold the credit first (so two clicks or a running reveal can't both spend the last one), then call SignalHire.
+    const { rows: held, budget } = await reserveReveals([{ roleCandidateId: rc.id, candidateId: cand.id, item }]);
+    if (!held.length) throw new HTTPException(400, { message: `This month's SignalHire limit of ${budget.limit} credits is used up. It can be raised in Settings.` });
     const callback = appIsPublic() && !mock.signalhire ? `${env.appUrl}/api/webhooks/signalhire/${env.webhookSecret}` : null;
-    const res = await revealContacts([item], callback);
-    await db.insert(schema.contactReveals).values({ roleCandidateId: rc.id, candidateId: cand.id, item, requestId: res.requestId });
+    let res: Awaited<ReturnType<typeof revealContacts>>;
+    try {
+      res = await revealContacts([item], callback);
+    } catch (e) {
+      await settleReveals([held[0].id], { failed: true });
+      throw e;
+    }
+    await settleReveals([held[0].id], { requestId: res.requestId });
+    const db = await getDb();
     if (res.creditsLeft != null) await updateSettings({ signalhireCreditsLeft: res.creditsLeft });
     if (res.results) {
       await applyRevealResults(res.results, res.mock);
