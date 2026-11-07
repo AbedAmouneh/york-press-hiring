@@ -3,7 +3,8 @@ import { HTTPException } from "hono/http-exception";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
-import { json } from "../validate.js";
+import { json, query } from "../validate.js";
+import { decodeCursor, DEFAULT_PAGE, newestFirst, olderThan, PageQuery, pageOf } from "../paging.js";
 import { hasRole, requireRole, type AppEnv } from "../auth.js";
 import { suppress } from "../services/suppression.js";
 import { ROLES, type Weights } from "../../shared/types.js";
@@ -215,12 +216,16 @@ export const adminRoutes = new Hono<AppEnv>()
       .limit(50);
     return c.json({ byProvider, runs: runs.map((r) => ({ ...r.run, error: r.run.error && redactSecrets(r.run.error), state: undefined, title: r.title })) });
   })
-  .get("/outbox", async (c) => {
+  .get("/outbox", query(z.object(PageQuery)), async (c) => {
     requireRole(c, "recruiter", "admin");
+    const { before, limit = DEFAULT_PAGE } = c.req.valid("query");
     const db = await getDb();
-    const rows = await db.select().from(schema.emailLog).orderBy(desc(schema.emailLog.createdAt)).limit(200);
+    const t = schema.emailLog;
+    const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(t);
+    const rows = await db.select().from(t).where(olderThan(t.createdAt, t.id, decodeCursor(before))).orderBy(...newestFirst(t.createdAt, t.id)).limit(limit + 1);
+    const { items, next } = pageOf(rows, limit, (r) => ({ at: r.createdAt, id: r.id }));
     // Sign-in links never leave the server, even from rows logged before they were hidden at write time.
-    return c.json({ emails: rows.map((r) => ({ ...r, body: hideAuthLinks(r.body) })), mock: mock.email });
+    return c.json({ emails: items.map((r) => ({ ...r, body: hideAuthLinks(r.body) })), total, next, mock: mock.email });
   })
   .get("/suppression", async (c) => {
     requireRole(c, "recruiter", "admin");
@@ -246,12 +251,15 @@ export const adminRoutes = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
   // ---------------------------------------------------------------- notifications
-  .get("/notifications", async (c) => {
+  .get("/notifications", query(z.object(PageQuery)), async (c) => {
     const user = c.get("user");
+    const { before, limit = DEFAULT_PAGE } = c.req.valid("query");
     const db = await getDb();
-    const rows = await db.select().from(schema.notifications).where(eq(schema.notifications.userId, user.id)).orderBy(desc(schema.notifications.createdAt)).limit(100);
-    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.notifications).where(and(eq(schema.notifications.userId, user.id), isNull(schema.notifications.readAt)));
-    return c.json({ notifications: rows, unread: n });
+    const t = schema.notifications;
+    const rows = await db.select().from(t).where(and(eq(t.userId, user.id), olderThan(t.createdAt, t.id, decodeCursor(before)))).orderBy(...newestFirst(t.createdAt, t.id)).limit(limit + 1);
+    const { items, next } = pageOf(rows, limit, (r) => ({ at: r.createdAt, id: r.id }));
+    const [{ n, total }] = await db.select({ n: sql<number>`count(*) filter (where ${t.readAt} is null)::int`, total: sql<number>`count(*)::int` }).from(t).where(eq(t.userId, user.id));
+    return c.json({ notifications: items, unread: n, total, next });
   })
   .post("/notifications/read", json(z.object({ ids: z.array(z.uuid()).optional() })), async (c) => {
     const user = c.get("user");
