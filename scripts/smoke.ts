@@ -227,6 +227,11 @@ ok(againRun.signalhireSearches === 0 && againRun.signalhireCredits === 0 && agai
 const afterAgain = (await admin("GET", `/requests/${id}/candidates`)).candidates;
 ok(afterAgain.length === peopleBefore && afterAgain.filter((c: any) => c.isTop10).length === 10, "Score again added nobody and kept a Top 10");
 ok((await admin("GET", "/outbox")).emails.length === mailBefore, "Score again contacted nobody");
+{
+  const [one, two] = await Promise.all([admin("POST", `/requests/${id}/rescore`), admin("POST", `/requests/${id}/rescore`)]);
+  ok(one.runId === two.runId, "two runs started at the same moment become one");
+  await settle();
+}
 
 // ---------------------------------------------------------------- cancelling a message
 {
