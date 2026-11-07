@@ -11,7 +11,7 @@ import { CandidateStatusBadge, OutreachBadge, RequestStatusBadge } from "@/compo
 import { CandidateSheet } from "@/components/CandidateSheet";
 import { StageBar } from "@/components/StageBar";
 import { Button } from "@/components/ui/button";
-import { CANDIDATE_STATUSES, CRITERIA, DEFAULT_WEIGHTS, type HmDecision, type Weights } from "../../shared/types";
+import { CANDIDATE_STATUSES, CRITERIA, DEFAULT_WEIGHTS, type CandidateStatus, type HmDecision, type Weights } from "../../shared/types";
 import { Avatar, Badge, DataTable, DeptDot, EmptyState, Modal, ScoreBar, Select, Spinner, Stat, Td, Th, useToast } from "@/components/kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 const DECISION_STYLE: Record<string, string> = { yes: "bg-success/15 text-success", maybe: "bg-chip-amber/30 text-warning", no: "bg-destructive/10 text-destructive" };
+
+/** The hiring manager's Yes / Maybe / No; pressing the chosen one again clears it. */
+function DecisionPicker({ value, canEdit, onChange }: { value: HmDecision | null; canEdit: boolean; onChange: (d: HmDecision | null) => void }) {
+  if (!canEdit) return value ? <Badge className={cn("capitalize", DECISION_STYLE[value])}>{value}</Badge> : <span className="text-muted-foreground">–</span>;
+  return (
+    <div className="inline-flex gap-0.5 rounded-lg bg-secondary p-0.5">
+      {(["yes", "maybe", "no"] as const).map((d) => (
+        <button key={d} type="button" onClick={() => onChange(value === d ? null : d)} aria-pressed={value === d}
+          className={cn("rounded-md px-2 py-0.5 text-xs capitalize transition-colors", value === d ? DECISION_STYLE[d] + " font-semibold" : "text-muted-foreground hover:bg-card hover:text-foreground")}>
+          {d}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function CandidateTable({ rows, onOpen, canEdit, onDecision, top }: { rows: CandidateRow[]; onOpen: (id: string) => void; canEdit: boolean; onDecision: (id: string, d: HmDecision | null) => void; top: boolean }) {
   if (!rows.length) return <EmptyState title="No candidates match">Try a different filter.</EmptyState>;
@@ -54,16 +69,7 @@ function CandidateTable({ rows, onOpen, canEdit, onDecision, top }: { rows: Cand
             <Td><ScoreBar value={c.score} /></Td>
             <Td><CandidateStatusBadge status={c.status} /></Td>
             <Td onClick={(e) => e.stopPropagation()}>
-              {canEdit ? (
-                <div className="inline-flex gap-0.5 rounded-lg bg-secondary p-0.5">
-                  {(["yes", "maybe", "no"] as const).map((d) => (
-                    <button key={d} onClick={() => onDecision(c.id, c.hmDecision === d ? null : d)} aria-pressed={c.hmDecision === d}
-                      className={cn("rounded-md px-2 py-0.5 text-xs capitalize transition-colors", c.hmDecision === d ? DECISION_STYLE[d] + " font-semibold" : "text-muted-foreground hover:bg-card hover:text-foreground")}>
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              ) : c.hmDecision ? <Badge className={cn("capitalize", DECISION_STYLE[c.hmDecision])}>{c.hmDecision}</Badge> : <span className="text-muted-foreground">–</span>}
+              <DecisionPicker value={c.hmDecision} canEdit={canEdit} onChange={(d) => onDecision(c.id, d)} />
             </Td>
             <Td className="text-xs">{top ? <OutreachBadge outreach={c.outreach} /> : <span className="text-muted-foreground">{c.location}</span>}</Td>
           </TableRow>
@@ -181,6 +187,12 @@ export default function RoleDetail() {
       qc.invalidateQueries();
     } catch (e) { toast((e as Error).message, "error"); }
   }
+  async function trackApplication(applicationId: string, json: { status?: CandidateStatus; hmDecision?: HmDecision | null; hmComment?: string | null }) {
+    try {
+      await call(rpc.applications[":id"].$patch({ param: { id: applicationId }, json }));
+      qc.invalidateQueries({ queryKey: ["applications", id] });
+    } catch (e) { toast((e as Error).message, "error"); }
+  }
   async function scoreCvAgain(applicationId: string) {
     try {
       const res = await call(rpc.applications[":id"].score.$post({ param: { id: applicationId } }));
@@ -294,7 +306,7 @@ export default function RoleDetail() {
         <TabsContent value="applications">
           {apps.isLoading ? <Spinner /> : apps.data?.applications.length ? (
             <DataTable>
-              <TableHeader><TableRow><Th>Received</Th><Th>Name</Th><Th>Score</Th><Th>Assessment</Th><Th>CV</Th></TableRow></TableHeader>
+              <TableHeader><TableRow><Th>Received</Th><Th>Name</Th><Th>Score</Th><Th>Assessment</Th><Th>Status</Th><Th>HM decision</Th><Th>CV</Th></TableRow></TableHeader>
               <TableBody>
                 {apps.data.applications.map((a) => (
                   <TableRow key={a.id}>
@@ -319,7 +331,30 @@ export default function RoleDetail() {
                         <>{a.analysis?.why}{a.analysis?.gaps && <div className="mt-1 text-muted-foreground">Gaps: {a.analysis.gaps}</div>}</>
                       )}
                     </Td>
-                    <Td>{a.email ? <a className="text-sm underline" href={`/api/applications/${a.id}/cv`}>{a.cvFileName}</a> : "—"}</Td>
+                    <Td>
+                      {apps.data.isRecruiter ? (
+                        <Select aria-label={`Status for ${a.name}`} className="h-8 w-32 text-xs" value={a.status} onChange={(e) => trackApplication(a.id, { status: e.target.value as CandidateStatus })}>
+                          {CANDIDATE_STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+                        </Select>
+                      ) : <CandidateStatusBadge status={a.status} />}
+                    </Td>
+                    <Td className="min-w-[180px]">
+                      <DecisionPicker value={a.hmDecision} canEdit={apps.data.canEdit} onChange={(d) => trackApplication(a.id, { hmDecision: d })} />
+                      {apps.data.canEdit ? (
+                        <Input key={a.hmComment ?? ""} aria-label={`Comment on ${a.name}`} placeholder="Comment" className="mt-1.5 h-8 text-xs" maxLength={2000} defaultValue={a.hmComment ?? ""}
+                          onBlur={(e) => { const v = e.target.value.trim(); if (v !== (a.hmComment ?? "")) trackApplication(a.id, { hmComment: v || null }); }} />
+                      ) : a.hmComment && <div className="mt-1 text-xs text-muted-foreground">{a.hmComment}</div>}
+                    </Td>
+                    <Td>
+                      {a.email ? <a className="text-sm underline" href={`/api/applications/${a.id}/cv`}>{a.cvFileName}</a> : "—"}
+                      {a.earlier.length > 0 && (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Also sent {a.earlier.map((e, i) => (
+                            <span key={e.id}>{i ? ", " : ""}<a className="underline" href={`/api/applications/${e.id}/cv`} title={e.cvFileName}>{fmtDate(e.createdAt)}</a></span>
+                          ))}
+                        </div>
+                      )}
+                    </Td>
                   </TableRow>
                 ))}
               </TableBody>
