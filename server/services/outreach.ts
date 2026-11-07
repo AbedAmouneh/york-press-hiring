@@ -1,4 +1,4 @@
-import { and, arrayOverlaps, asc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, arrayOverlaps, asc, eq, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
 import { getSettings } from "./settings.js";
 import { sendEmail, senderFor } from "./email.js";
@@ -127,19 +127,42 @@ export async function markContacted(roleCandidateId: string) {
     .where(and(eq(schema.roleCandidates.id, roleCandidateId), eq(schema.roleCandidates.status, "new")));
 }
 
-/** Send queued emails, respecting the kill switch and the daily cap. */
+/** A worker that crashed after claiming leaves a message "sending"; after this long it goes back to the queue. */
+const STUCK_SENDING_MS = 10 * 60_000;
+
+/**
+ * Takes the next queued email for this worker, or null when the queue is empty or today's cap is reached.
+ * Claims are made one at a time under a lock on the settings row, so two workers (cron, a run, "Send queued
+ * now") can never take the same message or both take the last slot under the cap. Messages being sent count
+ * against the cap.
+ */
+async function claimNext(cap: number) {
+  const db = await getDb();
+  const m = schema.outreachMessages;
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select id from settings where id = 1 for update`);
+    const [{ n }] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(m)
+      .where(and(eq(m.channel, "email"), or(and(eq(m.status, "sent"), gte(m.sentAt, startOfLocalDay())), eq(m.status, "sending"))));
+    if (n >= cap) return null;
+    const [next] = await tx.select({ id: m.id }).from(m).where(and(eq(m.channel, "email"), eq(m.status, "queued"))).orderBy(asc(m.queuedAt)).limit(1);
+    if (!next) return null;
+    const [claimed] = await tx.update(m).set({ status: "sending", claimedAt: new Date() }).where(and(eq(m.id, next.id), eq(m.status, "queued"))).returning();
+    return claimed ?? null;
+  });
+}
+
+/** Send queued emails, respecting the kill switch and the daily cap. Safe to run from several places at once. */
 export async function drainEmailQueue() {
   const settings = await getSettings();
   if (!settings.autoSendEnabled) return { sent: 0, failed: 0, remaining: -1, paused: true };
   const db = await getDb();
-  const room = settings.dailySendCap - (await sentTodayCount());
-  const queued = await db
-    .select()
-    .from(schema.outreachMessages)
-    .where(and(eq(schema.outreachMessages.channel, "email"), eq(schema.outreachMessages.status, "queued")))
-    .orderBy(asc(schema.outreachMessages.queuedAt));
+  const om = schema.outreachMessages;
+  // Messages a crashed worker left behind are retried with the same idempotency key, so the provider sends once.
+  await db.update(om).set({ status: "queued", claimedAt: null }).where(and(eq(om.status, "sending"), lt(om.claimedAt, new Date(Date.now() - STUCK_SENDING_MS))));
   let sent = 0, failed = 0;
-  for (const m of queued.slice(0, Math.max(0, room))) {
+  for (let m = await claimNext(settings.dailySendCap); m; m = await claimNext(settings.dailySendCap)) {
     const [sender] = m.senderId ? await db.select().from(schema.users).where(eq(schema.users.id, m.senderId)) : [];
     const [person] = await db
       .select({ id: schema.candidates.id, isSample: schema.candidates.isSample, email: schema.candidates.email, linkedinUrl: schema.candidates.linkedinUrl })
@@ -148,13 +171,14 @@ export async function drainEmailQueue() {
       .where(eq(schema.roleCandidates.id, m.roleCandidateId));
     // Someone may have opted out after the email was queued: check again right before sending.
     if (!person || (await isSuppressed({ ...person, email: person.email ?? m.toAddress }))) {
-      await db.update(schema.outreachMessages).set({ status: "cancelled" }).where(eq(schema.outreachMessages.id, m.id));
+      await db.update(om).set({ status: "cancelled", claimedAt: null }).where(eq(om.id, m.id));
       continue;
     }
     const res = await sendEmail({
+      idempotencyKey: `outreach-${m.id}`,
       listUnsubscribe: unsubscribeLink(person.id),
       kind: "outreach",
-      outboxOnly: person?.isSample ?? false,
+      outboxOnly: person.isSample,
       to: m.toAddress,
       subject: m.subject ?? "York Press",
       text: m.body,
@@ -162,13 +186,14 @@ export async function drainEmailQueue() {
       replyTo: sender?.email,
     });
     if (res.ok) {
-      await db.update(schema.outreachMessages).set({ status: "sent", sentAt: new Date(), providerMessageId: res.id }).where(eq(schema.outreachMessages.id, m.id));
+      await db.update(om).set({ status: "sent", sentAt: new Date(), providerMessageId: res.id }).where(eq(om.id, m.id));
       await markContacted(m.roleCandidateId);
       sent++;
     } else {
-      await db.update(schema.outreachMessages).set({ status: "failed", error: res.error }).where(eq(schema.outreachMessages.id, m.id));
+      await db.update(om).set({ status: "failed", error: res.error }).where(eq(om.id, m.id));
       failed++;
     }
   }
-  return { sent, failed, remaining: Math.max(0, queued.length - sent - failed), paused: false };
+  const [{ remaining }] = await db.select({ remaining: sql<number>`count(*)::int` }).from(om).where(and(eq(om.channel, "email"), eq(om.status, "queued")));
+  return { sent, failed, remaining, paused: false };
 }
