@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { Spinner } from "@/components/kit";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, Briefcase, CheckSquare, FileText, House, Inbox, LogOut, Mail, Menu, Plus, Send, Settings, Users } from "lucide-react";
@@ -129,7 +130,10 @@ export function AppShell({ me }: { me: Me }) {
             </div>
           )}
           <div className="mx-auto max-w-6xl">
-            <Outlet />
+            {/* Pages load on first visit: keep the sidebar on screen while one downloads. */}
+            <Suspense fallback={<div className="grid h-40 place-items-center text-muted-foreground"><Spinner /></div>}>
+              <Outlet />
+            </Suspense>
           </div>
         </main>
       </div>
