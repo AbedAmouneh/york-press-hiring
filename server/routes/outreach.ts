@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { decodeCursor, DEFAULT_PAGE, newestFirst, olderThan, PageQuery, pageOf } from "../paging.js";
 import { getDb, schema } from "../db/client.js";
 import { json, query } from "../validate.js";
 import { z } from "zod";
@@ -22,14 +23,20 @@ export const outreachRoutes = new Hono<AppEnv>()
     channel: z.enum(["email", "linkedin"]).optional(),
     /** Comma-separated, e.g. "awaiting_approval,approved". */
     status: z.string().transform((v) => v.split(",")).pipe(z.array(z.enum(OUTREACH_STATUSES))).optional(),
+    ...PageQuery,
   })), async (c) => {
     requireRole(c, "recruiter", "admin");
-    const { channel, status } = c.req.valid("query");
+    const { channel, status, before, limit = DEFAULT_PAGE } = c.req.valid("query");
     const db = await getDb();
     const m = schema.outreachMessages;
     const conds = [];
     if (channel) conds.push(eq(m.channel, channel));
     if (status) conds.push(inArray(m.status, status));
+    const filter = conds.length ? and(...conds) : undefined;
+    const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(m).where(filter);
+    // How many there are of each status (for this channel), so filter chips stay right whatever page is loaded.
+    const byStatus = await db.select({ status: m.status, n: sql<number>`count(*)::int` }).from(m).where(channel ? eq(m.channel, channel) : undefined).groupBy(m.status);
+    const counts = Object.fromEntries(byStatus.map((s) => [s.status, s.n])) as Partial<Record<(typeof OUTREACH_STATUSES)[number], number>>;
     const rows = await db
       .select({
         m,
@@ -46,12 +53,16 @@ export const outreachRoutes = new Hono<AppEnv>()
       .innerJoin(schema.roleCandidates, eq(schema.roleCandidates.id, m.roleCandidateId))
       .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
       .innerJoin(schema.roleRequests, eq(schema.roleRequests.id, schema.roleCandidates.requestId))
-      .where(conds.length ? and(...conds) : undefined)
-      .orderBy(desc(m.queuedAt))
-      .limit(500);
+      .where(and(filter, olderThan(m.queuedAt, m.id, decodeCursor(before))))
+      .orderBy(...newestFirst(m.queuedAt, m.id))
+      .limit(limit + 1);
+    const { items, next } = pageOf(rows, limit, (r) => ({ at: r.m.queuedAt, id: r.m.id }));
     const settings = await getSettings();
     return c.json({
-      messages: rows.map((r) => ({ ...r.m, candidateName: r.name, rank: r.rank, score: r.score, roleTitle: r.roleTitle, requestId: r.requestId, rcStatus: r.rcStatus, dateContacted: r.dateContacted, followUpDate: r.followUpDate })),
+      messages: items.map((r) => ({ ...r.m, candidateName: r.name, rank: r.rank, score: r.score, roleTitle: r.roleTitle, requestId: r.requestId, rcStatus: r.rcStatus, dateContacted: r.dateContacted, followUpDate: r.followUpDate })),
+      total,
+      next,
+      counts,
       sentToday: await sentTodayCount(),
       dailyCap: settings.dailySendCap,
       autoSendEnabled: settings.autoSendEnabled,
