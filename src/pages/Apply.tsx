@@ -62,7 +62,7 @@ export default function Apply() {
                 </div>
                 <Field label="LinkedIn profile (optional)" htmlFor="linkedin"><Input id="linkedin" placeholder="https://www.linkedin.com/in/…" {...form.register("linkedin")} /></Field>
                 <Field required label="CV" hint="PDF, Word or text, up to 4 MB." htmlFor="cv" error={errors.cv?.message}>
-                  <Input id="cv" type="file" accept=".pdf,.doc,.docx,.txt" className="h-auto py-1.5" aria-invalid={!!errors.cv} {...form.register("cv")} />
+                  <Input id="cv" type="file" accept=".pdf,.docx,.txt" className="h-auto py-1.5" aria-invalid={!!errors.cv} {...form.register("cv")} />
                 </Field>
                 <Field label="Anything you'd like to add (optional)" htmlFor="note" error={errors.note?.message}><Textarea id="note" {...form.register("note")} /></Field>
                 <div className="grid gap-1">

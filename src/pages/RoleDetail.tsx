@@ -172,6 +172,13 @@ export default function RoleDetail() {
       qc.invalidateQueries({ queryKey: ["runs", id] });
     } catch (e) { toast((e as Error).message, "error"); }
   }
+  async function scoreCvAgain(applicationId: string) {
+    try {
+      const res = await call(rpc.applications[":id"].score.$post({ param: { id: applicationId } }));
+      toast(res.ok ? "CV scored." : "Still couldn't score it. Open the CV and judge it yourself.", res.ok ? undefined : "error");
+      qc.invalidateQueries({ queryKey: ["applications", id] });
+    } catch (e) { toast((e as Error).message, "error"); }
+  }
   async function findLinkedin() {
     setFinding(true);
     try {
@@ -292,7 +299,16 @@ export default function RoleDetail() {
                       )}
                     </Td>
                     <Td><ScoreBar value={a.score} /></Td>
-                    <Td className="max-w-md text-xs">{a.analysis?.why}{a.analysis?.gaps && <div className="mt-1 text-muted-foreground">Gaps: {a.analysis.gaps}</div>}</Td>
+                    <Td className="max-w-md text-xs">
+                      {a.analysis?.error ? (
+                        <div className="text-destructive">
+                          {a.analysis.error}
+                          {isRecruiter && <Button size="sm" variant="link" className="h-auto px-1 py-0" onClick={() => scoreCvAgain(a.id)}>Score again</Button>}
+                        </div>
+                      ) : (
+                        <>{a.analysis?.why}{a.analysis?.gaps && <div className="mt-1 text-muted-foreground">Gaps: {a.analysis.gaps}</div>}</>
+                      )}
+                    </Td>
                     <Td>{a.email ? <a className="text-sm underline" href={`/api/applications/${a.id}/cv`}>{a.cvFileName}</a> : "—"}</Td>
                   </TableRow>
                 ))}
