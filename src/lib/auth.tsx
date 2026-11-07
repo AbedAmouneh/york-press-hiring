@@ -26,3 +26,9 @@ export const can = (user: Me | null | undefined, ...roles: Role[]) => !!user && 
 export function homeFor(_user: Me) {
   return "/";
 }
+
+/** The page someone opened before signing in (`?next=`), if it's a path in this app; never another site. */
+export function nextPath(search: string): string | null {
+  const next = new URLSearchParams(search).get("next");
+  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") && !next.startsWith("/login") ? next : null;
+}
