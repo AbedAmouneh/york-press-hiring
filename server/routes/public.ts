@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { and, eq, gt, isNull } from "drizzle-orm";
@@ -41,6 +42,10 @@ function unsubscribePage(message: string | null) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>York Press</title></head><body><h1>York Press</h1>${body}</body></html>`;
 }
 
+/** Fresh installs on a production deployment need the SETUP_KEY from Vercel. */
+const setupKeyRequired = () => env.vercelEnv === "production";
+const sameSecret = (a: string, b: string) => { const x = Buffer.from(a); const y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x, y); };
+
 // A bcrypt hash of a random secret, compared against when the email doesn't exist.
 let dummyHash: Promise<string> | null = null;
 const getDummyHash = () => (dummyHash ??= hashPassword(randomToken()));
@@ -48,9 +53,18 @@ const getDummyHash = () => (dummyHash ??= hashPassword(randomToken()));
 export const publicRoutes = new Hono()
   .get("/health", (c) => c.json({ ok: true }))
   // ---------------------------------------------------------------- first-run setup
-  .get("/setup", async (c) => c.json({ needsSetup: (await userCount()) === 0, demoMode: env.demoMode }))
+  .get("/setup", async (c) => c.json({ needsSetup: (await userCount()) === 0, demoMode: env.demoMode, needsSetupKey: setupKeyRequired() }))
   .post("/setup", json(SetupInput), async (c) => {
     const body = c.req.valid("json");
+    // On a production deployment only someone with the deployment's SETUP_KEY can claim the empty install.
+    if (setupKeyRequired()) {
+      const limits = INVITE_LIMITS(clientIp(c));
+      await assertWithinLimits(limits);
+      if (!env.setupKey || !sameSecret(body.setupKey ?? "", env.setupKey)) {
+        await recordHit(limits);
+        throw new HTTPException(403, { message: env.setupKey ? "That setup key isn't right." : "Set SETUP_KEY in Vercel, redeploy, then enter it here." });
+      }
+    }
     const { admin, invites } = await runSetup(body);
     await createSession(c, admin.id);
     return c.json({ ok: true, invites: invites.map((i) => ({ email: i.user.email, link: mock.email ? i.link : undefined })) });
