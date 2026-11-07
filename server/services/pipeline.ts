@@ -4,7 +4,7 @@ import { getDb, schema } from "../db/client.js";
 import { aiFeatures, appIsPublic, env, mock, POOL_SIZE, redactSecrets, TOP_N } from "../env.js";
 import type { RunState } from "../db/schema.js";
 import type { Weights } from "../../shared/types.js";
-import { buildBrief, collectScoreBatch, scoreBatch, submitScoreBatch, totalScore, webFindings, type ScoreResult } from "./claude.js";
+import { buildBrief, collectScoreBatch, scoreBatch, scoreFractions, submitScoreBatch, totalScore, webFindings, type ScoreResult } from "./claude.js";
 import { lastCreditsLeft, revealContacts, type RevealResult } from "./providers/signalhire.js";
 import { providerLabel, revealAvailable, searchProviders, skippedProviders } from "./providers/select.js";
 import type { NormalizedProfile } from "./providers/types.js";
@@ -487,6 +487,7 @@ async function saveScores(rows: ScoreRow[], results: ScoreResult[], weights: Wei
     await db.update(schema.roleCandidates).set({
       score,
       scoreBreakdown: breakdown,
+      scoreFractions: scoreFractions(guarded.breakdown, weights),
       dealBreakerMissing: r.dealBreakerMissing,
       whyRecommended: r.why,
       gaps: (r.dealBreakerMissing ? `Deal-breaker not met (score capped at 40). ${r.gaps}` : r.gaps) + adjusted,
