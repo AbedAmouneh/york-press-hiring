@@ -9,7 +9,7 @@ import { DecisionInput, MessageInput, rangeProblems, RequestInput, RequestPatch,
 import { canDeleteMessage, MESSAGE_DELETE_MINUTES } from "../../shared/messages.js";
 import { canViewRequest, isStaff, loadRequest, visibleRequests } from "./access.js";
 import { notifyRoles, notifyUsers, usersWithRoles } from "../services/notify.js";
-import { assertWithinLimits, MESSAGE_LIMITS, recordHit } from "../services/rate-limit.js";
+import { admit, MESSAGE_LIMITS } from "../services/rate-limit.js";
 import { decisionNotice } from "../services/decision-notice.js";
 import { cancelRuns, startRun } from "../services/pipeline.js";
 import { json, query } from "../validate.js";
@@ -137,8 +137,7 @@ export const requestRoutes = new Hono<AppEnv>()
     const user = c.get("user");
     const r = await loadRequest(c.req.param("id"), user);
     const limits = MESSAGE_LIMITS(user.id);
-    await assertWithinLimits(limits, "You're sending messages very quickly. Please wait a minute.");
-    await recordHit(limits);
+    await admit(limits, "You're sending messages very quickly. Please wait a minute.");
     const { body } = c.req.valid("json");
     const db = await getDb();
     const [message] = await db.insert(schema.requestMessages).values({ requestId: r.id, authorId: user.id, authorName: user.name, body }).returning();
