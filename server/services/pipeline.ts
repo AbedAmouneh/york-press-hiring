@@ -15,7 +15,7 @@ import { findLinkedinUrls, linkedinLookupAvailable } from "./linkedin-finder.js"
 import { toAI, toReq } from "./mappers.js";
 import { applyGuardrails, computeSignals, signalFacts } from "./signals.js";
 import { learnedWeightsFor } from "./learning.js";
-import { drainEmailQueue, isSuppressed, queueOutreach } from "./outreach.js";
+import { drainEmailQueue, isSuppressed, queueOutreach, RECONTACT_DAYS } from "./outreach.js";
 import { notifyRoles, notifyUsers } from "./notify.js";
 import { captureError } from "../monitoring.js";
 import { enqueueRun, queueEnabled } from "./queue.js";
@@ -837,6 +837,7 @@ async function stepOutreach({ run, request, state }: Ctx): Promise<StepResult> {
   const q = await queueOutreach(request.id, targets.map((t) => t.rc.id), run.id);
   const drained = await drainEmailQueue();
   log(state, `Outreach: ${q.email} email(s) queued, ${q.linkedin} LinkedIn message(s) awaiting approval; ${drained.paused ? "sending is paused" : `${drained.sent} sent now`}.`);
+  if (q.recentlyContacted) log(state, `${q.recentlyContacted} Top-${TOP_N} candidate(s) were contacted for another role in the last ${RECONTACT_DAYS} days, so they weren't contacted again automatically.`);
 }
 
 /** SignalHire credits spent on contact reveals for a run, including results that came back through the webhook. */
