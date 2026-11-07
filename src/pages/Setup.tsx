@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { call, rpc } from "@/lib/rpc";
 import { SetupForm, type SetupFormValues } from "@/lib/forms";
 import { Button } from "@/components/ui/button";
@@ -18,10 +18,12 @@ const DEFAULTS: SetupFormValues = {
   ceoName: "Khalil Sayegh",
   ceoEmail: "khalil.sayegh@york-press.com",
   managers: "",
+  setupKey: "",
 };
 
 export default function Setup() {
   const qc = useQueryClient();
+  const setup = useQuery({ queryKey: ["setup"], queryFn: () => call(rpc.setup.$get()) });
   const [links, setLinks] = useState<{ email: string; link?: string }[] | null>(null);
   const form = useForm({ resolver: zodResolver(SetupForm), defaultValues: DEFAULTS });
   const { errors, isSubmitting } = form.formState;
@@ -61,6 +63,11 @@ export default function Setup() {
         <h1 className="text-xl font-bold">First-time setup</h1>
         <p className="mb-5 text-sm text-muted-foreground">Create your admin account and invite Khalil. You only do this once.</p>
         <form onSubmit={submit} className="grid gap-4" noValidate>
+          {setup.data?.needsSetupKey && (
+            <Field required label="Setup key" hint="The SETUP_KEY set in Vercel for this site." htmlFor="sk" error={errors.setupKey?.message}>
+              <Input id="sk" type="password" autoComplete="off" {...form.register("setupKey")} />
+            </Field>
+          )}
           <Field required label="Your name" htmlFor="an" error={errors.adminName?.message}>
             <Input id="an" aria-invalid={!!errors.adminName} {...form.register("adminName")} />
           </Field>
