@@ -63,6 +63,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Main script size
+        run: npx tsx scripts/bundle-size.ts
+
       - name: End-to-end smoke test (mock mode)
         run: npm run smoke
 
