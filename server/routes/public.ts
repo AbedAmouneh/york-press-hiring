@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
 import { ApplyFields, cvProblem, InvitePasswordInput, LoginInput, NewPasswordInput, SetupInput, TwoFactorCodeInput } from "../../shared/schemas.js";
 import { env, mock } from "../env.js";
@@ -21,7 +21,7 @@ import { verifyQueueRequest } from "../services/queue.js";
 import { z } from "zod";
 import { form, json } from "../validate.js";
 import { publicUser } from "./access.js";
-import { APPLY_LIMITS, assertWithinLimits, clearHits, clientIp, INVITE_LIMITS, LOGIN_LIMITS, MFA_LIMITS, recordHit } from "../services/rate-limit.js";
+import { admit, APPLY_LIMITS, clearHits, clientIp, INVITE_LIMITS, LOGIN_LIMITS, MFA_LIMITS, release } from "../services/rate-limit.js";
 
 /** The apply page's multipart form. Field rules live in ApplyFields and cvProblem, checked in the handler. */
 const ApplyForm = z.object({
@@ -60,16 +60,18 @@ export const publicRoutes = new Hono()
     const { email: rawEmail, password } = c.req.valid("json");
     const email = rawEmail.trim().toLowerCase();
     const limits = LOGIN_LIMITS(email, clientIp(c));
-    await assertWithinLimits(limits, "Too many failed sign-in attempts. Please wait 15 minutes and try again.");
+    const attempt = await admit(limits, "Too many failed sign-in attempts. Please wait 15 minutes and try again.");
     await ensureDemoUsers();
     const db = await getDb();
     const [u] = await db.select().from(schema.users).where(eq(schema.users.email, email));
     // Always run bcrypt, so the response time doesn't reveal whether the email exists.
     const valid = await verifyPassword(password, u?.passwordHash ?? (await getDummyHash()));
     if (!u || !canSignIn(u) || !u.passwordHash || !valid) {
-      await recordHit(limits);
+      // The attempt was already counted by admit(): failures stay counted.
       throw new HTTPException(401, { message: "Email or password is incorrect." });
     }
+    // Only failures count: drop this attempt and the email's earlier failures.
+    await release(attempt);
     await clearHits([limits[0].key]);
     if (u.totpEnabledAt) {
       // Step two: the session is only created once the authenticator code checks out.
@@ -85,21 +87,29 @@ export const publicRoutes = new Hono()
     const userId = readChallenge(getMfaChallenge(c));
     if (!userId) throw new HTTPException(401, { message: "Your sign-in timed out. Enter your password again." });
     const limits = MFA_LIMITS(userId);
-    await assertWithinLimits(limits, "Too many wrong codes. Please wait 15 minutes and try again.");
+    const attempt = await admit(limits, "Too many wrong codes. Please wait 15 minutes and try again.");
     const db = await getDb();
     const [u] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
     if (!u || !canSignIn(u) || !u.totpSecret) throw new HTTPException(401, { message: "Your sign-in timed out. Enter your password again." });
     const { code } = c.req.valid("json");
     const step = checkCode(decryptSecret(u.totpSecret), code, u.totpLastStep);
     const remaining = step === null ? redeemRecoveryCode(u.recoveryCodes, code) : null;
-    if (step === null && remaining === null) {
-      await recordHit(limits);
-      throw new HTTPException(401, { message: "That code didn't work. Check your authenticator app and try again." });
-    }
-    await db.update(schema.users).set({
+    const wrong = () => new HTTPException(401, { message: "That code didn't work. Check your authenticator app and try again." });
+    if (step === null && remaining === null) throw wrong();
+    // Use the code up only if nobody used it in the meantime: the update checks the value it read, so two
+    // requests with the same code (or the same TOTP step) can't both sign in.
+    const t = schema.users;
+    const [used] = await db.update(t).set({
       lastLoginAt: new Date(),
       ...(step !== null ? { totpLastStep: step } : { recoveryCodes: remaining! }),
-    }).where(eq(schema.users.id, u.id));
+    }).where(and(
+      eq(t.id, u.id),
+      step !== null
+        ? (u.totpLastStep == null ? isNull(t.totpLastStep) : eq(t.totpLastStep, u.totpLastStep))
+        : eq(t.recoveryCodes, u.recoveryCodes),
+    )).returning({ id: t.id });
+    if (!used) throw wrong();
+    await release(attempt);
     await clearHits([limits[0].key]);
     clearMfaChallenge(c);
     await createSession(c, u.id);
@@ -162,7 +172,7 @@ export const publicRoutes = new Hono()
   .post("/auth/invite/:token", json(InvitePasswordInput), async (c) => {
     const { password } = c.req.valid("json");
     const limits = INVITE_LIMITS(clientIp(c));
-    await assertWithinLimits(limits);
+    const attempt = await admit(limits);
     const db = await getDb();
     const hash = await hashPassword(password);
     // Consume the token in the same statement that checks it, so two redemptions at once can't both win, and a
@@ -173,9 +183,9 @@ export const publicRoutes = new Hono()
       .where(and(eq(schema.users.inviteToken, c.req.param("token")), gt(schema.users.inviteExpiresAt, new Date()), eq(schema.users.active, true)))
       .returning();
     if (!u || !canSignIn(u)) {
-      await recordHit(limits);
       throw new HTTPException(404, { message: "This invite link is invalid or has expired." });
     }
+    await release(attempt);
     // A new password signs out everywhere else, as a password reset should.
     await db.delete(schema.sessions).where(eq(schema.sessions.userId, u.id));
     if (u.totpEnabledAt) {
@@ -200,8 +210,7 @@ export const publicRoutes = new Hono()
     if (!r || !["open", "sourcing"].includes(r.status)) throw new HTTPException(404, { message: "This position is no longer open." });
     // Each CV costs a Claude call, so cap uploads per visitor.
     const limits = APPLY_LIMITS(clientIp(c));
-    await assertWithinLimits(limits, "We've received several CVs from this connection. Please try again in an hour.");
-    await recordHit(limits);
+    await admit(limits, "We've received several CVs from this connection. Please try again in an hour.");
     const body = c.req.valid("form");
     const fields = ApplyFields.parse({
       name: body.name,
