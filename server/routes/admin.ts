@@ -16,7 +16,7 @@ import { publicUser } from "./access.js";
 import { searchProviders } from "../services/providers/select.js";
 import { previewRetention, RETENTION_MONTHS } from "../services/retention.js";
 import { signalhireBudget } from "../services/credit-budget.js";
-import { sendEmail } from "../services/email.js";
+import { hideAuthLinks, sendEmail } from "../services/email.js";
 import { MIN_EACH_CLASS, MIN_LABELS, runLearning } from "../services/learning.js";
 import { signalhireCredits } from "../services/providers/signalhire.js";
 
@@ -218,7 +218,8 @@ export const adminRoutes = new Hono<AppEnv>()
     requireRole(c, "recruiter", "admin");
     const db = await getDb();
     const rows = await db.select().from(schema.emailLog).orderBy(desc(schema.emailLog.createdAt)).limit(200);
-    return c.json({ emails: rows, mock: mock.email });
+    // Sign-in links never leave the server, even from rows logged before they were hidden at write time.
+    return c.json({ emails: rows.map((r) => ({ ...r, body: hideAuthLinks(r.body) })), mock: mock.email });
   })
   .get("/suppression", async (c) => {
     requireRole(c, "recruiter", "admin");
