@@ -1,4 +1,4 @@
-import { useEffect, type ReactElement } from "react";
+import { lazy, Suspense, useEffect, type ReactElement } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { setMonitoringUser } from "./lib/monitoring";
 import { useQuery } from "@tanstack/react-query";
@@ -8,24 +8,27 @@ import type { Me } from "./lib/types";
 import type { Role } from "../shared/types";
 import { AppShell } from "./components/AppShell";
 import { Spinner } from "./components/kit";
-import Login from "./pages/Login";
-import Setup from "./pages/Setup";
-import Invite from "./pages/Invite";
-import TwoFactorSetup from "./pages/TwoFactor";
-import ChangePassword from "./pages/ChangePassword";
-import Apply from "./pages/Apply";
-import Home from "./pages/Home";
-import Requests from "./pages/Requests";
-import RequestForm from "./pages/RequestForm";
-import RequestDetail from "./pages/RequestDetail";
-import Roles from "./pages/Roles";
-import RoleDetail from "./pages/RoleDetail";
-import Outreach from "./pages/Outreach";
-import LinkedinQueue from "./pages/LinkedinQueue";
-import Settings from "./pages/Settings";
-import Users from "./pages/Users";
-import Notifications from "./pages/Notifications";
-import Outbox from "./pages/Outbox";
+
+// Each page is its own file, downloaded when first opened: the public apply page and the sign-in
+// page don't carry the staff screens.
+const Login = lazy(() => import("./pages/Login"));
+const Setup = lazy(() => import("./pages/Setup"));
+const Invite = lazy(() => import("./pages/Invite"));
+const TwoFactorSetup = lazy(() => import("./pages/TwoFactor"));
+const ChangePassword = lazy(() => import("./pages/ChangePassword"));
+const Apply = lazy(() => import("./pages/Apply"));
+const Home = lazy(() => import("./pages/Home"));
+const Requests = lazy(() => import("./pages/Requests"));
+const RequestForm = lazy(() => import("./pages/RequestForm"));
+const RequestDetail = lazy(() => import("./pages/RequestDetail"));
+const Roles = lazy(() => import("./pages/Roles"));
+const RoleDetail = lazy(() => import("./pages/RoleDetail"));
+const Outreach = lazy(() => import("./pages/Outreach"));
+const LinkedinQueue = lazy(() => import("./pages/LinkedinQueue"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Users = lazy(() => import("./pages/Users"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const Outbox = lazy(() => import("./pages/Outbox"));
 
 /** Sends people without one of these roles to their home page, matching what the sidebar shows them. */
 function Only({ user, roles, children }: { user: Me; roles: Role[]; children: ReactElement }) {
@@ -37,6 +40,10 @@ function Loading() {
 }
 
 export default function App() {
+  return <Suspense fallback={<Loading />}><AppRoutes /></Suspense>;
+}
+
+function AppRoutes() {
   const location = useLocation();
   const setup = useQuery({ queryKey: ["setup"], queryFn: () => call(rpc.setup.$get()) });
   const me = useMe();
