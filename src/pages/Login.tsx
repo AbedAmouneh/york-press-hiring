@@ -43,7 +43,8 @@ export default function Login() {
   const navigate = useNavigate();
   const form = useForm({ resolver: zodResolver(LoginInput), defaultValues: { email: "", password: "" } });
   const { errors, isSubmitting } = form.formState;
-  const [codeStep, setCodeStep] = useState(false);
+  // "step=code": the password was already checked elsewhere (e.g. accepting an invite) and only the code is left.
+  const [codeStep, setCodeStep] = useState(params.get("step") === "code");
 
   async function finish() {
     await qc.invalidateQueries();
