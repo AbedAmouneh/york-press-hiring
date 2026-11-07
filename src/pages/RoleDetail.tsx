@@ -297,7 +297,7 @@ export default function RoleDetail() {
               <Card key={run.id}>
                 <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
                   <CardTitle>{run.kind === "rescore" ? "Score again" : `${run.kind} run`} · {fmtDateTime(run.createdAt)}</CardTitle>
-                  <Badge tone={run.status === "done" ? "good" : run.status === "failed" ? "bad" : "brand"}>{run.status}</Badge>
+                  <Badge tone={run.status === "done" ? "good" : run.status === "failed" ? "bad" : run.status === "cancelled" ? "neutral" : "brand"}>{run.status === "cancelled" ? "stopped (role closed)" : run.status}</Badge>
                 </CardHeader>
                 <CardContent className="grid gap-3">
                   <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
