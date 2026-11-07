@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, randomToken, requireRole, type AppEnv, type SessionUser } from "../auth.js";
 import { CRITERIA, type Weights } from "../../shared/types.js";
-import { DecisionInput, MessageInput, RequestInput, RequestPatch, WeightsInput } from "../../shared/schemas.js";
+import { DecisionInput, MessageInput, rangeProblems, RequestInput, RequestPatch, submitProblems, WeightsInput, type Problem } from "../../shared/schemas.js";
 import { canDeleteMessage, MESSAGE_DELETE_MINUTES } from "../../shared/messages.js";
 import { canViewRequest, isStaff, loadRequest } from "./access.js";
 import { notifyRoles, notifyUsers, usersWithRoles } from "../services/notify.js";
@@ -75,6 +75,21 @@ async function notifyKhalil(id: string, title: string, dept: string, by: string)
     link: `/requests/${id}`,
     emailBody: `${by} requested a new position: ${title} (${dept}). Please review it in York Press Hiring and approve, reject or request changes.`,
   });
+}
+
+/** Turns rule problems into one 400 with every message, like the form shows them. */
+function assertNoProblems(problems: Problem[]) {
+  if (problems.length) throw new HTTPException(400, { message: problems.map((p) => p.message).join(" ") });
+}
+
+/** The hiring manager must be an active person who can manage hiring (an unknown id would fail on the foreign key). */
+async function assertHiringManager(userId: string | null | undefined) {
+  if (!userId) return;
+  const db = await getDb();
+  const [u] = await db.select({ active: schema.users.active, roles: schema.users.roles }).from(schema.users).where(eq(schema.users.id, userId));
+  if (!u?.active || !u.roles.some((r) => ["hm", "manager", "recruiter", "admin"].includes(r))) {
+    throw new HTTPException(400, { message: "That hiring manager can't be chosen. Pick someone from the list." });
+  }
 }
 
 /** A request may only point at a location that exists (a deleted one would otherwise fail on the foreign key). */
@@ -161,7 +176,9 @@ export const requestRoutes = new Hono<AppEnv>()
     const user = requireRole(c, "manager", "recruiter", "admin");
     const input = c.req.valid("json");
     await assertLocation(input.locationId);
+    await assertHiringManager(input.hiringManagerId);
     const submit = c.req.valid("query").submit === "true";
+    if (submit) assertNoProblems(submitProblems(input));
     const db = await getDb();
     const [r] = await db.insert(schema.roleRequests).values({
       ...input,
@@ -183,6 +200,9 @@ export const requestRoutes = new Hono<AppEnv>()
     if (!editable) throw new HTTPException(403, { message: "This request can't be edited now." });
     const input = c.req.valid("json");
     await assertLocation(input.locationId);
+    await assertHiringManager(input.hiringManagerId);
+    // Check the request as it will be after the change, not only the fields sent.
+    assertNoProblems(rangeProblems({ ...r, ...input }));
     const db = await getDb();
     // "Me" (null) means the requester, as when the request was created.
     const hm = input.hiringManagerId === null ? { hiringManagerId: r.requesterId } : {};
@@ -195,6 +215,7 @@ export const requestRoutes = new Hono<AppEnv>()
     const r = await loadRequest(c.req.param("id"), user);
     if (r.requesterId !== user.id && !hasRole(user, "admin", "recruiter")) throw new HTTPException(403, { message: "Only the requester can submit." });
     if (!["draft", "changes_requested"].includes(r.status)) throw new HTTPException(400, { message: "This request was already submitted." });
+    assertNoProblems(submitProblems(r));
     const db = await getDb();
     await db.update(schema.roleRequests).set({ status: "submitted", submittedAt: new Date(), reminderSentAt: null, updatedAt: new Date() }).where(eq(schema.roleRequests.id, r.id));
     await event(r.id, user, r.status === "changes_requested" ? "Resubmitted" : "Submitted");
