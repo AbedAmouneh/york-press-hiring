@@ -1,6 +1,6 @@
 // Validation rules shared by the API (request parsing) and the React forms (react-hook-form resolver).
 import { z } from "zod";
-import { CANDIDATE_STATUSES, CRITERIA, CURRENCIES, HM_DECISIONS, ROLES } from "./types.js";
+import { CANDIDATE_STATUSES, CRITERIA, CURRENCIES, DEPARTMENTS, HM_DECISIONS, ROLES } from "./types.js";
 import { MESSAGE_MAX } from "./messages.js";
 
 const email = z.email("Enter a valid email address.");
@@ -34,8 +34,8 @@ export const SetupInput = z.object({
 // ---------------------------------------------------------------- role requests
 
 export const RequestFields = z.object({
-  title: z.string().trim().min(2, "Add a job title."),
-  department: z.string().trim().min(1, "Choose a department."),
+  title: z.string().trim().min(2, "Add a job title.").max(120, "Keep the title under 120 characters."),
+  department: z.enum(DEPARTMENTS, "Choose a department."),
   seniority: z.string().trim().min(1, "Choose a seniority."),
   headcount: z.coerce.number<number | string>().int().min(1, "At least 1.").max(50, "At most 50.").default(1),
   startDate: z.string().nullable().optional(),
@@ -62,12 +62,27 @@ export const RequestFields = z.object({
   workingHours: z.string().trim().max(200).nullable().optional(),
 });
 
-export const RequestInput = RequestFields.refine((r) => r.salaryMin == null || r.salaryMax == null || r.salaryMax >= r.salaryMin, {
-  message: "The top of the band must be at least the bottom.",
-  path: ["salaryMax"],
-}).refine((r) => r.minYears == null || r.idealYears == null || r.idealYears >= r.minYears, {
-  message: "Ideal years must be at least the minimum.",
-  path: ["idealYears"],
+export type Problem = { path: string; message: string };
+
+/** Salary band and years that contradict each other. Checked on create and on the merged row after an edit. */
+export function rangeProblems(r: { salaryMin?: number | null; salaryMax?: number | null; minYears?: number | null; idealYears?: number | null }): Problem[] {
+  const out: Problem[] = [];
+  if (r.salaryMin != null && r.salaryMax != null && r.salaryMax < r.salaryMin) out.push({ path: "salaryMax", message: "The top of the band must be at least the bottom." });
+  if (r.minYears != null && r.idealYears != null && r.idealYears < r.minYears) out.push({ path: "idealYears", message: "Ideal years must be at least the minimum." });
+  return out;
+}
+
+/** What a request needs before it goes to the CEO. A draft can wait. Same rules in the form and the API. */
+export function submitProblems(r: { locationId?: string | null; currency?: string | null; justification?: string | null }): Problem[] {
+  const out: Problem[] = [];
+  if (!r.locationId) out.push({ path: "locationId", message: "Choose where this person will work." });
+  if (!r.currency) out.push({ path: "currency", message: "Choose a currency." });
+  if (!r.justification?.trim()) out.push({ path: "justification", message: "Explain why this role is needed." });
+  return out;
+}
+
+export const RequestInput = RequestFields.superRefine((r, ctx) => {
+  for (const p of rangeProblems(r)) ctx.addIssue({ code: "custom", path: [p.path], message: p.message });
 });
 export type RequestInputT = z.infer<typeof RequestInput>;
 
