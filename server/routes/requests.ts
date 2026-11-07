@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, randomToken, requireRole, type AppEnv, type SessionUser } from "../auth.js";
@@ -231,6 +231,17 @@ export const requestRoutes = new Hono<AppEnv>()
     const db = await getDb();
     const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.roleCandidates).where(eq(schema.roleCandidates.requestId, r.id));
     const runId = await startRun(r.id, n ? "manual" : "initial");
+    return c.json({ runId });
+  })
+  // Score everyone already on the role again with the current rules: no searches, credits or messages.
+  .post("/requests/:id/rescore", async (c) => {
+    const user = requireRole(c, "recruiter", "admin");
+    const r = await loadRequest(c.req.param("id"), user);
+    if (!["open", "sourcing"].includes(r.status)) throw new HTTPException(400, { message: "Only open roles can be scored again." });
+    const db = await getDb();
+    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.roleCandidates).where(and(eq(schema.roleCandidates.requestId, r.id), isNotNull(schema.roleCandidates.scoredAt)));
+    if (!n) throw new HTTPException(400, { message: "Nobody has been scored for this role yet." });
+    const runId = await startRun(r.id, "rescore");
     return c.json({ runId });
   })
   .get("/requests/:id/runs", async (c) => {
