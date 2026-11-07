@@ -45,7 +45,7 @@ describe("other API rules", () => {
   it("checks CV size and type", () => {
     expect(cvProblem(null)).toBe("Please attach your CV.");
     expect(cvProblem({ size: 5 * 1024 * 1024, type: "application/pdf" })).toBe("The CV must be smaller than 4 MB.");
-    expect(cvProblem({ size: 1000, type: "image/png" })).toBe("Please upload a PDF, Word or text file.");
+    expect(cvProblem({ size: 1000, type: "image/png" })).toBe("Please upload a PDF, Word (.docx) or text file.");
     expect(cvProblem({ size: 1000, type: "application/pdf" })).toBeNull();
   });
 });
