@@ -18,8 +18,9 @@ export default function Invite() {
 
   const submit = form.handleSubmit(async ({ password }) => {
     try {
-      await call(rpc.auth.invite[":token"].$post({ param: { token }, json: { password } }));
-      window.location.href = "/";
+      const res = await call(rpc.auth.invite[":token"].$post({ param: { token }, json: { password } }));
+      // Accounts with two-step login on finish on the sign-in page's code step.
+      window.location.href = res.mfaRequired ? "/login?step=code" : "/";
     } catch (err) {
       form.setError("root", { message: (err as Error).message });
     }
