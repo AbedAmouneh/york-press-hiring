@@ -6,7 +6,7 @@ import { ApplyFields, cvProblem, InvitePasswordInput, LoginInput, NewPasswordInp
 import { env, mock } from "../env.js";
 import { canSignIn, clearMfaChallenge, createSession, currentUser, destroySession, getMfaChallenge, hashPassword, randomToken, setMfaChallenge, verifyPassword } from "../auth.js";
 import { checkCode, createChallenge, decryptSecret, encryptSecret, newRecoveryCodes, newSetup, readChallenge, redeemRecoveryCode } from "../services/two-factor.js";
-import { ensureDemoUsers, runSetup, userCount, DEMO_PASSWORD } from "../services/setup.js";
+import { ensureDemoUsers, runSetup, userCount } from "../services/setup.js";
 import { applyRevealResults, resumeWaitingRuns, runPipeline } from "../services/pipeline.js";
 import { parseCandidate, type SHCandidate } from "../services/providers/signalhire.js";
 import { runDaily } from "../services/cron.js";
@@ -142,7 +142,7 @@ export const publicRoutes = new Hono()
   .get("/auth/me", async (c) => {
     await ensureDemoUsers();
     const u = await currentUser(c);
-    return c.json({ user: u ? publicUser(u) : null, demoMode: env.demoMode, demoPassword: env.demoMode ? DEMO_PASSWORD : undefined, preview: env.isPreview });
+    return c.json({ user: u ? publicUser(u) : null, demoMode: env.demoMode, demoPassword: env.demoMode && env.demoPasswordIsPublic ? env.demoPassword : undefined, preview: env.isPreview });
   })
   .get("/auth/invite/:token", async (c) => {
     const db = await getDb();
