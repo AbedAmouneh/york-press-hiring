@@ -11,7 +11,7 @@ import type { NormalizedProfile } from "./providers/types.js";
 import { mergeProfiles, nameKey, prescore, type MergedProfile } from "./merge.js";
 import { getSettings, logUsage, updateSettings, weightsFor } from "./settings.js";
 import { reserveReveals, settleReveals } from "./credit-budget.js";
-import { findLinkedinUrls, linkedinLookupAvailable } from "./linkedin-finder.js";
+import { describeMisses, findLinkedinUrls, linkedinLookupAvailable } from "./linkedin-finder.js";
 import { toAI, toReq } from "./mappers.js";
 import { applyGuardrails, computeSignals, signalFacts } from "./signals.js";
 import { learnedWeightsFor } from "./learning.js";
@@ -421,6 +421,7 @@ async function findMissingLinkedin({ run, state, deadline }: Ctx): Promise<StepR
     .where(and(inArray(schema.roleCandidates.id, ids), isNull(schema.candidates.linkedinUrl), eq(schema.candidates.isSample, false)));
   const todo = rows.filter((r) => !checked.has(r.rcId));
   let found = 0;
+  const why = { misses: { no_search: 0, not_found: 0, name_mismatch: 0 }, failed: 0, error: null as string | null };
   // Five at a time (one parallel group, at most a minute even if every model is slow), so a slice never runs past the time budget.
   for (let i = 0; i < todo.length; i += 5) {
     if (Date.now() > deadline) return "again";
@@ -430,10 +431,15 @@ async function findMissingLinkedin({ run, state, deadline }: Ctx): Promise<StepR
       await db.update(schema.candidates).set({ linkedinUrl: url }).where(and(eq(schema.candidates.id, candidateId), isNull(schema.candidates.linkedinUrl)));
       found++;
     }
+    for (const k of Object.keys(why.misses) as (keyof typeof why.misses)[]) why.misses[k] += urls.misses[k];
+    why.failed += urls.failed;
+    why.error ??= urls.error;
     for (const r of slice) checked.add(r.rcId);
     state.linkedinChecked = [...checked];
   }
-  if (todo.length) log(state, `Found LinkedIn profiles for ${found} of ${todo.length} people.`);
+  // Say why the others weren't found, so a lookup that never works is visible (quota, search not running, names).
+  const reasons = found < todo.length ? describeMisses(why) : "";
+  if (todo.length) log(state, `Found LinkedIn profiles for ${found} of ${todo.length} people${reasons ? ` (${reasons})` : ""}.`);
 }
 
 async function stepEnrich(ctx: Ctx): Promise<StepResult> {
