@@ -4,7 +4,8 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql } from "drizzl
 import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { json } from "../validate.js";
-import { requireRole, type AppEnv } from "../auth.js";
+import { hasRole, requireRole, type AppEnv } from "../auth.js";
+import { suppress } from "../services/suppression.js";
 import { ROLES, type Weights } from "../../shared/types.js";
 import { SettingsPatch, TemplateInput, TemplatePatch, UserInviteInput, UserPatch } from "../../shared/schemas.js";
 import { env, mock, redactSecrets } from "../env.js";
@@ -230,24 +231,18 @@ export const adminRoutes = new Hono<AppEnv>()
     requireRole(c, "recruiter", "admin");
     const body = c.req.valid("json");
     if (!body.email && !body.linkedinUrl && !body.candidateId) throw new HTTPException(400, { message: "Give an email, LinkedIn URL or candidate." });
-    const db = await getDb();
-    if (body.candidateId) {
-      const [cand] = await db.select().from(schema.candidates).where(eq(schema.candidates.id, body.candidateId));
-      if (cand) { body.email ??= cand.email ?? undefined; body.linkedinUrl ??= cand.linkedinUrl ?? undefined; }
-      // Cancel anything not yet sent to this person.
-      const rcIds = db.select({ id: schema.roleCandidates.id }).from(schema.roleCandidates).where(eq(schema.roleCandidates.candidateId, body.candidateId));
-      await db.update(schema.outreachMessages).set({ status: "cancelled" }).where(and(inArray(schema.outreachMessages.roleCandidateId, rcIds), inArray(schema.outreachMessages.status, ["queued", "awaiting_approval", "approved"])));
-      if (body.reason === "opted_out") {
-        await db.update(schema.candidates).set({ email: null, phone: null, contactSource: null, contactRetrievedAt: null }).where(eq(schema.candidates.id, body.candidateId));
-      }
-    }
-    await db.insert(schema.suppressionList).values({ email: body.email?.toLowerCase() ?? null, linkedinUrl: body.linkedinUrl ?? null, candidateId: body.candidateId ?? null, reason: body.reason });
-    return c.json({ ok: true });
+    // Same rules as the unsubscribe link: matched by candidate, email or LinkedIn, unsent messages cancelled.
+    const { cancelled } = await suppress(body);
+    return c.json({ ok: true, cancelled });
   })
   .delete("/suppression/:id", async (c) => {
-    requireRole(c, "recruiter", "admin");
+    const user = requireRole(c, "recruiter", "admin");
     const db = await getDb();
-    await db.delete(schema.suppressionList).where(eq(schema.suppressionList.id, c.req.param("id")));
+    const [entry] = await db.select().from(schema.suppressionList).where(eq(schema.suppressionList.id, c.req.param("id")));
+    if (!entry) throw new HTTPException(404, { message: "Not found." });
+    // Someone who asked not to be contacted stays on the list unless an admin removes them.
+    if (entry.reason === "opted_out" && !hasRole(user, "admin")) throw new HTTPException(403, { message: "This person opted out. Only an admin can remove them from the list." });
+    await db.delete(schema.suppressionList).where(eq(schema.suppressionList.id, entry.id));
     return c.json({ ok: true });
   })
   // ---------------------------------------------------------------- notifications
