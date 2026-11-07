@@ -98,6 +98,16 @@ const { id } = await manager("POST", "/requests?submit=true", {
   locationId: lebanon.id, workingHours: lebanon.workingHours,
 });
 ok(id, "manager submitted a request");
+const refused = await manager.raw("POST", "/requests?submit=true", { title: "Too thin", department: "Editorial", seniority: "Mid" });
+ok(refused.status === 400 && (await refused.json()).error.includes("Choose a currency."), "the API refuses to submit a request without location, currency and reason");
+const { id: thinDraft } = await manager("POST", "/requests", { title: "Thin draft", department: "Editorial", seniority: "Mid", salaryMin: 500, salaryMax: 900 });
+ok(thinDraft, "a draft only needs a title");
+ok((await manager.raw("POST", `/requests/${thinDraft}/submit`)).status === 400, "a draft missing required fields can't be submitted");
+ok((await manager.raw("PATCH", `/requests/${thinDraft}`, { salaryMax: 100 })).status === 400, "an edit can't leave the salary band upside down");
+ok((await manager.raw("PATCH", `/requests/${thinDraft}`, { minYears: 10, idealYears: 2 })).status === 400, "an edit can't leave ideal years below the minimum");
+ok((await manager.raw("POST", "/requests", { title: "Ghost manager", department: "Editorial", seniority: "Mid", hiringManagerId: "00000000-0000-4000-8000-000000000000" })).status === 400, "an unknown hiring manager is a clear 400, not a crash");
+ok((await manager.raw("POST", "/requests", { title: "x".repeat(121), department: "Editorial", seniority: "Mid" })).status === 400, "titles are capped at 120 characters");
+ok((await manager.raw("POST", "/requests", { title: "Odd department", department: "Not a department", seniority: "Mid" })).status === 400, "departments come from the list");
 ok((await manager("GET", `/requests/${id}`)).request.locationId === lebanon.id, "the request keeps its location");
 
 const ceo = client();
@@ -334,11 +344,11 @@ ok((await team()).find((u) => u.email === "demo.hm@york-press.test")?.active, "w
 
 // ---------------------------------------------------------------- no CEO approver
 for (const u of (await team()).filter((x) => x.active && x.roles.includes("ceo"))) await second("PATCH", `/users/${u.id}`, { active: false });
-await second("POST", "/requests?submit=true", { title: "Nobody to approve", department: "Editorial", seniority: "Mid" });
+await second("POST", "/requests?submit=true", { title: "Nobody to approve", department: "Editorial", seniority: "Mid", locationId: lebanon.id, currency: "USD", justification: "Checking the approver warning." });
 ok((await second("GET", "/notifications")).notifications.some((n: any) => n.title === "Nobody can approve Nobody to approve: add a CEO approver"), "with no CEO approver, admins are told nobody can approve the request");
 
 // ---------------------------------------------------------------- closing a role
-const waiting = await second("POST", "/requests?submit=true", { title: "Still with the CEO", department: "Editorial", seniority: "Mid" });
+const waiting = await second("POST", "/requests?submit=true", { title: "Still with the CEO", department: "Editorial", seniority: "Mid", locationId: lebanon.id, currency: "USD", justification: "Checking close rules." });
 ok((await second.raw("POST", `/requests/${waiting.id}/close`, { deleteContacts: false })).status === 400, "a request still waiting for the CEO can't be closed as a role");
 const { getDb, schema: tables } = await import("../server/db/client.js");
 const { runPipeline } = await import("../server/services/pipeline.js");
