@@ -9,7 +9,7 @@ const resend = vi.hoisted(() => ({ send: vi.fn(async () => ({ data: { id: "re_1"
 vi.mock("resend", () => ({ Resend: class { emails = { send: resend.send }; } }));
 
 import { getDb, schema } from "../../server/db/client.js";
-import { isTestAddress, sendEmail } from "../../server/services/email.js";
+import { hideAuthLinks, isTestAddress, sendEmail } from "../../server/services/email.js";
 import { drainEmailQueue } from "../../server/services/outreach.js";
 
 beforeAll(async () => {
@@ -33,6 +33,23 @@ describe("test addresses", () => {
     for (const a of ["khalil.sayegh@york-press.com", "rana@myexample.com", "someone@testing.io", "x@gmail.com"]) {
       expect(isTestAddress(a), a).toBe(false);
     }
+  });
+});
+
+describe("invitation links", () => {
+  it("sends the real link but logs it hidden", async () => {
+    vi.stubEnv("RESEND_API_KEY", "re_live");
+    const text = "Set your password here:\nhttps://hiring.test/invite/Abc_123-xyz\n";
+    await sendEmail({ kind: "system", to: "new.person@york-press.com", subject: "Invite check", text });
+    expect(resend.send).toHaveBeenCalledWith(expect.objectContaining({ text }));
+    const db = await getDb();
+    const [row] = await db.select().from(schema.emailLog).where(eq(schema.emailLog.subject, "Invite check"));
+    expect(row.body).toBe("Set your password here:\nhttps://hiring.test/invite/[hidden]\n");
+  });
+
+  it("hides every invitation link in a text", () => {
+    expect(hideAuthLinks("a /invite/AAA b /invite/b-c_d")).toBe("a /invite/[hidden] b /invite/[hidden]");
+    expect(hideAuthLinks("no links here")).toBe("no links here");
   });
 });
 
