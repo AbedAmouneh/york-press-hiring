@@ -716,7 +716,10 @@ export async function applyRevealResults(results: RevealResult[], isMock = false
     const success = r.status === "success";
     if (success) credits++;
     await db.update(schema.contactReveals).set({ status: r.status, receivedAt: new Date(), creditsUsed: success && !isMock ? 1 : 0 }).where(eq(schema.contactReveals.id, reveal.id));
-    if (success && (r.email || r.phone)) {
+    // A result arriving after the person opted out must not bring their contact details back.
+    const [person] = await db.select({ id: schema.candidates.id, email: schema.candidates.email, linkedinUrl: schema.candidates.linkedinUrl }).from(schema.candidates).where(eq(schema.candidates.id, reveal.candidateId));
+    const optedOut = !!person && (await isSuppressed({ ...person, email: person.email ?? r.email }));
+    if (success && !optedOut && (r.email || r.phone)) {
       await db.update(schema.candidates).set({
         email: r.email?.toLowerCase() ?? null,
         phone: r.phone,
