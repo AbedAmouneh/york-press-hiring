@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { setMonitoringUser } from "./lib/monitoring";
 import { useQuery } from "@tanstack/react-query";
 import { call, rpc } from "./lib/rpc";
-import { can, homeFor, useMe } from "./lib/auth";
+import { can, homeFor, nextPath, useMe } from "./lib/auth";
 import type { Me } from "./lib/types";
 import type { Role } from "../shared/types";
 import { AppShell } from "./components/AppShell";
@@ -60,7 +60,8 @@ export default function App() {
   if (user.twoFactorSetupRequired) return <TwoFactorSetup />;
   return (
     <Routes>
-      <Route path="/login" element={<Navigate to={homeFor(user)} replace />} />
+      {/* Signed in from a link: go where the link pointed, not Home. */}
+      <Route path="/login" element={<Navigate to={nextPath(location.search) ?? homeFor(user)} replace />} />
       <Route element={<AppShell me={user} />}>
         <Route path="/" element={<Home />} />
         <Route path="/approvals" element={<Only user={user} roles={["ceo"]}><Requests scope="approvals" /></Only>} />
