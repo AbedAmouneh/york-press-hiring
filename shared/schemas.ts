@@ -133,14 +133,13 @@ export const CV_TYPES = [
   "application/pdf",
   "text/plain",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/msword",
 ] as const;
 
 /** Rules for an uploaded CV, shared by the apply page and the API. */
 export function cvProblem(file: { size: number; type: string } | null | undefined): string | null {
   if (!file) return "Please attach your CV.";
   if (file.size > CV_MAX_BYTES) return "The CV must be smaller than 4 MB.";
-  if (!(CV_TYPES as readonly string[]).includes(file.type)) return "Please upload a PDF, Word or text file.";
+  if (!(CV_TYPES as readonly string[]).includes(file.type)) return "Please upload a PDF, Word (.docx) or text file.";
   return null;
 }
 
