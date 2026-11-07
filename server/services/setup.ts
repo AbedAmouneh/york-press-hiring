@@ -8,8 +8,6 @@ import { getSettings } from "./settings.js";
 import { sendEmail } from "./email.js";
 import type { Role } from "../../shared/types.js";
 
-export const DEMO_PASSWORD = "demo-york-2026";
-
 export async function userCount() {
   const db = await getDb();
   const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.users);
@@ -100,7 +98,9 @@ export async function runSetup(input: {
 
 export async function seedDemoUsers() {
   const db = await getDb();
-  const hash = await hashPassword(DEMO_PASSWORD);
+  // A public deployment without DEMO_PASSWORD has no usable demo password: leave the accounts as they are (they can't sign in).
+  if (!env.demoPassword) return;
+  const hash = await hashPassword(env.demoPassword);
   const demo: { email: string; name: string; roles: Role[]; department: string }[] = [
     { email: "demo.manager@york-press.test", name: "Demo Manager", roles: ["manager", "hm"], department: "Product & Technology" },
     { email: "demo.ceo@york-press.test", name: "Demo CEO", roles: ["ceo"], department: "Leadership" },

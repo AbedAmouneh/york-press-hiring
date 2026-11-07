@@ -57,8 +57,8 @@ export async function currentUser(c: Context): Promise<SessionUser | null> {
   return user && canSignIn(user) ? user : null;
 }
 
-/** Switched-off accounts can't sign in, and demo accounts only work while DEMO_MODE is on. */
-export const canSignIn = (u: { active: boolean; isDemo: boolean }) => u.active && (!u.isDemo || env.demoMode);
+/** Switched-off accounts can't sign in. Demo accounts only work while DEMO_MODE is on and a demo password is usable here. */
+export const canSignIn = (u: { active: boolean; isDemo: boolean }) => u.active && (!u.isDemo || (env.demoMode && !!env.demoPassword));
 
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   const user = await currentUser(c);
