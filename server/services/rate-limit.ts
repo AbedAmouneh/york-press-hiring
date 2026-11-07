@@ -35,6 +35,28 @@ export async function assertWithinLimits(limits: Limit[], message = "Too many at
   }
 }
 
+/**
+ * Counts this attempt first, then checks the limits including it, so attempts sent at the same moment can't all
+ * slip past a check that hasn't seen the others yet. Throws 429 when over. Returns the attempt's rows, which a
+ * caller that only counts failures releases on success.
+ */
+export async function admit(limits: Limit[], message = "Too many attempts. Please wait a few minutes and try again.") {
+  const db = await getDb();
+  const rows = await db.insert(schema.rateLimitHits).values(limits.map((l) => ({ key: l.key }))).returning({ id: schema.rateLimitHits.id });
+  const ids = rows.map((r) => r.id);
+  for (const l of limits) {
+    if ((await hits(l)) > l.max) throw new HTTPException(429, { message });
+  }
+  return ids;
+}
+
+/** Forget one admitted attempt (it succeeded, and only failures count). */
+export async function release(ids: number[]) {
+  if (!ids.length) return;
+  const db = await getDb();
+  await db.delete(schema.rateLimitHits).where(inArray(schema.rateLimitHits.id, ids));
+}
+
 /** Count one attempt against each limit. */
 export async function recordHit(limits: Limit[]) {
   const db = await getDb();
