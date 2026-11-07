@@ -184,6 +184,14 @@ const hm = client();
 await hm("POST", "/auth/login", { email: "demo.manager@york-press.test", password: "demo-york-2026" });
 await hm("PATCH", `/role-candidates/${candidates[0].id}`, { hmDecision: "yes", hmComment: "Interview" });
 ok(true, "hiring manager recorded a decision");
+{
+  // The same person is also on a role the manager can't open: its title, status and score stay hidden from them.
+  const { getDb: db0, schema: s0 } = await import("../server/db/client.js");
+  const shared = await admin("GET", `/role-candidates/${candidates[0].id}`);
+  await (await db0()).insert(s0.roleCandidates).values({ requestId: commentReq, candidateId: shared.candidate.id, score: 77 });
+  ok((await admin("GET", `/role-candidates/${candidates[0].id}`)).otherRoles.some((o: any) => o.id === commentReq), "staff see every role a candidate is on");
+  ok(!(await hm("GET", `/role-candidates/${candidates[0].id}`)).otherRoles.some((o: any) => o.id === commentReq), "a hiring manager doesn't see other roles they can't open");
+}
 ok((await hm.raw("PATCH", `/role-candidates/${candidates[0].id}`, { status: "hired" })).status === 403, "a hiring manager can't set a candidate's status");
 ok((await hm.raw("PATCH", `/role-candidates/${candidates[0].id}`, {})).status === 400, "an empty change is refused");
 const weekly = await admin("POST", `/requests/${id}/runs`);
