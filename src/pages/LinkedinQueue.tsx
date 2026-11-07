@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, ExternalLink, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { call, rpc } from "@/lib/rpc";
+import { LoadMore, usePaged } from "@/lib/paged";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import type { OutreachMessage as Msg } from "@/lib/types";
@@ -53,11 +54,16 @@ function MessageCard({ m, onDone }: { m: Msg; onDone: () => void }) {
 
 export default function LinkedinQueue() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["outreach", "linkedin"], queryFn: () => call(rpc.outreach.$get({ query: { channel: "linkedin", status: "awaiting_approval,approved" } })) });
-  const sent = useQuery({ queryKey: ["outreach", "linkedin-sent"], queryFn: () => call(rpc.outreach.$get({ query: { channel: "linkedin", status: "sent" } })) });
-  const msgs = q.data?.messages ?? [];
-  const approved = msgs.filter((m) => m.status === "approved");
-  const waiting = msgs.filter((m) => m.status === "awaiting_approval");
+  // Each section pages on its own; the counts in the headings are the real totals.
+  const list = (status: "approved" | "awaiting_approval" | "sent", limit: string) => (before: string | undefined) =>
+    call(rpc.outreach.$get({ query: { channel: "linkedin", status, limit, ...(before ? { before } : {}) } }));
+  const approvedQ = usePaged(["outreach", "linkedin", "approved"], list("approved", "200"), (p) => p.messages);
+  const waitingQ = usePaged(["outreach", "linkedin", "waiting"], list("awaiting_approval", "200"), (p) => p.messages);
+  const sent = usePaged(["outreach", "linkedin", "sent"], list("sent", "50"), (p) => p.messages);
+  const q = { isLoading: approvedQ.isLoading || waitingQ.isLoading };
+  const approved = approvedQ.rows;
+  const waiting = waitingQ.rows;
+  const more = (p: typeof sent) => <LoadMore shown={p.rows.length} total={p.total} hasMore={p.hasNextPage} loading={p.isFetchingNextPage} onMore={() => p.fetchNextPage()} />;
   const refresh = () => qc.invalidateQueries({ queryKey: ["outreach"] });
 
   return (
@@ -70,19 +76,22 @@ export default function LinkedinQueue() {
       {q.isLoading ? <Spinner /> : (
         <div className="grid gap-8">
           <section>
-            <h2 className="mb-3 text-sm font-semibold">Approved — ready to send <span className="num font-normal text-muted-foreground">{approved.length}</span></h2>
+            <h2 className="mb-3 text-sm font-semibold">Approved — ready to send <span className="num font-normal text-muted-foreground">{approvedQ.total}</span></h2>
             {approved.length ? <div className="grid gap-3">{approved.map((m) => <MessageCard key={m.id} m={m} onDone={refresh} />)}</div> : <EmptyState title="Nothing approved yet" />}
+            {more(approvedQ)}
           </section>
           <section>
-            <h2 className="mb-3 text-sm font-semibold">Needs your approval <span className="num font-normal text-muted-foreground">{waiting.length}</span></h2>
+            <h2 className="mb-3 text-sm font-semibold">Needs your approval <span className="num font-normal text-muted-foreground">{waitingQ.total}</span></h2>
             {waiting.length ? <div className="grid gap-3">{waiting.map((m) => <MessageCard key={m.id} m={m} onDone={refresh} />)}</div> : <EmptyState title="All caught up" />}
+            {more(waitingQ)}
           </section>
-          {!!sent.data?.messages.length && (
+          {!!sent.rows.length && (
             <section>
-              <h2 className="mb-3 text-sm font-semibold">Sent <span className="num font-normal text-muted-foreground">{sent.data.messages.length}</span></h2>
+              <h2 className="mb-3 text-sm font-semibold">Sent <span className="num font-normal text-muted-foreground">{sent.total}</span></h2>
               <ul className="grid gap-1 text-sm">
-                {sent.data.messages.map((m) => <li key={m.id}><Link to={`/roles/${m.requestId}`} className="hover:underline">{m.candidateName}</Link> <span className="text-muted-foreground">· {m.roleTitle}</span></li>)}
+                {sent.rows.map((m) => <li key={m.id}><Link to={`/roles/${m.requestId}`} className="hover:underline">{m.candidateName}</Link> <span className="text-muted-foreground">· {m.roleTitle}</span></li>)}
               </ul>
+              {more(sent)}
             </section>
           )}
         </div>
