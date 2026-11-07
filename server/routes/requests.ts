@@ -271,7 +271,15 @@ export const requestRoutes = new Hono<AppEnv>()
     const db = await getDb();
     const runs = await db.select().from(schema.sourcingRuns).where(eq(schema.sourcingRuns.requestId, r.id)).orderBy(desc(schema.sourcingRuns.createdAt));
     // Older runs may hold an error that echoed an API key: hide it on the way out too.
-    return c.json({ runs: runs.map((run) => ({ ...run, error: run.error && redactSecrets(run.error), state: redactDeep(run.state) })) });
+    // The page polls this every few seconds during a run, so send only what it shows: not the run's
+    // internal bookkeeping (candidate id lists, batch ids).
+    return c.json({
+      runs: runs.map(({ state, ...run }) => ({
+        ...run,
+        error: run.error && redactSecrets(run.error),
+        state: redactDeep({ brief: state.brief, log: state.log, progress: state.progress }),
+      })),
+    });
   })
   .patch("/requests/:id/weights", json(WeightsInput), async (c) => {
     const user = requireRole(c, "recruiter", "admin");
