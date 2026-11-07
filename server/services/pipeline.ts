@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { waitUntil } from "@vercel/functions";
 import { getDb, schema } from "../db/client.js";
 import { aiFeatures, appIsPublic, env, mock, POOL_SIZE, redactSecrets, TOP_N } from "../env.js";
@@ -126,16 +126,37 @@ async function acquire(runId: string): Promise<Run | null> {
     .set({ lockedUntil: new Date(now.getTime() + 6 * 60_000), status: "running", startedAt: sql`coalesce(${schema.sourcingRuns.startedAt}, now())` })
     .where(and(
       eq(schema.sourcingRuns.id, runId),
-      notInArray(schema.sourcingRuns.status, ["done", "failed"]),
+      notInArray(schema.sourcingRuns.status, ["done", "failed", "cancelled"]),
       or(isNull(schema.sourcingRuns.lockedUntil), lt(schema.sourcingRuns.lockedUntil, now)),
     ))
     .returning();
   return run ?? null;
 }
 
+/** Saves progress, unless closing the role cancelled the run meanwhile: a cancelled run is never brought back. */
 async function save(runId: string, patch: Partial<typeof schema.sourcingRuns.$inferInsert>) {
   const db = await getDb();
-  await db.update(schema.sourcingRuns).set(patch).where(eq(schema.sourcingRuns.id, runId));
+  await db.update(schema.sourcingRuns).set(patch).where(and(eq(schema.sourcingRuns.id, runId), ne(schema.sourcingRuns.status, "cancelled")));
+}
+
+/** False once the run was cancelled or its role is no longer open (closed while the run was going). */
+async function stillWanted(runId: string, requestId: string) {
+  const db = await getDb();
+  const [row] = await db
+    .select({ run: schema.sourcingRuns.status, role: schema.roleRequests.status })
+    .from(schema.sourcingRuns)
+    .innerJoin(schema.roleRequests, eq(schema.roleRequests.id, schema.sourcingRuns.requestId))
+    .where(and(eq(schema.sourcingRuns.id, runId), eq(schema.roleRequests.id, requestId)));
+  return !!row && row.run !== "cancelled" && ["sourcing", "open"].includes(row.role);
+}
+
+/** Stops a run for good (the role was closed). */
+export async function cancelRuns(requestId: string) {
+  const db = await getDb();
+  await db
+    .update(schema.sourcingRuns)
+    .set({ status: "cancelled", lockedUntil: null, finishedAt: new Date() })
+    .where(and(eq(schema.sourcingRuns.requestId, requestId), inArray(schema.sourcingRuns.status, ["queued", "running", "waiting"])));
 }
 
 function log(state: RunState, msg: string) {
@@ -151,7 +172,7 @@ export type RunOutcome = "ran" | "busy" | "skipped";
 async function whyNotAcquired(runId: string): Promise<RunOutcome> {
   const db = await getDb();
   const [r] = await db.select({ status: schema.sourcingRuns.status, lockedUntil: schema.sourcingRuns.lockedUntil }).from(schema.sourcingRuns).where(eq(schema.sourcingRuns.id, runId));
-  return r && !["done", "failed"].includes(r.status) && r.lockedUntil && r.lockedUntil > new Date() ? "busy" : "skipped";
+  return r && !["done", "failed", "cancelled"].includes(r.status) && r.lockedUntil && r.lockedUntil > new Date() ? "busy" : "skipped";
 }
 
 export async function runPipeline(runId: string): Promise<RunOutcome> {
@@ -168,6 +189,11 @@ export async function runPipeline(runId: string): Promise<RunOutcome> {
   };
   try {
     while (step !== "done") {
+      // Checked before every step, so closing the role stops paid calls, contact lookups and outreach.
+      if (!(await stillWanted(runId, request.id))) {
+        await cancelRuns(request.id);
+        return "ran";
+      }
       if (Date.now() > deadline) {
         await save(runId, { step, state, ...counters, lockedUntil: null, status: "queued" });
         continueLater(runId);
@@ -194,9 +220,8 @@ export async function runPipeline(runId: string): Promise<RunOutcome> {
     captureError(e, { tags: { area: "pipeline", step, kind: run.kind }, extra: { runId, requestId: run.requestId } });
     log(state, `Failed at step "${step}": ${message}`);
     await save(runId, { step, state, ...counters, status: "failed", error: message, lockedUntil: null, finishedAt: new Date() });
-    if (request.status === "sourcing") {
-      await db.update(schema.roleRequests).set({ status: "open" }).where(eq(schema.roleRequests.id, request.id));
-    }
+    // Only a role that is still sourcing becomes open again (never one closed meanwhile).
+    await db.update(schema.roleRequests).set({ status: "open" }).where(and(eq(schema.roleRequests.id, request.id), eq(schema.roleRequests.status, "sourcing")));
     await notifyRoles(["recruiter"], { type: "run_failed", title: `Sourcing failed for ${request.title}`, link: `/roles/${request.id}`, emailBody: `The sourcing run stopped at "${step}": ${message}\nYou can re-run it from the role page.` });
   }
   return "ran";
@@ -827,9 +852,8 @@ async function finish(run: Run, request: Request, state: RunState, counters: Rec
   counters.signalhireCredits = Math.max(counters.signalhireCredits ?? 0, await creditsSpentOnRun(run.id));
   log(state, "Run finished.");
   await save(run.id, { step: "done", state, ...counters, status: "done", lockedUntil: null, finishedAt: new Date() });
-  if (request.status === "sourcing" || request.status === "open") {
-    await db.update(schema.roleRequests).set({ status: "open", updatedAt: new Date() }).where(eq(schema.roleRequests.id, request.id));
-  }
+  // Conditional on the current status, not this run's copy: a role closed while the run finished stays closed.
+  await db.update(schema.roleRequests).set({ status: "open", updatedAt: new Date() }).where(and(eq(schema.roleRequests.id, request.id), inArray(schema.roleRequests.status, ["sourcing", "open"])));
   const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.roleCandidates).where(eq(schema.roleCandidates.requestId, request.id));
   if (run.kind === "initial") {
     await notifyRoles(["recruiter", "ceo"], {
