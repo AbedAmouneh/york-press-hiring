@@ -155,14 +155,28 @@ export const publicRoutes = new Hono()
     const limits = INVITE_LIMITS(clientIp(c));
     await assertWithinLimits(limits);
     const db = await getDb();
-    const [u] = await db.select().from(schema.users).where(and(eq(schema.users.inviteToken, c.req.param("token")), gt(schema.users.inviteExpiresAt, new Date())));
-    if (!u) {
+    const hash = await hashPassword(password);
+    // Consume the token in the same statement that checks it, so two redemptions at once can't both win, and a
+    // switched-off account can't be brought back with an old link.
+    const [u] = await db
+      .update(schema.users)
+      .set({ passwordHash: hash, inviteToken: null, inviteExpiresAt: null, mustChangePassword: false })
+      .where(and(eq(schema.users.inviteToken, c.req.param("token")), gt(schema.users.inviteExpiresAt, new Date()), eq(schema.users.active, true)))
+      .returning();
+    if (!u || !canSignIn(u)) {
       await recordHit(limits);
       throw new HTTPException(404, { message: "This invite link is invalid or has expired." });
     }
-    await db.update(schema.users).set({ passwordHash: await hashPassword(password), inviteToken: null, inviteExpiresAt: null, lastLoginAt: new Date() }).where(eq(schema.users.id, u.id));
+    // A new password signs out everywhere else, as a password reset should.
+    await db.delete(schema.sessions).where(eq(schema.sessions.userId, u.id));
+    if (u.totpEnabledAt) {
+      // An account that already has two-step login still needs its code.
+      setMfaChallenge(c, createChallenge(u.id));
+      return c.json({ ok: true, mfaRequired: true as const });
+    }
+    await db.update(schema.users).set({ lastLoginAt: new Date() }).where(eq(schema.users.id, u.id));
     await createSession(c, u.id);
-    return c.json({ ok: true });
+    return c.json({ ok: true, mfaRequired: false as const });
   })
   // ---------------------------------------------------------------- candidate apply page
   .get("/public/apply/:token", async (c) => {
