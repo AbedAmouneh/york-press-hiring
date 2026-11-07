@@ -7,7 +7,7 @@ import { hasRole, randomToken, requireRole, type AppEnv, type SessionUser } from
 import { CRITERIA, type Weights } from "../../shared/types.js";
 import { DecisionInput, MessageInput, rangeProblems, RequestInput, RequestPatch, submitProblems, WeightsInput, type Problem } from "../../shared/schemas.js";
 import { canDeleteMessage, MESSAGE_DELETE_MINUTES } from "../../shared/messages.js";
-import { canViewRequest, isStaff, loadRequest } from "./access.js";
+import { canViewRequest, isStaff, loadRequest, visibleRequests } from "./access.js";
 import { notifyRoles, notifyUsers, usersWithRoles } from "../services/notify.js";
 import { assertWithinLimits, MESSAGE_LIMITS, recordHit } from "../services/rate-limit.js";
 import { decisionNotice } from "../services/decision-notice.js";
@@ -106,7 +106,7 @@ export const requestRoutes = new Hono<AppEnv>()
     const db = await getDb();
     const { scope } = c.req.valid("query");
     const t = schema.roleRequests;
-    let where = isStaff(user) ? undefined : or(eq(t.requesterId, user.id), eq(t.hiringManagerId, user.id));
+    let where = visibleRequests(user);
     if (scope === "mine") where = eq(t.requesterId, user.id);
     // Approvals are the CEO's queue; anyone else only sees their own requests waiting there.
     if (scope === "approvals") where = isStaff(user) ? eq(t.status, "submitted") : and(eq(t.status, "submitted"), or(eq(t.requesterId, user.id), eq(t.hiringManagerId, user.id)));
