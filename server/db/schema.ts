@@ -387,7 +387,7 @@ export const applications = pgTable("applications", {
   cvBlobPath: text("cv_blob_path"),
   cvBase64: text("cv_base64"),
   score: integer("score"),
-  analysis: jsonb("analysis").$type<{ why?: string; gaps?: string; breakdown?: ScoreBreakdown }>(),
+  analysis: jsonb("analysis").$type<{ why?: string; gaps?: string; breakdown?: ScoreBreakdown; error?: string }>(),
   createdAt: createdAt(),
 });
 
