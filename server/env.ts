@@ -3,6 +3,8 @@
 const v = (k: string) => (process.env[k] ?? "").trim();
 /** API keys never contain whitespace; a key pasted across two lines in Vercel would otherwise break every request. */
 const key = (k: string) => v(k).replace(/\s+/g, "");
+/** Demo accounts' password for local runs, tests and previews. Public, so never accepted on a public deployment. */
+export const PUBLIC_DEMO_PASSWORD = "demo-york-2026";
 
 export const env = {
   get databaseUrl() { return v("DATABASE_URL") || v("POSTGRES_URL"); },
@@ -43,6 +45,14 @@ export const env = {
   get resendKey() { return key("RESEND_API_KEY"); },
   get emailFrom() { return v("EMAIL_FROM") || "York Press Careers <careers@york-press.com>"; },
   get demoMode() { return v("DEMO_MODE").toLowerCase() === "true"; },
+  /**
+   * True where the built-in demo password (it's in this public repo) may be used and shown on the sign-in page:
+   * locally, in tests and on pull-request previews. A public deployment (Vercel production, e.g. the demo site,
+   * which can hold real data) needs DEMO_PASSWORD instead and never shows it.
+   */
+  get demoPasswordIsPublic() { return !v("DEMO_PASSWORD") && (!v("VERCEL") || v("VERCEL_ENV") === "preview"); },
+  /** The demo accounts' password, or "" when demo accounts can't be used (public deployment without DEMO_PASSWORD). */
+  get demoPassword() { return v("DEMO_PASSWORD") || (env.demoPasswordIsPublic ? PUBLIC_DEMO_PASSWORD : ""); },
   get onVercel() { return !!v("VERCEL"); },
   get vercelEnv() { return v("VERCEL_ENV"); }, // production | preview | development
   get isPreview() { return v("VERCEL_ENV") === "preview"; },
