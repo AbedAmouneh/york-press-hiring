@@ -327,6 +327,14 @@ ok(step2.user.email === abed.email && step2.recoveryCodesLeft === 7, "a recovery
 const third = client();
 await third("POST", "/auth/login", abed);
 ok((await third.raw("POST", "/auth/mfa", { code: recoveryCodes[0] })).status === 401, "the same recovery code can't be used twice");
+{
+  // Two sign-ins racing with the same recovery code: only one gets in.
+  const [a, b] = [client(), client()];
+  await a("POST", "/auth/login", abed);
+  await b("POST", "/auth/login", abed);
+  const both = await Promise.all([a.raw("POST", "/auth/mfa", { code: recoveryCodes[1] }), b.raw("POST", "/auth/mfa", { code: recoveryCodes[1] })]);
+  ok(both.filter((r) => r.status === 200).length === 1, "a recovery code used twice at the same moment works once");
+}
 ok((await client().raw("POST", "/auth/mfa", { code: currentCode(enrol.secret) })).status === 401, "the second step needs the password step first");
 
 // ---------------------------------------------------------------- adding users by hand
