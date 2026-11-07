@@ -16,6 +16,7 @@ import { toReq } from "../services/mappers.js";
 import { notifyRoles } from "../services/notify.js";
 import { normalizeLinkedin } from "../services/providers/types.js";
 import { saveCv } from "../services/cv-store.js";
+import { readUnsubscribeToken, suppress } from "../services/suppression.js";
 import { verifyQueueRequest } from "../services/queue.js";
 import { z } from "zod";
 import { form, json } from "../validate.js";
@@ -31,6 +32,14 @@ const ApplyForm = z.object({
   consent: z.string().optional(),
   cv: z.instanceof(File, { error: "Please attach your CV." }),
 });
+
+/** A tiny page for the unsubscribe link: a message, or the confirm button. No scripts, no outside resources. */
+function unsubscribePage(message: string | null) {
+  const body = message
+    ? `<p>${message}</p>`
+    : `<p>Stop all emails from York Press and delete the contact details we hold about you?</p><form method="post"><button type="submit">Yes, stop and delete</button></form>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>York Press</title></head><body><h1>York Press</h1>${body}</body></html>`;
+}
 
 // A bcrypt hash of a random secret, compared against when the email doesn't exist.
 let dummyHash: Promise<string> | null = null;
@@ -214,13 +223,17 @@ export const publicRoutes = new Hono()
     await notifyRoles(["recruiter"], { type: "application", title: `New CV for ${r.title}: ${name}`, link: `/roles/${r.id}?tab=applications` }, [r.hiringManagerId]);
     return c.json({ ok: true });
   })
-  .get("/public/unsubscribe/:candidateId", async (c) => {
-    const db = await getDb();
-    const [cand] = await db.select().from(schema.candidates).where(eq(schema.candidates.id, c.req.param("candidateId")));
-    if (cand) {
-      await db.insert(schema.suppressionList).values({ candidateId: cand.id, email: cand.email, linkedinUrl: cand.linkedinUrl, reason: "opted_out" });
-    }
-    return c.text("You won't hear from York Press about this again. Your contact details will be deleted.");
+  // The link in every outreach email. Opening it only shows a button: link scanners open links, they don't press
+  // buttons. Mail clients' one-click unsubscribe (List-Unsubscribe-Post) and the button both POST.
+  .get("/public/unsubscribe/:token", (c) => {
+    if (!readUnsubscribeToken(c.req.param("token"))) return c.html(unsubscribePage("This link isn't valid. Reply to the email and we'll remove you by hand."), 404);
+    return c.html(unsubscribePage(null));
+  })
+  .post("/public/unsubscribe/:token", async (c) => {
+    const candidateId = readUnsubscribeToken(c.req.param("token"));
+    if (!candidateId) return c.html(unsubscribePage("This link isn't valid. Reply to the email and we'll remove you by hand."), 404);
+    await suppress({ candidateId, reason: "opted_out" });
+    return c.html(unsubscribePage("Done. You won't hear from York Press again, and we've deleted your contact details."));
   })
   // ---------------------------------------------------------------- SignalHire webhook
   .post("/webhooks/signalhire/:secret", async (c) => {
