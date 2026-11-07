@@ -4,7 +4,7 @@ import { and, asc, desc, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm
 import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, randomToken, requireRole, type AppEnv, type SessionUser } from "../auth.js";
-import { CRITERIA, type Weights } from "../../shared/types.js";
+import type { Weights } from "../../shared/types.js";
 import { DecisionInput, MessageInput, rangeProblems, RequestInput, RequestPatch, submitProblems, WeightsInput, type Problem } from "../../shared/schemas.js";
 import { canDeleteMessage, MESSAGE_DELETE_MINUTES } from "../../shared/messages.js";
 import { canViewRequest, isStaff, loadRequest, visibleRequests } from "./access.js";
@@ -12,6 +12,8 @@ import { notifyRoles, notifyUsers, usersWithRoles } from "../services/notify.js"
 import { admit, MESSAGE_LIMITS } from "../services/rate-limit.js";
 import { decisionNotice } from "../services/decision-notice.js";
 import { cancelRuns, startRun } from "../services/pipeline.js";
+import { getSettings, weightsFor } from "../services/settings.js";
+import { scoreFractions, scoreWithWeights, type Fractions } from "../services/claude.js";
 import { json, query } from "../validate.js";
 import { redactDeep, redactSecrets } from "../env.js";
 
@@ -276,26 +278,31 @@ export const requestRoutes = new Hono<AppEnv>()
     const r = await loadRequest(c.req.param("id"), user);
     const weights: Weights = c.req.valid("json");
     const db = await getDb();
-    await db.update(schema.roleRequests).set({ scorecardWeights: weights }).where(eq(schema.roleRequests.id, r.id));
-    // Re-score everyone with the new weights by re-weighting their stored breakdown proportionally.
-    const rcs = await db.select().from(schema.roleCandidates).where(eq(schema.roleCandidates.requestId, r.id));
-    const old = r.scorecardWeights;
-    for (const rc of rcs) {
-      if (!rc.scoreBreakdown) continue;
-      let sum = 0;
-      for (const k of CRITERIA) {
-        const prevMax = old?.[k.key] ?? k.weight;
-        const frac = prevMax ? (rc.scoreBreakdown[k.key] ?? 0) / prevMax : 0;
-        sum += frac * weights[k.key];
+    // The weights the stored scores were made with: the role's own, else (older roles) today's defaults.
+    const old = r.scorecardWeights ?? weightsFor(r, await getSettings());
+    await db.transaction(async (tx) => {
+      await tx.update(schema.roleRequests).set({ scorecardWeights: weights }).where(eq(schema.roleRequests.id, r.id));
+      const rcs = await tx.select().from(schema.roleCandidates).where(eq(schema.roleCandidates.requestId, r.id));
+      for (const rc of rcs) {
+        if (!rc.scoreBreakdown) continue;
+        // Scores keep each criterion's unrounded share, so changing weights and back gives the same scores.
+        const fractions = { ...scoreFractions(rc.scoreBreakdown, old), ...(rc.scoreFractions ?? {}) } as Fractions;
+        const { breakdown, score } = scoreWithWeights(fractions, weights, rc.dealBreakerMissing);
+        await tx.update(schema.roleCandidates).set({ score, scoreBreakdown: breakdown, scoreFractions: fractions }).where(eq(schema.roleCandidates.id, rc.id));
       }
-      const score = rc.dealBreakerMissing ? Math.min(40, Math.round(sum)) : Math.round(sum);
-      const breakdown = Object.fromEntries(CRITERIA.map((k) => [k.key, Math.round(((rc.scoreBreakdown![k.key] ?? 0) / ((old?.[k.key] ?? k.weight) || 1)) * weights[k.key])]));
-      await db.update(schema.roleCandidates).set({ score, scoreBreakdown: breakdown }).where(eq(schema.roleCandidates.id, rc.id));
-    }
-    const ranked = await db.select({ id: schema.roleCandidates.id }).from(schema.roleCandidates).where(eq(schema.roleCandidates.requestId, r.id)).orderBy(desc(schema.roleCandidates.score));
-    for (let i = 0; i < ranked.length; i++) {
-      await db.update(schema.roleCandidates).set({ rank: i + 1, isTop10: i < 10 }).where(eq(schema.roleCandidates.id, ranked[i].id));
-    }
+      // Only scored people are ranked; anyone without a score has no rank and is never in the Top 10.
+      const ranked = await tx
+        .select({ id: schema.roleCandidates.id, score: schema.roleCandidates.score })
+        .from(schema.roleCandidates)
+        .where(eq(schema.roleCandidates.requestId, r.id))
+        .orderBy(sql`${schema.roleCandidates.score} desc nulls last`, desc(schema.roleCandidates.prescore), asc(schema.roleCandidates.id));
+      let rank = 0;
+      for (const row of ranked) {
+        const scored = row.score != null;
+        if (scored) rank++;
+        await tx.update(schema.roleCandidates).set({ rank: scored ? rank : null, isTop10: scored && rank <= 10 }).where(eq(schema.roleCandidates.id, row.id));
+      }
+    });
     await event(r.id, user, "Changed scorecard weights");
     return c.json({ ok: true });
   })
