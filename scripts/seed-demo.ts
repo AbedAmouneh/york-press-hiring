@@ -36,8 +36,10 @@ const manager = client();
 await manager("POST", "/auth/login", { email: "demo.manager@york-press.test", password: "demo-york-2026" });
 // Submitted requests need a hiring location (any from the starter list).
 const place = (await manager("GET", "/locations")).locations.find((l: any) => l.country === "Lebanon") ?? (await manager("GET", "/locations")).locations[0];
+// The demo hiring manager manages the designer role, so browser tests can check what a hiring manager sees.
+const hm = (await manager("GET", "/people/hiring-managers")).users.find((u: any) => u.name === "Demo Hiring Manager");
 const role = await manager("POST", "/requests?submit=true", {
-  title: "Senior Product Designer", department: "Product & Technology", seniority: "Senior", headcount: 1,
+  title: "Senior Product Designer", department: "Product & Technology", seniority: "Senior", headcount: 1, hiringManagerId: hm?.id ?? null,
   jdText: "Own the design of York-E, our digital learning platform used by schools across the region.",
   mustHaves: ["Figma", "Design systems", "User research"], niceToHaves: ["Edtech or publishing"], dealBreakers: [],
   minYears: 5, idealYears: 8, languages: ["English", "Arabic"], locationPolicy: "Remote, MENA time zones", searchLocations: ["Lebanon"],
