@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { env, mock } from "../../server/env.js";
+import { env, missingProductionSecrets, mock } from "../../server/env.js";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -80,5 +80,31 @@ describe("pull-request previews", () => {
     liveKeys();
     vi.stubEnv("VERCEL_ENV", "production");
     expect(mock).toMatchObject({ claude: false, email: false });
+  });
+});
+
+describe("production secrets", () => {
+  it("lists secrets a production deployment hasn't set", () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("SESSION_SECRET", "");
+    vi.stubEnv("INTERNAL_SECRET", "short");
+    vi.stubEnv("SIGNALHIRE_WEBHOOK_SECRET", "a-long-enough-webhook-secret");
+    expect(missingProductionSecrets()).toEqual(["SESSION_SECRET", "INTERNAL_SECRET"]);
+  });
+
+  it("asks nothing of previews and local runs", () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("SESSION_SECRET", "");
+    expect(missingProductionSecrets()).toEqual([]);
+    vi.stubEnv("VERCEL_ENV", "");
+    expect(missingProductionSecrets()).toEqual([]);
+  });
+
+  it("makes the API answer 503 instead of running on development secrets", async () => {
+    const { default: app } = await import("../../server/app.js");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("SESSION_SECRET", "");
+    const res = await app.fetch(new Request("http://localhost/api/health"));
+    expect(res.status).toBe(503);
   });
 });
