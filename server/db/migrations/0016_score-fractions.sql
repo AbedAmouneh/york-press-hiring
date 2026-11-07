@@ -1,0 +1,1 @@
+ALTER TABLE "role_candidates" ADD COLUMN "score_fractions" jsonb;
