@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { call, rpc } from "@/lib/rpc";
-import { useMe } from "@/lib/auth";
+import { nextPath, useMe } from "@/lib/auth";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Field, FormError } from "@/components/kit";
@@ -48,7 +48,7 @@ export default function Login() {
 
   async function finish() {
     await qc.invalidateQueries();
-    navigate(params.get("next") ?? "/", { replace: true });
+    navigate(nextPath(`?${params.toString()}`) ?? "/", { replace: true });
   }
 
   async function signIn(creds: { email: string; password: string }) {
