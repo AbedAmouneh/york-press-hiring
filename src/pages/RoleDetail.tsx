@@ -123,10 +123,12 @@ export default function RoleDetail() {
   const [finding, setFinding] = useState(false);
   const [deleteContacts, setDeleteContacts] = useState(false);
 
-  const req = useQuery({ queryKey: ["request", id], queryFn: () => call(rpc.requests[":id"].$get({ param: { id } })), refetchInterval: (q) => (q.state.data?.request.status === "sourcing" ? 3000 : false) });
+  // Only the small runs list is polled quickly during a run (it carries the progress). The role and its
+  // candidates refresh slowly while it works, and once more when it finishes (the effect below).
+  const req = useQuery({ queryKey: ["request", id], queryFn: () => call(rpc.requests[":id"].$get({ param: { id } })), refetchInterval: (q) => (q.state.data?.request.status === "sourcing" ? 15_000 : false) });
   const runs = useQuery({ queryKey: ["runs", id], queryFn: () => call(rpc.requests[":id"].runs.$get({ param: { id } })), refetchInterval: (q) => (q.state.data?.runs.some((r) => ["queued", "running", "waiting"].includes(r.status)) ? 3000 : false) });
   const running = runs.data?.runs.find((r) => ["queued", "running", "waiting"].includes(r.status));
-  const cands = useQuery({ queryKey: ["candidates", id], queryFn: () => call(rpc.requests[":id"].candidates.$get({ param: { id } })), refetchInterval: running ? 3000 : false });
+  const cands = useQuery({ queryKey: ["candidates", id], queryFn: () => call(rpc.requests[":id"].candidates.$get({ param: { id } })), refetchInterval: running ? 15_000 : false });
   // When the latest run changes (a new run, or one that finishes), reload the candidates and numbers once.
   // Polling stops with the run, and a quick run can finish before the page ever sees it running.
   const latest = runs.data?.runs[0];
