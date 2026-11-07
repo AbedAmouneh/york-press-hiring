@@ -223,6 +223,44 @@ export const requestRoutes = new Hono<AppEnv>()
     await notifyKhalil(r.id, r.title, r.department, user.name);
     return c.json({ ok: true });
   })
+  /** The requester takes a request back before the CEO decides; it becomes a draft they can edit or delete. */
+  .post("/requests/:id/withdraw", async (c) => {
+    const user = c.get("user");
+    const r = await loadRequest(c.req.param("id"), user);
+    if (r.requesterId !== user.id && !hasRole(user, "admin", "recruiter")) throw new HTTPException(403, { message: "Only the requester can withdraw this request." });
+    const db = await getDb();
+    const moved = await db.update(schema.roleRequests).set({ status: "draft", updatedAt: new Date() })
+      .where(and(eq(schema.roleRequests.id, r.id), inArray(schema.roleRequests.status, ["submitted", "changes_requested"])))
+      .returning({ id: schema.roleRequests.id });
+    if (!moved.length) throw new HTTPException(400, { message: "Only a request waiting for a decision can be withdrawn." });
+    await event(r.id, user, "Withdrew the request");
+    if (r.status === "submitted") {
+      await notifyRoles(["ceo"], { type: "decision", title: `${user.name} withdrew ${r.title}`, link: `/requests/${r.id}`, emailBody: `${user.name} withdrew the request for ${r.title}. Nothing is waiting for you on it.` });
+    }
+    return c.json({ ok: true });
+  })
+  /** A draft that was never approved can be deleted by its requester (or a recruiter/admin). */
+  .delete("/requests/:id", async (c) => {
+    const user = c.get("user");
+    const r = await loadRequest(c.req.param("id"), user);
+    if (r.requesterId !== user.id && !hasRole(user, "admin", "recruiter")) throw new HTTPException(403, { message: "Only the requester can delete this draft." });
+    if (r.status !== "draft") throw new HTTPException(400, { message: "Only drafts can be deleted. Withdraw the request first, or close the role." });
+    const db = await getDb();
+    await db.delete(schema.roleRequests).where(and(eq(schema.roleRequests.id, r.id), eq(schema.roleRequests.status, "draft")));
+    return c.json({ ok: true });
+  })
+  /** A role closed by mistake opens again; nothing is searched or sent until someone presses Refresh. */
+  .post("/requests/:id/reopen", async (c) => {
+    const user = requireRole(c, "recruiter", "admin");
+    const r = await loadRequest(c.req.param("id"), user);
+    const db = await getDb();
+    const moved = await db.update(schema.roleRequests).set({ status: "open", closedAt: null, updatedAt: new Date() })
+      .where(and(eq(schema.roleRequests.id, r.id), eq(schema.roleRequests.status, "closed")))
+      .returning({ id: schema.roleRequests.id });
+    if (!moved.length) throw new HTTPException(400, { message: "Only a closed role can be reopened." });
+    await event(r.id, user, "Reopened the role");
+    return c.json({ ok: true });
+  })
   .post("/requests/:id/decision", json(DecisionInput), async (c) => {
     const user = requireRole(c, "ceo");
     const r = await loadRequest(c.req.param("id"), user);
