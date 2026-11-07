@@ -729,7 +729,11 @@ async function stepDeep(ctx: Ctx): Promise<StepResult> {
     for (const { rc } of part) done.add(rc.id);
     state.deepScored = [...done];
   }
-  const before = new Set(rows.filter(({ rc }) => rc.isTop10).map(({ rc }) => rc.id));
+  // The whole Top 10 before re-ranking, not only the shortlisted rows, or everyone already there counts as "moved in".
+  const before = new Set((await db
+    .select({ id: schema.roleCandidates.id })
+    .from(schema.roleCandidates)
+    .where(and(eq(schema.roleCandidates.requestId, request.id), eq(schema.roleCandidates.isTop10, true)))).map((r) => r.id));
   await rerank(ctx);
   const after = await db
     .select({ id: schema.roleCandidates.id })
