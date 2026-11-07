@@ -10,7 +10,7 @@ import { providerLabel, revealAvailable, searchProviders, skippedProviders } fro
 import type { NormalizedProfile } from "./providers/types.js";
 import { mergeProfiles, nameKey, prescore, type MergedProfile } from "./merge.js";
 import { getSettings, logUsage, updateSettings, weightsFor } from "./settings.js";
-import { signalhireBudget } from "./credit-budget.js";
+import { reserveReveals, settleReveals } from "./credit-budget.js";
 import { findLinkedinUrls, linkedinLookupAvailable } from "./linkedin-finder.js";
 import { toAI, toReq } from "./mappers.js";
 import { applyGuardrails, computeSignals, signalFacts } from "./signals.js";
@@ -64,7 +64,16 @@ export async function startRun(requestId: string, kind: "initial" | "weekly" | "
       .limit(1);
     if (!finished) kind = "initial";
   }
-  const [run] = await db.insert(schema.sourcingRuns).values({ requestId, kind, state: { log: [] } }).returning();
+  // The database allows one active run per role: if another call started one a moment ago, use that one.
+  const [run] = await db.insert(schema.sourcingRuns).values({ requestId, kind, state: { log: [] } }).onConflictDoNothing().returning();
+  if (!run) {
+    const [other] = await db
+      .select({ id: schema.sourcingRuns.id })
+      .from(schema.sourcingRuns)
+      .where(and(eq(schema.sourcingRuns.requestId, requestId), inArray(schema.sourcingRuns.status, ["queued", "running", "waiting"])))
+      .limit(1);
+    return other.id;
+  }
   if (kind === "initial") {
     await db.update(schema.roleRequests).set({ status: "sourcing", updatedAt: new Date() }).where(eq(schema.roleRequests.id, requestId));
   }
@@ -711,20 +720,23 @@ async function stepReveal({ run, request, state, counters }: Ctx) {
   const done = new Set(existing.map((e) => e.rcId));
   const wanted = targets.filter(({ rc, c }) => !done.has(rc.id) && (c.linkedinUrl || c.signalhireUid));
   if (!wanted.length) { log(state, "No contacts to reveal."); return; }
-  const budget = await signalhireBudget();
-  const todo = wanted.slice(0, budget.allowed);
-  if (todo.length < wanted.length) {
-    log(state, `This month's SignalHire limit (${budget.limit} credits) leaves room for ${todo.length} of ${wanted.length} contacts; the rest weren't looked up.`);
+  // Hold the credits first, then call SignalHire: two callers can't both spend the last credit.
+  const wantedRows = wanted.map(({ rc, c }) => ({ roleCandidateId: rc.id, candidateId: c.id, item: (c.linkedinUrl ?? c.signalhireUid)!, runId: run.id }));
+  const { rows: held, budget } = await reserveReveals(wantedRows);
+  if (held.length < wanted.length) {
+    log(state, `This month's SignalHire limit (${budget.limit} credits) leaves room for ${held.length} of ${wanted.length} contacts; the rest weren't looked up.`);
   }
-  if (!todo.length) return;
-  const items = todo.map(({ c }) => (c.linkedinUrl ?? c.signalhireUid)!);
+  if (!held.length) return;
+  const items = held.map((h) => h.item);
   const callback = appIsPublic() && !mock.signalhire ? `${env.appUrl}/api/webhooks/signalhire/${env.webhookSecret}` : null;
-  const res = await revealContacts(items, callback);
-  for (let i = 0; i < todo.length; i++) {
-    await db.insert(schema.contactReveals).values({
-      roleCandidateId: todo[i].rc.id, candidateId: todo[i].c.id, runId: run.id, item: items[i], requestId: res.requestId,
-    });
+  let res: Awaited<ReturnType<typeof revealContacts>>;
+  try {
+    res = await revealContacts(items, callback);
+  } catch (e) {
+    await settleReveals(held.map((h) => h.id), { failed: true });
+    throw e;
   }
+  await settleReveals(held.map((h) => h.id), { requestId: res.requestId });
   if (res.results) {
     const credits = await applyRevealResults(res.results, res.mock);
     counters.signalhireCredits += credits;
