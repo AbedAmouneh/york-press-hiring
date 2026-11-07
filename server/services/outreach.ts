@@ -34,6 +34,8 @@ export async function queueOutreach(requestId: string, roleCandidateIds: string[
   if (!roleCandidateIds.length) return { email: 0, linkedin: 0, skipped: 0 };
   const db = await getDb();
   const [request] = await db.select().from(schema.roleRequests).where(eq(schema.roleRequests.id, requestId));
+  // A closed role never contacts anyone, even if a run that started earlier gets here.
+  if (!request || !["sourcing", "open"].includes(request.status)) return { email: 0, linkedin: 0, skipped: roleCandidateIds.length };
   const sender = await senderForRequest(request);
   const rows = await db
     .select({ rc: schema.roleCandidates, c: schema.candidates })
