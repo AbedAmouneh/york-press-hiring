@@ -491,7 +491,8 @@ export async function webFindings(c: CandidateForAI & { fullName: string }, runI
 
 // ---------------------------------------------------------------- CV scoring (apply page)
 
-export async function scoreCv(r: Req, weights: Weights, cv: { base64: string; mime: string; fileName: string }) {
+/** `text`: the CV as plain text when it was extracted from another format (Word). */
+export async function scoreCv(r: Req, weights: Weights, cv: { base64: string; mime: string; fileName: string; text?: string }) {
   if (mock.claude) {
     const s = 55 + (cv.fileName.length % 30);
     return { score: s, breakdown: {}, why: "CV received. Sample score — mock mode.", gaps: "Review the CV manually." };
@@ -499,7 +500,7 @@ export async function scoreCv(r: Req, weights: Weights, cv: { base64: string; mi
   const doc: Anthropic.ContentBlockParam =
     cv.mime === "application/pdf"
       ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: cv.base64 } }
-      : { type: "text", text: `<cv>${Buffer.from(cv.base64, "base64").toString("utf8").slice(0, 20000)}</cv>` };
+      : { type: "text", text: `<cv>${(cv.text ?? Buffer.from(cv.base64, "base64").toString("utf8")).slice(0, 20000)}</cv>` };
   const scorecard = CRITERIA.map((c) => `- ${c.key}: 0-${weights[c.key]}`).join("\n");
   const out = await structured<{ breakdown: ScoreBreakdown; dealBreakerMissing: boolean; why: string; gaps: string }>({
     action: "cv_score",
