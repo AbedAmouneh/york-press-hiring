@@ -84,4 +84,19 @@ describe("with a live Resend key", () => {
     const [after] = await db.select().from(schema.outreachMessages).where(eq(schema.outreachMessages.id, msg.id));
     expect(after.status).toBe("sent");
   });
+
+  it("cancels a queued email to someone who opted out after it was queued", async () => {
+    vi.stubEnv("RESEND_API_KEY", "re_live");
+    const db = await getDb();
+    const [u] = await db.insert(schema.users).values({ email: "r2@york-press.test", name: "Recruiter Two", roles: ["recruiter"] }).returning();
+    const [role] = await db.insert(schema.roleRequests).values({ title: "Editor", department: "Editorial", seniority: "Senior", requesterId: u.id, status: "open", applyToken: "t-optout" }).returning();
+    const [person] = await db.insert(schema.candidates).values({ fullName: "Real Person", email: "real.person@realmail.com" }).returning();
+    const [rc] = await db.insert(schema.roleCandidates).values({ requestId: role.id, candidateId: person.id }).returning();
+    const [msg] = await db.insert(schema.outreachMessages).values({ roleCandidateId: rc.id, channel: "email", toAddress: "real.person@realmail.com", subject: "Role", body: "Hello", status: "queued" }).returning();
+    await db.insert(schema.suppressionList).values({ email: "real.person@realmail.com", reason: "opted_out" });
+    await drainEmailQueue();
+    expect(resend.send).not.toHaveBeenCalled();
+    const [after] = await db.select().from(schema.outreachMessages).where(eq(schema.outreachMessages.id, msg.id));
+    expect(after.status).toBe("cancelled");
+  });
 });
