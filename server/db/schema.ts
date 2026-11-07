@@ -120,6 +120,8 @@ export type RunState = {
   linkedinChecked?: string[];
   /** Shortlisted role candidates already scored again in the deep check, so a resumed run doesn't repeat them. */
   deepScored?: string[];
+  /** "Score again" runs: people scored before this moment are scored again with the current rules. */
+  rescoreBefore?: string;
   /** A Claude Message Batch in flight (weekly runs): chunk custom_id → role-candidate ids. */
   scoreBatch?: { id: string; submittedAt: string; chunks: Record<string, string[]> };
 };
@@ -139,7 +141,7 @@ export type SearchBrief = {
 export const sourcingRuns = pgTable("sourcing_runs", {
   id: id(),
   requestId: uuid("request_id").notNull().references(() => roleRequests.id, { onDelete: "cascade" }),
-  kind: text("kind").$type<"initial" | "weekly" | "manual">().notNull().default("initial"), // initial | weekly | manual
+  kind: text("kind").$type<"initial" | "weekly" | "manual" | "rescore">().notNull().default("initial"), // initial | weekly | manual | rescore
   status: text("status").$type<"queued" | "running" | "waiting" | "done" | "failed">().notNull().default("queued"), // queued | running | waiting | done | failed
   step: text("step").notNull().default("brief"),
   state: jsonb("state").$type<RunState>().notNull().default({ log: [] }),
