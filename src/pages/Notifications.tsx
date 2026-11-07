@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { call, rpc } from "@/lib/rpc";
+import { LoadMore, usePaged } from "@/lib/paged";
 import type { Notification } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { dayGroup } from "@/lib/dates";
@@ -13,8 +14,9 @@ import { Card } from "@/components/ui/card";
 export default function Notifications() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState("all");
-  const q = useQuery({ queryKey: ["notifications"], queryFn: () => call(rpc.notifications.$get()) });
-  const all = q.data?.notifications ?? [];
+  const q = usePaged(["notifications", "list"], (before) => call(rpc.notifications.$get({ query: before ? { before } : {} })), (p) => p.notifications);
+  const all = q.rows;
+  const unread = q.first?.unread ?? 0;
   const rows = filter === "unread" ? all.filter((n) => !n.readAt) : all;
   const groups = new Map<string, Notification[]>();
   for (const n of rows) {
@@ -26,9 +28,9 @@ export default function Notifications() {
   return (
     <>
       <PageHeader title="Notifications">
-        {!!q.data?.unread && <Button variant="outline" size="sm" onClick={() => markRead()}>Mark all read</Button>}
+        {!!unread && <Button variant="outline" size="sm" onClick={() => markRead()}>Mark all read</Button>}
       </PageHeader>
-      <FilterChips label="Filter notifications" options={[{ key: "all", label: "All", count: all.length }, { key: "unread", label: "Unread", count: q.data?.unread ?? 0 }]} value={filter} onChange={setFilter} />
+      <FilterChips label="Filter notifications" options={[{ key: "all", label: "All", count: q.total }, { key: "unread", label: "Unread", count: unread }]} value={filter} onChange={setFilter} />
       {q.isLoading ? <Spinner /> : rows.length ? (
         <div className="grid gap-6">
           {[...groups].map(([day, items]) => (
@@ -54,6 +56,7 @@ export default function Notifications() {
               </Card>
             </section>
           ))}
+          <LoadMore shown={all.length} total={q.total} hasMore={q.hasNextPage} loading={q.isFetchingNextPage} onMore={() => q.fetchNextPage()} />
         </div>
       ) : <EmptyState title={filter === "unread" ? "No unread notifications" : "No notifications yet"} />}
     </>

@@ -90,7 +90,8 @@ export function AppShell({ me }: { me: Me }) {
   const preview = useMe().data?.preview ?? false;
   const [menu, setMenu] = useState(false);
   const { pathname } = useLocation();
-  const notes = useQuery({ queryKey: ["notifications"], queryFn: () => call(rpc.notifications.$get()), refetchInterval: 30_000 });
+  // Only the unread count is shown here, so ask for the smallest page.
+  const notes = useQuery({ queryKey: ["notifications", "count"], queryFn: () => call(rpc.notifications.$get({ query: { limit: "1" } })), refetchInterval: 30_000 });
   const unread = notes.data?.unread ?? 0;
   const canRequest = can(me, "manager", "recruiter", "admin");
   return (
