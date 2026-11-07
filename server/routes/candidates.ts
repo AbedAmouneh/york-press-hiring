@@ -144,9 +144,15 @@ export const candidateRoutes = new Hono<AppEnv>()
     if (!canEditCandidates(user, request)) throw new HTTPException(403, { message: "You can view but not change candidates for this role." });
     const body = c.req.valid("json");
     const recruiter = hasRole(user, "recruiter", "admin");
-    const patch = recruiter ? body : { hmDecision: body.hmDecision, hmComment: body.hmComment };
+    const sent = Object.entries(body).filter(([, v]) => v !== undefined).map(([k]) => k);
+    // Hiring managers decide Yes/No and comment; status and dates are the recruiter's.
+    if (!recruiter && sent.some((k) => k !== "hmDecision" && k !== "hmComment")) {
+      throw new HTTPException(403, { message: "Only recruiters can change a candidate's status or dates." });
+    }
+    const patch = Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined));
+    if (!Object.keys(patch).length) throw new HTTPException(400, { message: "Nothing to change." });
     const db = await getDb();
-    await db.update(schema.roleCandidates).set(Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined))).where(eq(schema.roleCandidates.id, rc.id));
+    await db.update(schema.roleCandidates).set(patch).where(eq(schema.roleCandidates.id, rc.id));
     if (body.status === "rejected" && recruiter) {
       await db.update(schema.outreachMessages).set({ status: "cancelled" }).where(and(eq(schema.outreachMessages.roleCandidateId, rc.id), inArray(schema.outreachMessages.status, ["queued", "awaiting_approval", "approved"])));
     }
