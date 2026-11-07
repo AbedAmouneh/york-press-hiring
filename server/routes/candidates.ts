@@ -192,7 +192,24 @@ export const candidateRoutes = new Hono<AppEnv>()
       .from(schema.applications)
       .where(eq(schema.applications.requestId, r.id))
       .orderBy(desc(schema.applications.createdAt));
-    return c.json({ applications: canSeeContacts(c.get("user"), r) ? rows : rows.map((x) => ({ ...x, email: null })) });
+    const contacts = canSeeContacts(c.get("user"), r);
+    // Possible match with someone already sourced for this role (same email). Unverified: shown, never applied.
+    const emails = rows.map((x) => x.email.toLowerCase());
+    const matches = contacts && emails.length
+      ? await db
+        .select({ email: schema.candidates.email, rank: schema.roleCandidates.rank, rcId: schema.roleCandidates.id })
+        .from(schema.roleCandidates)
+        .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
+        .where(and(eq(schema.roleCandidates.requestId, r.id), inArray(schema.candidates.email, emails)))
+      : [];
+    const matchBy = new Map(matches.map((m) => [m.email?.toLowerCase(), { rank: m.rank, roleCandidateId: m.rcId }]));
+    return c.json({
+      applications: rows.map((x) => ({
+        ...x,
+        email: contacts ? x.email : null,
+        sourcedMatch: contacts ? matchBy.get(x.email.toLowerCase()) ?? null : null,
+      })),
+    });
   })
   .get("/applications/:id/cv", async (c) => {
     const db = await getDb();
