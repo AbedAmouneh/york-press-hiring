@@ -359,6 +359,7 @@ ok((await second("GET", "/notifications")).notifications.some((n: any) => n.titl
 const waiting = await second("POST", "/requests?submit=true", { title: "Still with the CEO", department: "Editorial", seniority: "Mid", locationId: lebanon.id, currency: "USD", justification: "Checking close rules." });
 ok((await second.raw("POST", `/requests/${waiting.id}/close`, { deleteContacts: false })).status === 400, "a request still waiting for the CEO can't be closed as a role");
 const { getDb, schema: tables } = await import("../server/db/client.js");
+const { eq: eqOp } = await import("drizzle-orm");
 const { runPipeline } = await import("../server/services/pipeline.js");
 const smokeDb = await getDb();
 // A run that already reached outreach when the role is closed (it would contact the Top 10 next).
@@ -371,6 +372,19 @@ ok(lateRunAfter.status === "cancelled", "closing a role stops its run for good")
 ok((await second("GET", `/requests/${id}`)).request.status === "closed", "the role stays closed");
 ok((await second("GET", "/outreach")).messages.length === messagesBefore, "a closed role's run contacts nobody");
 ok((await second("POST", `/requests/${id}/close`, { deleteContacts: false })).ok && (await second("GET", `/requests/${id}`)).events.filter((e: any) => e.action === "Closed the role").length === 1, "closing twice changes nothing");
+{
+  // One person on two open roles: closing the first with "delete contacts" keeps their details for the second.
+  const me = (await second("GET", "/auth/me")).user;
+  const openRole = async (title: string) => (await smokeDb.insert(tables.roleRequests).values({ title, department: "Editorial", seniority: "Mid", requesterId: me.id, status: "open", applyToken: `smoke-${title}` }).returning())[0];
+  const [roleA, roleB] = [await openRole("Shared A"), await openRole("Shared B")];
+  const [person] = await smokeDb.insert(tables.candidates).values({ fullName: "Shared Person", email: "shared.person@example.com", phone: "+961 1 000 000" }).returning();
+  for (const role of [roleA, roleB]) await smokeDb.insert(tables.roleCandidates).values({ requestId: role.id, candidateId: person.id });
+  const contactOf = async () => (await smokeDb.select().from(tables.candidates).where(eqOp(tables.candidates.id, person.id)))[0];
+  const firstClose = await second("POST", `/requests/${roleA.id}/close`, { deleteContacts: true });
+  ok(firstClose.keptContacts === 1 && (await contactOf()).email === "shared.person@example.com", "closing one role keeps contacts a second open role still needs");
+  await second("POST", `/requests/${roleB.id}/close`, { deleteContacts: true });
+  ok((await contactOf()).email === null, "closing the last role deletes them");
+}
 
 // ---------------------------------------------------------------- invitations and two-step login
 const adminNow = (await second("GET", "/auth/me")).user;
