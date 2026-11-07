@@ -140,3 +140,38 @@ describe("sending from several places at once", () => {
     expect(resend.send).toHaveBeenCalledWith(expect.anything(), { idempotencyKey: `outreach-${id}` });
   });
 });
+
+describe("kill switch and daily cap", () => {
+  async function queueOne(tag: string) {
+    const db = await getDb();
+    const [u] = await db.insert(schema.users).values({ email: `r-${tag}@york-press.test`, name: "Recruiter", roles: ["recruiter"] }).returning();
+    const [role] = await db.insert(schema.roleRequests).values({ title: "Editor", department: "Editorial", seniority: "Senior", requesterId: u.id, status: "open", applyToken: `t-${tag}` }).returning();
+    const [person] = await db.insert(schema.candidates).values({ fullName: `Person ${tag}`, email: `p-${tag}@realmail.com` }).returning();
+    const [rc] = await db.insert(schema.roleCandidates).values({ requestId: role.id, candidateId: person.id }).returning();
+    const [msg] = await db.insert(schema.outreachMessages).values({ roleCandidateId: rc.id, channel: "email", toAddress: person.email!, subject: "Role", body: "Hello", status: "queued" }).returning();
+    return msg.id;
+  }
+  const statusOf = async (id: string) => (await (await getDb()).select().from(schema.outreachMessages).where(eq(schema.outreachMessages.id, id)))[0].status;
+
+  it("sends nothing while automatic sending is off", async () => {
+    const { updateSettings } = await import("../../server/services/settings.js");
+    const id = await queueOne("kill");
+    await updateSettings({ autoSendEnabled: false });
+    expect(await drainEmailQueue()).toMatchObject({ sent: 0, paused: true });
+    expect(await statusOf(id)).toBe("queued");
+    await updateSettings({ autoSendEnabled: true });
+    await drainEmailQueue();
+    expect(await statusOf(id)).toBe("sent");
+  });
+
+  it("stops at the daily cap and leaves the rest queued", async () => {
+    const { updateSettings } = await import("../../server/services/settings.js");
+    const { sentTodayCount } = await import("../../server/services/outreach.js");
+    const [a, b] = [await queueOne("cap-a"), await queueOne("cap-b")];
+    await updateSettings({ autoSendEnabled: true, dailySendCap: (await sentTodayCount()) + 1 });
+    const out = await drainEmailQueue();
+    expect(out.sent).toBe(1);
+    expect([await statusOf(a), await statusOf(b)].sort()).toEqual(["queued", "sent"]);
+    await updateSettings({ dailySendCap: 500 });
+  });
+});
