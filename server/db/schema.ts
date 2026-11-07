@@ -122,6 +122,8 @@ export type RunState = {
   deepScored?: string[];
   /** "Score again" runs: people scored before this moment are scored again with the current rules. */
   rescoreBefore?: string;
+  /** What the current step is doing right now, e.g. "Scoring 20 of 50", shown on the role page while it runs. */
+  progress?: string;
   /** A Claude Message Batch in flight (weekly runs): chunk custom_id → role-candidate ids. */
   scoreBatch?: { id: string; submittedAt: string; chunks: Record<string, string[]> };
 };
