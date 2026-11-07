@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
 import { ApplyFields, cvProblem, InvitePasswordInput, LoginInput, NewPasswordInput, SetupInput, TwoFactorCodeInput } from "../../shared/schemas.js";
 import { env, mock } from "../env.js";
@@ -243,9 +243,16 @@ export const publicRoutes = new Hono()
     const linkedinUrl = normalizeLinkedin(fields.linkedin ?? "");
     // The email isn't verified, so an application is never attached to a sourced candidate and never changes
     // their status by itself: the CVs tab shows a possible match and the recruiter decides.
+    // Applying again for the same role keeps the decision already made on this email's earlier CV.
+    const [earlier] = await db
+      .select({ status: schema.applications.status, hmDecision: schema.applications.hmDecision, hmComment: schema.applications.hmComment })
+      .from(schema.applications)
+      .where(and(eq(schema.applications.requestId, r.id), eq(schema.applications.email, email)))
+      .orderBy(desc(schema.applications.createdAt))
+      .limit(1);
     const [app] = await db.insert(schema.applications).values({
       requestId: r.id, candidateId: null, name, email, linkedinUrl, note: fields.note ?? "",
-      cvFileName: file.name.slice(0, 200), cvMime: file.type, ...stored,
+      cvFileName: file.name.slice(0, 200), cvMime: file.type, ...stored, ...(earlier ?? {}),
     }).returning();
     // A failed score is saved as a visible message on the CVs tab, with a way to try again.
     await scoreApplication(app, r, bytes);
