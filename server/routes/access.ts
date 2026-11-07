@@ -1,5 +1,5 @@
 import { HTTPException } from "hono/http-exception";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, type SessionUser } from "../auth.js";
 import { needsTwoFactorSetup } from "../services/two-factor.js";
@@ -10,6 +10,12 @@ export const isStaff = (u: SessionUser) => hasRole(u, "admin", "recruiter", "ceo
 
 export function canViewRequest(u: SessionUser, r: Request) {
   return isStaff(u) || r.requesterId === u.id || r.hiringManagerId === u.id;
+}
+
+/** `canViewRequest` as a SQL condition on role_requests, for lists and joins (undefined: staff see everything). */
+export function visibleRequests(u: SessionUser) {
+  const t = schema.roleRequests;
+  return isStaff(u) ? undefined : or(eq(t.requesterId, u.id), eq(t.hiringManagerId, u.id));
 }
 
 /** Recruiter/admin/CEO, the hiring manager, and the requesting manager (read-only). */
