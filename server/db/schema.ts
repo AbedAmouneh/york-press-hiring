@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { CandidateStatus, EducationItem, ExperienceItem, HmDecision, MustHaveEvidence, OutreachStatus, RequestStatus, Role, Signals, Weights } from "../../shared/types.js";
+import type { CandidateStatus, CriterionKey, EducationItem, ExperienceItem, HmDecision, MustHaveEvidence, OutreachStatus, RequestStatus, Role, Signals, Weights } from "../../shared/types.js";
 
 const id = () => uuid("id").primaryKey().default(sql`gen_random_uuid()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -204,6 +204,8 @@ export const roleCandidates = pgTable("role_candidates", {
   prescore: real("prescore").notNull().default(0),
   score: integer("score"),
   scoreBreakdown: jsonb("score_breakdown").$type<ScoreBreakdown>(),
+  /** Each criterion's share of its maximum (0..1, unrounded), so changing the weights never drifts scores. */
+  scoreFractions: jsonb("score_fractions").$type<Partial<Record<CriterionKey, number>>>(),
   dealBreakerMissing: boolean("deal_breaker_missing").notNull().default(false),
   rank: integer("rank"),
   isTop10: boolean("is_top10").notNull().default(false),
