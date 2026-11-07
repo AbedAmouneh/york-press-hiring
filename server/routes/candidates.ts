@@ -4,7 +4,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm"
 import { getDb, schema } from "../db/client.js";
 import { json } from "../validate.js";
 import { hasRole, requireRole, type AppEnv, type SessionUser } from "../auth.js";
-import { RoleCandidatePatch } from "../../shared/schemas.js";
+import { ApplicationPatch, RoleCandidatePatch } from "../../shared/schemas.js";
 import { canEditCandidates, isStaff, loadRequest, visibleRequests } from "./access.js";
 import { appIsPublic, env, mock } from "../env.js";
 import { revealContacts } from "../services/providers/signalhire.js";
@@ -196,13 +196,22 @@ export const candidateRoutes = new Hono<AppEnv>()
         id: schema.applications.id, name: schema.applications.name, email: schema.applications.email, linkedinUrl: schema.applications.linkedinUrl,
         note: schema.applications.note, cvFileName: schema.applications.cvFileName, score: schema.applications.score,
         analysis: schema.applications.analysis, candidateId: schema.applications.candidateId, createdAt: schema.applications.createdAt,
+        status: schema.applications.status, hmDecision: schema.applications.hmDecision, hmComment: schema.applications.hmComment,
       })
       .from(schema.applications)
       .where(eq(schema.applications.requestId, r.id))
       .orderBy(desc(schema.applications.createdAt));
     const contacts = canSeeContacts(c.get("user"), r);
+    // One row per email: the newest CV, with earlier ones from the same email listed under it.
+    const groups = new Map<string, { latest: (typeof rows)[number]; earlier: { id: string; cvFileName: string; score: number | null; createdAt: Date }[] }>();
+    for (const x of rows) {
+      const key = x.email.toLowerCase();
+      const g = groups.get(key);
+      if (g) g.earlier.push({ id: x.id, cvFileName: x.cvFileName, score: x.score, createdAt: x.createdAt });
+      else groups.set(key, { latest: x, earlier: [] });
+    }
     // Possible match with someone already sourced for this role (same email). Unverified: shown, never applied.
-    const emails = rows.map((x) => x.email.toLowerCase());
+    const emails = [...groups.keys()];
     const matches = contacts && emails.length
       ? await db
         .select({ email: schema.candidates.email, rank: schema.roleCandidates.rank, rcId: schema.roleCandidates.id })
@@ -212,12 +221,32 @@ export const candidateRoutes = new Hono<AppEnv>()
       : [];
     const matchBy = new Map(matches.map((m) => [m.email?.toLowerCase(), { rank: m.rank, roleCandidateId: m.rcId }]));
     return c.json({
-      applications: rows.map((x) => ({
+      canEdit: canEditCandidates(c.get("user"), r),
+      isRecruiter: hasRole(c.get("user"), "recruiter", "admin"),
+      applications: [...groups.values()].map(({ latest: x, earlier }) => ({
         ...x,
         email: contacts ? x.email : null,
         sourcedMatch: contacts ? matchBy.get(x.email.toLowerCase()) ?? null : null,
+        earlier: contacts ? earlier : [],
       })),
     });
+  })
+  /** Status (recruiters) and Yes/Maybe/No with a comment (hiring manager) for a CV received. */
+  .patch("/applications/:id", json(ApplicationPatch), async (c) => {
+    const user = c.get("user");
+    const db = await getDb();
+    const [a] = await db.select().from(schema.applications).where(eq(schema.applications.id, c.req.param("id")));
+    if (!a) throw new HTTPException(404, { message: "CV not found." });
+    const r = await loadRequest(a.requestId, user);
+    if (!canEditCandidates(user, r)) throw new HTTPException(403, { message: "You can view but not change applicants for this role." });
+    const patch = Object.fromEntries(Object.entries(c.req.valid("json")).filter(([, v]) => v !== undefined));
+    if (!hasRole(user, "recruiter", "admin") && "status" in patch) {
+      throw new HTTPException(403, { message: "Only recruiters can change an applicant's status." });
+    }
+    if (!Object.keys(patch).length) throw new HTTPException(400, { message: "Nothing to change." });
+    // Every CV from the same email on this role shares one decision.
+    await db.update(schema.applications).set(patch).where(and(eq(schema.applications.requestId, a.requestId), eq(schema.applications.email, a.email)));
+    return c.json({ ok: true });
   })
   /** Score a CV again (e.g. after the AI service failed the first time). */
   .post("/applications/:id/score", async (c) => {
