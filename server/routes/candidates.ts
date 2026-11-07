@@ -5,7 +5,7 @@ import { getDb, schema } from "../db/client.js";
 import { json } from "../validate.js";
 import { hasRole, requireRole, type AppEnv, type SessionUser } from "../auth.js";
 import { RoleCandidatePatch } from "../../shared/schemas.js";
-import { canEditCandidates, isStaff, loadRequest } from "./access.js";
+import { canEditCandidates, isStaff, loadRequest, visibleRequests } from "./access.js";
 import { appIsPublic, env, mock } from "../env.js";
 import { revealContacts } from "../services/providers/signalhire.js";
 import { applyRevealResults } from "../services/pipeline.js";
@@ -120,7 +120,8 @@ export const candidateRoutes = new Hono<AppEnv>()
       .select({ id: schema.roleRequests.id, title: schema.roleRequests.title, status: schema.roleCandidates.status, score: schema.roleCandidates.score })
       .from(schema.roleCandidates)
       .innerJoin(schema.roleRequests, eq(schema.roleRequests.id, schema.roleCandidates.requestId))
-      .where(and(eq(schema.roleCandidates.candidateId, cand.id), ne(schema.roleCandidates.requestId, request.id)));
+      // Only roles this viewer may open: a hiring manager must not learn about other roles a candidate is on.
+      .where(and(eq(schema.roleCandidates.candidateId, cand.id), ne(schema.roleCandidates.requestId, request.id), visibleRequests(user)));
     const applications = await db
       .select({ id: schema.applications.id, createdAt: schema.applications.createdAt, cvFileName: schema.applications.cvFileName, score: schema.applications.score })
       .from(schema.applications)
