@@ -11,12 +11,11 @@ import { ensureDemoUsers, runSetup, userCount } from "../services/setup.js";
 import { applyRevealResults, resumeWaitingRuns, runPipeline } from "../services/pipeline.js";
 import { parseCandidate, type SHCandidate } from "../services/providers/signalhire.js";
 import { runDaily } from "../services/cron.js";
-import { scoreCv } from "../services/claude.js";
-import { getSettings, weightsFor } from "../services/settings.js";
-import { toReq } from "../services/mappers.js";
 import { notifyRoles } from "../services/notify.js";
 import { normalizeLinkedin } from "../services/providers/types.js";
 import { saveCv } from "../services/cv-store.js";
+import { checkCv } from "../services/cv-text.js";
+import { scoreApplication } from "../services/applications.js";
 import { readUnsubscribeToken, suppress } from "../services/suppression.js";
 import { verifyQueueRequest } from "../services/queue.js";
 import { z } from "zod";
@@ -237,7 +236,9 @@ export const publicRoutes = new Hono()
     const problem = cvProblem(file);
     if (problem) throw new HTTPException(400, { message: problem });
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const base64 = Buffer.from(bytes).toString("base64"); // for Claude only; storage is decided by saveCv
+    // The browser's file type is only a claim: check the bytes before storing or scoring anything.
+    const check = checkCv(bytes, file.type);
+    if (!check.ok) throw new HTTPException(400, { message: check.problem });
     const stored = await saveCv({ name: file.name, type: file.type, bytes });
     const linkedinUrl = normalizeLinkedin(fields.linkedin ?? "");
     // The email isn't verified, so an application is never attached to a sourced candidate and never changes
@@ -246,13 +247,8 @@ export const publicRoutes = new Hono()
       requestId: r.id, candidateId: null, name, email, linkedinUrl, note: fields.note ?? "",
       cvFileName: file.name.slice(0, 200), cvMime: file.type, ...stored,
     }).returning();
-    try {
-      const settings = await getSettings();
-      const res = await scoreCv(toReq(r), weightsFor(r, settings), { base64, mime: file.type, fileName: file.name });
-      await db.update(schema.applications).set({ score: res.score, analysis: { why: res.why, gaps: res.gaps, breakdown: res.breakdown } }).where(eq(schema.applications.id, app.id));
-    } catch (e) {
-      console.error("cv score", e);
-    }
+    // A failed score is saved as a visible message on the CVs tab, with a way to try again.
+    await scoreApplication(app, r, bytes);
     await notifyRoles(["recruiter"], { type: "application", title: `New CV for ${r.title}: ${name}`, link: `/roles/${r.id}?tab=applications` }, [r.hiringManagerId]);
     return c.json({ ok: true });
   })
