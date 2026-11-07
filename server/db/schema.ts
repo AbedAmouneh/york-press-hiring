@@ -391,6 +391,10 @@ export const applications = pgTable("applications", {
   cvBase64: text("cv_base64"),
   score: integer("score"),
   analysis: jsonb("analysis").$type<{ why?: string; gaps?: string; breakdown?: ScoreBreakdown; error?: string }>(),
+  // The same tracking as a sourced candidate: recruiter status, hiring manager decision and comment.
+  status: text("status").$type<CandidateStatus>().notNull().default("new"),
+  hmDecision: text("hm_decision").$type<HmDecision>(),
+  hmComment: text("hm_comment"),
   createdAt: createdAt(),
 });
 
