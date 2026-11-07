@@ -54,7 +54,9 @@ export const env = {
   /** The demo accounts' password, or "" when demo accounts can't be used (public deployment without DEMO_PASSWORD). */
   get demoPassword() { return v("DEMO_PASSWORD") || (env.demoPasswordIsPublic ? PUBLIC_DEMO_PASSWORD : ""); },
   get onVercel() { return !!v("VERCEL"); },
-  get vercelEnv() { return v("VERCEL_ENV"); }, // production | preview | development
+  get vercelEnv() { return v("VERCEL_ENV"); },
+  /** Asked for by first-run setup on a production deployment, so nobody else can claim a fresh install. */
+  get setupKey() { return v("SETUP_KEY"); }, // production | preview | development
   get isPreview() { return v("VERCEL_ENV") === "preview"; },
   /** Previews never email candidates or spend paid credits unless this is explicitly turned on. */
   get previewUsesRealServices() { return v("PREVIEW_USE_REAL_SERVICES").toLowerCase() === "true"; },
@@ -67,6 +69,16 @@ export const env = {
   get qstashNextSigningKey() { return v("QSTASH_NEXT_SIGNING_KEY"); },
   get isProd() { return v("NODE_ENV") === "production" || !!v("VERCEL"); },
 };
+
+/**
+ * Secrets a production deployment must set itself. Without them the code falls back to development values that
+ * are public in this repo, so production refuses to serve instead (see server/app.ts). Previews and local runs
+ * keep the fallbacks.
+ */
+export function missingProductionSecrets(): string[] {
+  if (v("VERCEL_ENV") !== "production") return [];
+  return ["SESSION_SECRET", "INTERNAL_SECRET", "SIGNALHIRE_WEBHOOK_SECRET"].filter((k) => v(k).length < 16);
+}
 
 /** A pull-request preview is a test copy: it uses sample data and the mock outbox by default. */
 const previewSafe = () => env.isPreview && !env.previewUsesRealServices;
