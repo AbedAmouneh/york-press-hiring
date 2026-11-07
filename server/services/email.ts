@@ -19,16 +19,23 @@ export const isTestAddress = (address: string) => TEST_DOMAIN.test(address.trim(
 
 let client: Resend | null = null;
 
+/**
+ * Sign-in links (invites) let whoever holds them set the account's password, so the email log never keeps them:
+ * the person receives the real link, the log and the outbox show "/invite/[hidden]".
+ */
+export const hideAuthLinks = (text: string) => text.replace(/\/invite\/[A-Za-z0-9_-]+/g, "/invite/[hidden]");
+
 /** Sends through Resend, or records the email in the outbox when no key is set or it is test data. */
 export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; id?: string; mock: boolean; error?: string }> {
   const db = await getDb();
   const from = input.from ?? env.emailFrom;
+  const logged = hideAuthLinks(input.text);
   // Sample people and demo accounts only ever reach the outbox, so a live Resend key can't bounce
   // mail off made-up addresses and hurt the domain's sender reputation.
   if (mock.email || input.outboxOnly || isTestAddress(input.to)) {
     const [row] = await db
       .insert(schema.emailLog)
-      .values({ toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: input.text, kind: input.kind, mock: true })
+      .values({ toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: logged, kind: input.kind, mock: true })
       .returning({ id: schema.emailLog.id });
     return { ok: true, id: `mock_${row.id}`, mock: true };
   }
@@ -37,7 +44,7 @@ export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; id?: 
     const res = await client.emails.send({ from, to: input.to, subject: input.subject, text: input.text, replyTo: input.replyTo });
     if (res.error) throw new Error(res.error.message);
     await db.insert(schema.emailLog).values({
-      toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: input.text,
+      toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: logged,
       kind: input.kind, mock: false, providerMessageId: res.data?.id,
     });
     await db.insert(schema.usageLog).values({ provider: "resend", action: input.kind, units: 1 });
@@ -45,7 +52,7 @@ export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; id?: 
   } catch (e) {
     const error = redactSecrets(e instanceof Error ? e.message : String(e));
     await db.insert(schema.emailLog).values({
-      toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: input.text,
+      toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: logged,
       kind: input.kind, mock: false, status: "failed", error,
     });
     return { ok: false, mock: false, error };
