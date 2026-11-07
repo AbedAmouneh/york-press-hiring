@@ -172,6 +172,13 @@ export default function RoleDetail() {
       qc.invalidateQueries({ queryKey: ["runs", id] });
     } catch (e) { toast((e as Error).message, "error"); }
   }
+  async function reopen() {
+    try {
+      await call(rpc.requests[":id"].reopen.$post({ param: { id } }));
+      toast("Role reopened. Press Refresh to look for new candidates.");
+      qc.invalidateQueries();
+    } catch (e) { toast((e as Error).message, "error"); }
+  }
   async function scoreCvAgain(applicationId: string) {
     try {
       const res = await call(rpc.applications[":id"].score.$post({ param: { id: applicationId } }));
@@ -231,6 +238,7 @@ export default function RoleDetail() {
             )}
             <Button variant="outline" size="icon-sm" onClick={exportCsv} disabled={!all.length} aria-label="Download CSV" title="Download CSV"><Download /></Button>
             {r.status !== "closed" && <Button variant="ghost" size="sm" onClick={() => setClosing(true)}>Close role</Button>}
+            {r.status === "closed" && <Button variant="outline" size="sm" onClick={reopen}>Reopen role</Button>}
           </div>
         )}
       </div>
