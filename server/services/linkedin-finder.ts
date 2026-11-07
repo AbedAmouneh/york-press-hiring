@@ -58,12 +58,16 @@ function parseInteraction(res: LookupResponse) {
 }
 
 /** Pick the profile link from Gemini's answer, or null. Exported for tests. */
-export function readLookup(res: LookupResponse, fullName: string): { url: string | null; searches: number } {
+export type LookupMiss = "no_search" | "not_found" | "name_mismatch";
+
+export function readLookup(res: LookupResponse, fullName: string): { url: string | null; searches: number; miss?: LookupMiss } {
   const { queries, text } = parseInteraction(res);
   const searches = queries.length;
   const url = normalizeLinkedin(text.match(/https?:\/\/[a-z]{0,3}\.?linkedin\.com\/in\/[^\s)"'<>\]]+/i)?.[0]);
   // No search means no evidence: don't trust a link from memory.
-  if (!url || !searches || !slugMatchesName(url, fullName)) return { url: null, searches };
+  if (!searches) return { url: null, searches, miss: "no_search" };
+  if (!url) return { url: null, searches, miss: "not_found" };
+  if (!slugMatchesName(url, fullName)) return { url: null, searches, miss: "name_mismatch" };
   return { url, searches };
 }
 
@@ -73,7 +77,7 @@ const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 // The model that answered last time is tried first, so one without search quota is only hit once per instance.
 let preferred: string | null = null;
 
-export async function findLinkedinUrl(p: LookupPerson, runId?: string | null): Promise<string | null> {
+export async function findLinkedinUrl(p: LookupPerson, runId?: string | null, onMiss?: (m: LookupMiss) => void): Promise<string | null> {
   if (!linkedinLookupAvailable()) return null;
   const models = [...new Set([preferred, ...lookupModels()].filter((m): m is string => !!m))];
   let last = "";
@@ -103,9 +107,10 @@ export async function findLinkedinUrl(p: LookupPerson, runId?: string | null): P
     // Answered from memory without searching: no evidence, so ask the next model rather than trust or drop it.
     if (!out.searches) { last = ""; noSearch = true; continue; }
     preferred = model;
+    if (out.miss) onMiss?.(out.miss);
     return out.url;
   }
-  if (noSearch && !last) return null;
+  if (noSearch && !last) { onMiss?.("no_search"); return null; }
   throw new Error(last);
 }
 
@@ -117,17 +122,30 @@ export async function findLinkedinUrls<T extends LookupPerson & { id: string }>(
   const found = new Map<string, string>();
   let error: string | null = null;
   let checked = 0;
+  let failed = 0;
+  const misses: Record<LookupMiss, number> = { no_search: 0, not_found: 0, name_mismatch: 0 };
   for (let i = 0; i < people.length; i += concurrency) {
     if (deadline && Date.now() > deadline) break;
     checked = Math.min(people.length, i + concurrency);
     await Promise.all(people.slice(i, i + concurrency).map(async (p) => {
-      const url = await findLinkedinUrl(p, runId).catch((e: Error) => { error ??= e.message; return null; });
+      const url = await findLinkedinUrl(p, runId, (m) => { misses[m]++; }).catch((e: Error) => { error ??= e.message; failed++; return null; });
       if (url) found.set(p.id, url);
     }));
     // Every lookup in the first group failed the same way (bad key, quota): stop rather than repeat it 50 times.
     if (i === 0 && !found.size && error) break;
   }
-  return Object.assign(found, { error, checked });
+  return Object.assign(found, { error, checked, failed, misses });
+}
+
+/** "12 not in the search results, 3 links for someone else's name, 2 failed: <reason>": why lookups found nothing. */
+export function describeMisses(r: { misses: Record<LookupMiss, number>; failed: number; error: string | null }) {
+  const parts = [
+    r.misses.not_found && `${r.misses.not_found} not in the search results`,
+    r.misses.name_mismatch && `${r.misses.name_mismatch} link(s) that didn't match the name`,
+    r.misses.no_search && `${r.misses.no_search} where Google search didn't run`,
+    r.failed && `${r.failed} failed${r.error ? `: ${r.error}` : ""}`,
+  ].filter(Boolean);
+  return parts.join(", ");
 }
 
 /**
