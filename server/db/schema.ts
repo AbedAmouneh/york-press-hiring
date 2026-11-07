@@ -161,7 +161,10 @@ export const sourcingRuns = pgTable("sourcing_runs", {
   startedAt: ts("started_at"),
   finishedAt: ts("finished_at"),
   createdAt: createdAt(),
-});
+}, (t) => [
+  // At most one active run per role, enforced by the database (two clicks or a click and the weekly cron at once).
+  uniqueIndex("sourcing_runs_one_active").on(t.requestId).where(sql`${t.status} in ('queued', 'running', 'waiting')`),
+]);
 
 export const candidates = pgTable("candidates", {
   id: id(),
