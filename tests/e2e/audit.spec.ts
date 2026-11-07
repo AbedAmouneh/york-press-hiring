@@ -11,6 +11,17 @@ test("a refresh updates the role's numbers without reloading the page", async ({
   await expect.poll(async () => Number((await allTab.innerText()).match(/\d+/)?.[0]), { timeout: 20_000 }).toBeGreaterThan(before);
 });
 
+test("Score again re-scores the role without contacting anyone", async ({ page }) => {
+  await signInAs(page, "Recruiter");
+  await page.goto("/roles");
+  await page.getByRole("link", { name: /Senior Product Designer/ }).click();
+  await page.getByRole("button", { name: "Score again" }).click();
+  await expect(page.getByText("Nobody is contacted.")).toBeVisible();
+  await page.getByRole("tab", { name: /^Runs/ }).click();
+  await expect(page.getByText(/^Score again ·/).first()).toBeVisible();
+  await expect(page.getByText(/Scoring \d+ people again with the current rules/).first()).toBeVisible({ timeout: 20_000 });
+});
+
 test("a recruiter can open an email to read it", async ({ page }) => {
   await signInAs(page, "Recruiter");
   await page.goto("/outreach");
