@@ -159,6 +159,13 @@ export default function RoleDetail() {
       qc.invalidateQueries({ queryKey: ["runs", id] });
     } catch (e) { toast((e as Error).message, "error"); }
   }
+  async function scoreAgain() {
+    try {
+      await call(rpc.requests[":id"].rescore.$post({ param: { id } }));
+      toast("Scoring everyone again with the current rules. Nobody is contacted.");
+      qc.invalidateQueries({ queryKey: ["runs", id] });
+    } catch (e) { toast((e as Error).message, "error"); }
+  }
   async function findLinkedin() {
     setFinding(true);
     try {
@@ -206,6 +213,9 @@ export default function RoleDetail() {
               <Button variant="outline" size="sm" onClick={findLinkedin} disabled={finding}>{finding ? <Spinner /> : <span className="rounded bg-[#0a66c2] px-1 text-[10px] font-bold leading-4 text-white">in</span>} Find LinkedIn profiles</Button>
             )}
             {r.status !== "closed" && <Button variant="outline" size="sm" onClick={rerun} disabled={!!running}><RefreshCw /> Refresh</Button>}
+            {r.status !== "closed" && all.length > 0 && (
+              <Button variant="outline" size="sm" onClick={scoreAgain} disabled={!!running} title="Score everyone on this role again with the current rules. No searches, credits or messages."><Sparkles /> Score again</Button>
+            )}
             <Button variant="outline" size="icon-sm" onClick={exportCsv} disabled={!all.length} aria-label="Download CSV" title="Download CSV"><Download /></Button>
             {r.status !== "closed" && <Button variant="ghost" size="sm" onClick={() => setClosing(true)}>Close role</Button>}
           </div>
@@ -215,7 +225,7 @@ export default function RoleDetail() {
       {running && (
         <div role="status" className="mb-4 flex items-center gap-2.5 rounded-lg bg-accent px-4 py-2.5 text-sm">
           <Spinner className="text-primary" />
-          <span>Finding candidates · {running.state.log.at(-1)?.msg ?? "starting…"}</span>
+          <span>{running.kind === "rescore" ? "Scoring again" : "Finding candidates"} · {running.state.log.at(-1)?.msg ?? "starting…"}</span>
         </div>
       )}
       {lastRun?.status === "failed" && !running && (
@@ -286,7 +296,7 @@ export default function RoleDetail() {
             {runs.data?.runs.map((run) => (
               <Card key={run.id}>
                 <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
-                  <CardTitle>{run.kind} run · {fmtDateTime(run.createdAt)}</CardTitle>
+                  <CardTitle>{run.kind === "rescore" ? "Score again" : `${run.kind} run`} · {fmtDateTime(run.createdAt)}</CardTitle>
                   <Badge tone={run.status === "done" ? "good" : run.status === "failed" ? "bad" : "brand"}>{run.status}</Badge>
                 </CardHeader>
                 <CardContent className="grid gap-3">
