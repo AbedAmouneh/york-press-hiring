@@ -70,7 +70,11 @@ export const outreachRoutes = new Hono<AppEnv>()
   .post("/outreach/:id/cancel", async (c) => {
     requireRole(c, "recruiter", "admin");
     const msg = await loadMessage(c.req.param("id"));
-    if (!["queued", "awaiting_approval", "approved"].includes(msg.status)) throw new HTTPException(400, { message: "This message was already sent." });
+    // Cancelling twice (two tabs, a double click) is fine; anything else says what actually happened to it.
+    if (msg.status === "cancelled") return c.json({ ok: true });
+    if (!["queued", "awaiting_approval", "approved"].includes(msg.status)) {
+      throw new HTTPException(400, { message: msg.status === "sent" ? "This message was already sent." : `This message can't be cancelled: it ${msg.status === "failed" ? "failed to send" : `is ${msg.status.replace("_", " ")}`}.` });
+    }
     const db = await getDb();
     await db.update(schema.outreachMessages).set({ status: "cancelled" }).where(eq(schema.outreachMessages.id, msg.id));
     return c.json({ ok: true });
