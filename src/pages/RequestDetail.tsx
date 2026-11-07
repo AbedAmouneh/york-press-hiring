@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -139,6 +139,7 @@ export default function RequestDetail() {
   const q = useQuery({ queryKey: ["request", id], queryFn: () => call(rpc.requests[":id"].$get({ param: { id } })) });
   const canSeeRole = !!q.data && ["sourcing", "open", "closed"].includes(q.data.request.status);
   const cands = useQuery({ queryKey: ["candidates", id], queryFn: () => call(rpc.requests[":id"].candidates.$get({ param: { id } })), enabled: canSeeRole });
+  const navigate = useNavigate();
   if (q.isLoading) return <Spinner />;
   if (q.error) return <p className="text-destructive">{(q.error as Error).message}</p>;
   const { request: r, events } = q.data!;
@@ -154,6 +155,25 @@ export default function RequestDetail() {
     } catch (e) {
       toast((e as Error).message, "error");
     }
+  }
+
+  const mine = r.requesterId === me.id || can(me, "admin", "recruiter");
+  async function withdraw() {
+    if (!window.confirm("Withdraw this request? It goes back to a draft you can edit, resubmit or delete.")) return;
+    try {
+      await call(rpc.requests[":id"].withdraw.$post({ param: { id: r.id } }));
+      await qc.invalidateQueries();
+      toast("Withdrawn. It's a draft again.");
+    } catch (e) { toast((e as Error).message, "error"); }
+  }
+  async function deleteDraft() {
+    if (!window.confirm("Delete this draft? This can't be undone.")) return;
+    try {
+      await call(rpc.requests[":id"].$delete({ param: { id: r.id } }));
+      await qc.invalidateQueries();
+      toast("Draft deleted.");
+      navigate("/requests");
+    } catch (e) { toast((e as Error).message, "error"); }
   }
 
   const musts = splitMustHaves(r.mustHaves);
@@ -174,6 +194,8 @@ export default function RequestDetail() {
         </div>
         <div className="flex items-center gap-2">
           {canEdit && <Button asChild variant="outline" size="sm"><Link to={`/requests/${r.id}/edit`}>Edit</Link></Button>}
+          {mine && ["submitted", "changes_requested"].includes(r.status) && <Button variant="ghost" size="sm" onClick={withdraw}>Withdraw</Button>}
+          {mine && r.status === "draft" && <Button variant="ghost" size="sm" onClick={deleteDraft}>Delete draft</Button>}
           {r.requesterId === me.id && r.status === "draft" && <Button size="sm" onClick={submitDraft}>Submit to Khalil</Button>}
         </div>
       </div>
