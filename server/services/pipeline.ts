@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { waitUntil } from "@vercel/functions";
 import { getDb, schema } from "../db/client.js";
 import { aiFeatures, appIsPublic, env, mock, POOL_SIZE, redactSecrets, TOP_N } from "../env.js";
@@ -37,7 +37,13 @@ const REVEAL_WAIT_MS = 20 * 60_000;
 
 // ------------------------------------------------------------------ scheduling
 
-export async function startRun(requestId: string, kind: "initial" | "weekly" | "manual") {
+/**
+ * A "Score again" run only scores everyone already on the role again with the current rules and ranks them: no
+ * searches, no contact reveals, no web search and no outreach, so it costs Claude calls only and never contacts anyone.
+ */
+const RESCORE_STEPS = new Set<Step>(["brief", "score", "rank"]);
+
+export async function startRun(requestId: string, kind: "initial" | "weekly" | "manual" | "rescore") {
   const db = await getDb();
   const active = await db
     .select({ id: schema.sourcingRuns.id })
@@ -50,7 +56,7 @@ export async function startRun(requestId: string, kind: "initial" | "weekly" | "
     return active[0].id;
   }
   // Until one run has finished, a re-run is still the first run: it checks the top 15 and contacts the Top 10.
-  if (kind !== "initial") {
+  if (kind === "weekly" || kind === "manual") {
     const [finished] = await db
       .select({ id: schema.sourcingRuns.id })
       .from(schema.sourcingRuns)
@@ -167,7 +173,7 @@ export async function runPipeline(runId: string): Promise<RunOutcome> {
         continueLater(runId);
         return "ran";
       }
-      const result = await STEP_FNS[step]({ run, request, state, counters, deadline });
+      const result = run.kind === "rescore" && !RESCORE_STEPS.has(step) ? undefined : await STEP_FNS[step]({ run, request, state, counters, deadline });
       if (result === "waiting") {
         await save(runId, { step, state, ...counters, lockedUntil: null, status: "waiting" });
         return "ran";
@@ -214,6 +220,16 @@ const STEP_FNS: Record<Exclude<Step, "done">, (ctx: Ctx) => Promise<StepResult>>
 
 async function stepBrief({ run, request, state }: Ctx) {
   const db = await getDb();
+  if (run.kind === "rescore") {
+    const rows = await db
+      .select({ id: schema.roleCandidates.id })
+      .from(schema.roleCandidates)
+      .where(and(eq(schema.roleCandidates.requestId, request.id), isNotNull(schema.roleCandidates.scoredAt)));
+    state.newRoleCandidateIds = rows.map((r) => r.id);
+    state.rescoreBefore = run.createdAt.toISOString();
+    log(state, `Scoring ${rows.length} people again with the current rules. No new searches, contact lookups or messages.`);
+    return;
+  }
   if (run.kind !== "initial") {
     const [prev] = await db
       .select({ state: schema.sourcingRuns.state })
@@ -417,14 +433,16 @@ function scoringInput({ c, rc }: ScoreRow, request: Request) {
   return { ...toAI(c, rc), facts: signalFacts(computeSignals(c, request)) };
 }
 
-async function unscored(ids: string[], limit?: number): Promise<ScoreRow[]> {
+/** People not scored yet, or (for "Score again") last scored before `before`. */
+async function unscored(ids: string[], limit?: number, before?: string): Promise<ScoreRow[]> {
   if (!ids.length) return [];
   const db = await getDb();
+  const scoredAt = schema.roleCandidates.scoredAt;
   const q = db
     .select({ rc: schema.roleCandidates, c: schema.candidates })
     .from(schema.roleCandidates)
     .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
-    .where(and(inArray(schema.roleCandidates.id, ids), isNull(schema.roleCandidates.scoredAt)));
+    .where(and(inArray(schema.roleCandidates.id, ids), before ? or(isNull(scoredAt), lt(scoredAt, new Date(before))) : isNull(scoredAt)));
   return limit ? q.limit(limit) : q;
 }
 
@@ -562,7 +580,7 @@ async function stepScore(ctx: Ctx): Promise<StepResult> {
   // Direct scoring, a few candidates per call; also picks up anything a batch couldn't score.
   while (true) {
     if (Date.now() > deadline) return "again";
-    const rows = await unscored(ids, SCORE_CHUNK);
+    const rows = await unscored(ids, SCORE_CHUNK, state.rescoreBefore);
     if (!rows.length) break;
     await scoreRows(rows, request, weights, run.id);
   }
@@ -581,7 +599,8 @@ async function rerank({ run, request, state, counters }: Ctx) {
   let contenders = 0;
   for (let i = 0; i < all.length; i++) {
     const isTop = i < TOP_N;
-    const newContender = run.kind !== "initial" && isTop && newIds.has(all[i].id);
+    // Scoring again brings nobody new, so it never marks contenders (they would be contacted by the next refresh).
+    const newContender = run.kind !== "initial" && run.kind !== "rescore" && isTop && newIds.has(all[i].id);
     if (newContender) contenders++;
     await db.update(schema.roleCandidates).set({ rank: i + 1, isTop10: isTop, ...(newContender ? { newContender: true } : {}) }).where(eq(schema.roleCandidates.id, all[i].id));
   }
@@ -590,10 +609,29 @@ async function rerank({ run, request, state, counters }: Ctx) {
 }
 
 async function stepRank(ctx: Ctx) {
+  if (ctx.run.kind === "rescore") return rankAfterRescore(ctx);
   const n = await rerank(ctx);
   log(ctx.state, ctx.run.kind === "initial"
     ? `Ranked ${n} candidates; the top ${Math.min(SHORTLIST, n)} go to a deep check.`
     : `${ctx.counters.newContenders} new candidate(s) reached the Top ${TOP_N}; checking them in depth.`);
+}
+
+/** After "Score again": rank, say how the Top 10 changed and who now qualifies but hasn't been contacted. */
+async function rankAfterRescore(ctx: Ctx) {
+  const db = await getDb();
+  const rc = schema.roleCandidates;
+  const topIds = async () => new Set((await db.select({ id: rc.id }).from(rc).where(and(eq(rc.requestId, ctx.request.id), eq(rc.isTop10, true)))).map((r) => r.id));
+  const before = await topIds();
+  const n = await rerank(ctx);
+  const after = await topIds();
+  const movedIn = [...after].filter((id) => !before.has(id)).length;
+  const { minOutreachScore } = await getSettings();
+  const [{ waiting }] = await db
+    .select({ waiting: sql<number>`count(*)::int` })
+    .from(rc)
+    .where(and(eq(rc.requestId, ctx.request.id), eq(rc.isTop10, true), eq(rc.status, "new"), gte(rc.score, minOutreachScore)));
+  log(ctx.state, `Ranked ${n} candidates; ${movedIn ? `${movedIn} moved into the Top ${TOP_N}` : `the Top ${TOP_N} held`}.`);
+  if (waiting) log(ctx.state, `${waiting} Top-${TOP_N} candidate(s) now score ${minOutreachScore} or more and haven't been contacted. Contact them from the role page.`);
 }
 
 /**
