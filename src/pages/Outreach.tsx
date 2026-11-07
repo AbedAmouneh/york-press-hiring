@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { call, rpc } from "@/lib/rpc";
+import { LoadMore, usePaged } from "@/lib/paged";
 import { cn, fmtDate } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -56,16 +57,23 @@ export default function Outreach() {
   const toast = useToast();
   const [picked, setFilter] = useState<(typeof FILTERS)[number][0] | null>(null);
   const [open, setOpen] = useState<OutreachMessage | null>(null);
-  const q = useQuery({ queryKey: ["outreach", "email"], queryFn: () => call(rpc.outreach.$get({ query: { channel: "email" } })) });
-  const msgs = q.data?.messages ?? [];
-  const count = (f: string) => (f === "all" ? msgs.length : msgs.filter((m) => m.status === f).length);
+  // Counts per status and the sending settings come from a one-row request; the list itself is paged.
+  const summary = useQuery({ queryKey: ["outreach", "email", "summary"], queryFn: () => call(rpc.outreach.$get({ query: { channel: "email", limit: "1" } })) });
+  const counts: Partial<Record<string, number>> = summary.data?.counts ?? {};
+  const count = (f: string) => (f === "all" ? Object.values(counts).reduce((a, b) => (a ?? 0) + (b ?? 0), 0) ?? 0 : counts[f] ?? 0);
   const queued = count("queued");
   // Open on the queue when something is waiting, otherwise on everything.
   const filter = picked ?? (queued ? "queued" : "all");
-  const rows = filter === "all" ? msgs : msgs.filter((m) => m.status === filter);
-  const sentToday = q.data?.sentToday ?? 0;
-  const cap = q.data?.dailyCap ?? 0;
-  const on = !!q.data?.autoSendEnabled;
+  const q = usePaged(
+    ["outreach", "email", filter],
+    (before) => call(rpc.outreach.$get({ query: { channel: "email", ...(filter === "all" ? {} : { status: filter }), ...(before ? { before } : {}) } })),
+    (p) => p.messages,
+    { enabled: !!summary.data },
+  );
+  const rows = q.rows;
+  const sentToday = summary.data?.sentToday ?? 0;
+  const cap = summary.data?.dailyCap ?? 0;
+  const on = !!summary.data?.autoSendEnabled;
 
   async function sendNow() {
     const r = await call(rpc.outreach["send-now"].$post());
@@ -83,7 +91,7 @@ export default function Outreach() {
         <Button onClick={sendNow} disabled={!queued || !on}><Send /> Send queued now</Button>
       </PageHeader>
 
-      {q.data && (
+      {summary.data && (
         <Card className="mb-6 flex-row flex-wrap items-center gap-x-8 gap-y-3 px-5 py-4">
           <div className="min-w-56 flex-1">
             <div className="mb-1.5 flex items-baseline gap-1.5"><span className="num text-2xl font-semibold">{sentToday}</span><span className="text-sm text-muted-foreground">of {cap} sent today</span></div>
@@ -98,7 +106,8 @@ export default function Outreach() {
 
       <FilterChips label="Filter emails" options={FILTERS.map(([k, l]) => ({ key: k, label: l, count: count(k) }))} value={filter} onChange={(k) => setFilter(k as typeof filter)} />
 
-      {q.isLoading ? <Spinner /> : rows.length ? (
+      {summary.isLoading || q.isLoading ? <Spinner /> : rows.length ? (
+        <>
         <DataTable>
           <TableHeader><TableRow><Th>Candidate</Th><Th>Role</Th><Th>To</Th><Th>Status</Th><Th>Sent</Th><Th>Follow up</Th><Th /></TableRow></TableHeader>
           <TableBody>
@@ -120,7 +129,9 @@ export default function Outreach() {
             ))}
           </TableBody>
         </DataTable>
-      ) : <EmptyState title={msgs.length ? "Nothing here" : "No emails yet"}>{msgs.length ? null : "Top 10 candidates with an email are contacted after each run."}</EmptyState>}
+        <LoadMore shown={rows.length} total={q.total} hasMore={q.hasNextPage} loading={q.isFetchingNextPage} onMore={() => q.fetchNextPage()} />
+        </>
+      ) : <EmptyState title={count("all") ? "Nothing here" : "No emails yet"}>{count("all") ? null : "Top 10 candidates with an email are contacted after each run."}</EmptyState>}
       {open && <EmailPreview key={open.id} m={open} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); qc.invalidateQueries({ queryKey: ["outreach"] }); }} />}
     </>
   );

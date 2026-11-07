@@ -23,7 +23,7 @@ export default function Home() {
   const all = useQuery({ queryKey: ["requests", "all"], queryFn: () => call(rpc.requests.$get({ query: {} })) });
   const out = useQuery({
     queryKey: ["outreach", "home"],
-    queryFn: () => call(rpc.outreach.$get({ query: { status: "awaiting_approval,approved,failed" } })),
+    queryFn: () => call(rpc.outreach.$get({ query: { status: "awaiting_approval,approved,failed", limit: "200" } })),
     enabled: staff,
   });
 
