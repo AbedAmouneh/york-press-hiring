@@ -187,6 +187,25 @@ ok(weekly.runId, "manual refresh started");
 await new Promise((r) => setTimeout(r, 4000));
 ok((await admin("GET", "/outbox")).emails.length > 0, "emails captured in the mock outbox");
 
+// ---------------------------------------------------------------- score again
+const runsOf = async () => (await admin("GET", `/requests/${id}/runs`)).runs as any[];
+const settle = async () => {
+  for (let i = 0; i < 150 && (await runsOf()).some((r) => ["queued", "running", "waiting"].includes(r.status)); i++) await new Promise((r) => setTimeout(r, 200));
+};
+await settle();
+const peopleBefore = (await admin("GET", `/requests/${id}/candidates`)).candidates.length;
+const mailBefore = (await admin("GET", "/outbox")).emails.length;
+ok((await hm.raw("POST", `/requests/${id}/rescore`)).status === 403, "a hiring manager can't start Score again");
+const again = await admin("POST", `/requests/${id}/rescore`);
+await settle();
+const againRun = (await runsOf()).find((r) => r.id === again.runId);
+ok(againRun.kind === "rescore" && againRun.status === "done", "Score again finished");
+ok(againRun.state.log.some((l: any) => /Scoring \d+ people again/.test(l.msg)), "Score again scored everyone already on the role");
+ok(againRun.signalhireSearches === 0 && againRun.signalhireCredits === 0 && againRun.pdlRecords === 0, "Score again ran no searches and spent no credits");
+const afterAgain = (await admin("GET", `/requests/${id}/candidates`)).candidates;
+ok(afterAgain.length === peopleBefore && afterAgain.filter((c: any) => c.isTop10).length === 10, "Score again added nobody and kept a Top 10");
+ok((await admin("GET", "/outbox")).emails.length === mailBefore, "Score again contacted nobody");
+
 // ---------------------------------------------------------------- CV upload and download
 const { applyToken } = (await admin("GET", `/requests/${id}`)).request;
 const cvText = "Rana Haddad\nSenior Product Designer, 9 years. Figma, design systems, user research.";
