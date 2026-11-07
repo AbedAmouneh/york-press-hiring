@@ -228,6 +228,19 @@ const afterAgain = (await admin("GET", `/requests/${id}/candidates`)).candidates
 ok(afterAgain.length === peopleBefore && afterAgain.filter((c: any) => c.isTop10).length === 10, "Score again added nobody and kept a Top 10");
 ok((await admin("GET", "/outbox")).emails.length === mailBefore, "Score again contacted nobody");
 
+// ---------------------------------------------------------------- cancelling a message
+{
+  const all = (await admin("GET", "/outreach")).messages;
+  const sentOne = all.find((m: any) => m.status === "sent");
+  const cancelSent = await admin.raw("POST", `/outreach/${sentOne.id}/cancel`);
+  ok(cancelSent.status === 400 && (await cancelSent.json()).error === "This message was already sent.", "a sent message can't be cancelled");
+  const twoPending = all.filter((m: any) => ["queued", "awaiting_approval", "approved"].includes(m.status));
+  if (twoPending.length > 1) {
+    const target = twoPending[1];
+    ok((await admin.raw("POST", `/outreach/${target.id}/cancel`)).status === 200 && (await admin.raw("POST", `/outreach/${target.id}/cancel`)).status === 200, "cancelling the same message twice is fine");
+  }
+}
+
 // ---------------------------------------------------------------- opting out
 const raw0 = (method: string, url: string) => app.fetch(new Request(`http://localhost/api${url}`, { method }));
 const outreachMail = (await admin("GET", "/outbox")).emails.find((e: any) => e.kind === "outreach");
