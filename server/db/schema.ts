@@ -298,6 +298,8 @@ export const outreachMessages = pgTable("outreach_messages", {
   approvedById: uuid("approved_by_id").references(() => users.id),
   error: text("error"),
   queuedAt: createdAt(),
+  /** When a worker took the email to send it (status "sending"); a stuck claim is retried after 10 minutes. */
+  claimedAt: ts("claimed_at"),
   sentAt: ts("sent_at"),
 });
 
