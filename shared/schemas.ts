@@ -126,7 +126,10 @@ export const RoleCandidatePatch = z.object({
   dateContacted: z.string().nullable().optional(),
 });
 
-export const OutreachEdit = z.object({ subject: z.string().optional(), body: z.string().min(5, "The message is too short.") });
+/** Tracking a CV received from the apply page: the recruiter's status and the hiring manager's decision. */
+export const ApplicationPatch = RoleCandidatePatch.pick({ status: true, hmDecision: true, hmComment: true });
+
+export const OutreachEdit =z.object({ subject: z.string().optional(), body: z.string().min(5, "The message is too short.") });
 
 export const CV_MAX_BYTES = 4 * 1024 * 1024;
 export const CV_TYPES = [
