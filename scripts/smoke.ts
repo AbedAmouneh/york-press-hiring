@@ -263,6 +263,20 @@ ok(applications.length === 1 && applications[0].score != null, "the CV is listed
 const download = await admin.raw("GET", `/applications/${applications[0].id}/cv`);
 ok(download.ok && (await download.text()) === cvText, "the recruiter downloads the same CV file");
 ok((await app.fetch(new Request(`http://localhost/api/applications/${applications[0].id}/cv`))).status === 401, "CVs need a signed-in user");
+{
+  // Someone applies with a sourced candidate's email: nothing about that candidate changes; the recruiter sees a possible match.
+  const sourced = (await admin("GET", `/requests/${id}/candidates`)).candidates.find((c: any) => c.email && c.status === "new");
+  const impostor = new FormData();
+  impostor.set("name", "Not Them");
+  impostor.set("email", sourced.email);
+  impostor.set("consent", "true");
+  impostor.set("cv", new File(["Someone else"], "other.txt", { type: "text/plain" }));
+  ok((await app.fetch(new Request(`http://localhost/api/public/apply/${applyToken}`, { method: "POST", body: impostor }))).ok, "an application with a sourced candidate's email is accepted");
+  const after = (await admin("GET", `/requests/${id}/candidates`)).candidates.find((c: any) => c.id === sourced.id);
+  ok(after.status === "new", "it doesn't change the sourced candidate's status");
+  const listed = (await admin("GET", `/requests/${id}/applications`)).applications.find((a: any) => a.name === "Not Them");
+  ok(listed.candidateId === null && listed.sourcedMatch?.roleCandidateId === sourced.id, "it isn't attached to them; the recruiter sees a possible match");
+}
 
 // ---------------------------------------------------------------- daily job and data retention
 const retention = await admin("GET", "/retention");
