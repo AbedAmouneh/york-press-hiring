@@ -126,6 +126,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 - **Demo accounts** (`demo.*@york-press.test`, `isDemo`): `DEMO_MODE` alone decides whether they work. Off, they
   can't sign in and open demo sessions stop (`canSignIn` in `server/auth.ts`). On, `ensureDemoUsers` recreates and
   reactivates them once per server start, so test copies of the live database get working demo buttons.
+  The built-in demo password is public (it's in this repo), so it only works and is only shown locally, in tests and on
+  previews. A public deployment (Vercel production, e.g. the demo site, which holds real data) needs `DEMO_PASSWORD`;
+  without it demo accounts can't sign in, and the demo buttons there only fill in the email.
 - `tests/unit/`: Vitest. `tests/e2e/`: Playwright, signing in with the demo accounts.
 
 ## Rules the code must keep
