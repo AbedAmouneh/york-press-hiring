@@ -8,6 +8,12 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 const v = (k: string) => (process.env[k] ?? "").trim();
 const url = v("DATABASE_URL_UNPOOLED") || v("POSTGRES_URL_NON_POOLING") || v("DATABASE_URL") || v("POSTGRES_URL");
 
+if (!url && v("VERCEL_ENV") === "production") {
+  // A production deploy without its database would go live on a schema that may be out of date: stop here.
+  console.error("No DATABASE_URL in this production build. Add the Neon database (SETUP_GUIDE step 3) and redeploy.");
+  process.exit(1);
+}
+
 if (!url) {
   console.warn(
     v("VERCEL")
