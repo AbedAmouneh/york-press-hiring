@@ -30,4 +30,21 @@ test.describe("sign in", () => {
     await page.goto("/roles");
     await expect(page).toHaveURL(/\/login\?next=%2Froles/);
   });
+
+  test("returns to the page you opened after signing in", async ({ page }) => {
+    await page.goto("/notifications");
+    await expect(page).toHaveURL(/\/login\?next=%2Fnotifications/);
+    await page.getByLabel("Email").fill("demo.manager@york-press.test");
+    await page.getByLabel("Password").fill("demo-york-2026");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/notifications$/);
+  });
+
+  test("never follows a next link to another site", async ({ page }) => {
+    await page.goto("/login?next=//example.com/x");
+    await page.getByLabel("Email").fill("demo.manager@york-press.test");
+    await page.getByLabel("Password").fill("demo-york-2026");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/:\d+\/$/);
+  });
 });
