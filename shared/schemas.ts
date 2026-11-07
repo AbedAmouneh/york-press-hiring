@@ -29,6 +29,8 @@ export const SetupInput = z.object({
   ceoName: z.string().trim().min(2, "Enter the CEO's name."),
   ceoEmail: email,
   managers: z.array(ManagerInvite).default([]),
+  /** Required on a production deployment: the SETUP_KEY set in Vercel, so a stranger can't claim a fresh install. */
+  setupKey: z.string().optional(),
 });
 
 // ---------------------------------------------------------------- role requests
