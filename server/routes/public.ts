@@ -218,15 +218,12 @@ export const publicRoutes = new Hono()
     const base64 = Buffer.from(bytes).toString("base64"); // for Claude only; storage is decided by saveCv
     const stored = await saveCv({ name: file.name, type: file.type, bytes });
     const linkedinUrl = normalizeLinkedin(fields.linkedin ?? "");
-    // Link to an existing candidate when we can.
-    const [existing] = await db.select().from(schema.candidates).where(eq(schema.candidates.email, email)).limit(1);
+    // The email isn't verified, so an application is never attached to a sourced candidate and never changes
+    // their status by itself: the CVs tab shows a possible match and the recruiter decides.
     const [app] = await db.insert(schema.applications).values({
-      requestId: r.id, candidateId: existing?.id ?? null, name, email, linkedinUrl, note: fields.note ?? "",
+      requestId: r.id, candidateId: null, name, email, linkedinUrl, note: fields.note ?? "",
       cvFileName: file.name.slice(0, 200), cvMime: file.type, ...stored,
     }).returning();
-    if (existing) {
-      await db.update(schema.roleCandidates).set({ status: "replied" }).where(and(eq(schema.roleCandidates.candidateId, existing.id), eq(schema.roleCandidates.requestId, r.id)));
-    }
     try {
       const settings = await getSettings();
       const res = await scoreCv(toReq(r), weightsFor(r, settings), { base64, mime: file.type, fileName: file.name });
