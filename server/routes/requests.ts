@@ -42,13 +42,13 @@ export async function serializeRequests(rows: (typeof schema.roleRequests.$infer
     .where(inArray(schema.roleCandidates.requestId, ids))
     .groupBy(schema.roleCandidates.requestId);
   const byId = new Map(counts.map((c) => [c.requestId, c]));
+  // Only the newest event per request (edits don't count), not every event of every request.
   const lastEvents = await db
-    .select()
+    .selectDistinctOn([schema.requestEvents.requestId])
     .from(schema.requestEvents)
-    .where(inArray(schema.requestEvents.requestId, ids))
-    .orderBy(desc(schema.requestEvents.createdAt));
-  const lastBy = new Map<string, typeof lastEvents[number]>();
-  for (const e of lastEvents) if (!lastBy.has(e.requestId) && e.action !== "edited") lastBy.set(e.requestId, e);
+    .where(and(inArray(schema.requestEvents.requestId, ids), ne(schema.requestEvents.action, "edited")))
+    .orderBy(schema.requestEvents.requestId, desc(schema.requestEvents.createdAt));
+  const lastBy = new Map(lastEvents.map((e) => [e.requestId, e]));
   return rows.map((r) => ({
     ...r,
     code: `R-${100 + r.number}`,
