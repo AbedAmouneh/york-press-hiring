@@ -335,6 +335,23 @@ for (const u of (await team()).filter((x) => x.active && x.roles.includes("ceo")
 await second("POST", "/requests?submit=true", { title: "Nobody to approve", department: "Editorial", seniority: "Mid" });
 ok((await second("GET", "/notifications")).notifications.some((n: any) => n.title === "Nobody can approve Nobody to approve: add a CEO approver"), "with no CEO approver, admins are told nobody can approve the request");
 
+// ---------------------------------------------------------------- closing a role
+const waiting = await second("POST", "/requests?submit=true", { title: "Still with the CEO", department: "Editorial", seniority: "Mid" });
+ok((await second.raw("POST", `/requests/${waiting.id}/close`, { deleteContacts: false })).status === 400, "a request still waiting for the CEO can't be closed as a role");
+const { getDb, schema: tables } = await import("../server/db/client.js");
+const { runPipeline } = await import("../server/services/pipeline.js");
+const smokeDb = await getDb();
+// A run that already reached outreach when the role is closed (it would contact the Top 10 next).
+const [lateRun] = await smokeDb.insert(tables.sourcingRuns).values({ requestId: id, kind: "manual", status: "queued", step: "outreach", state: { log: [] } }).returning();
+const messagesBefore = (await second("GET", "/outreach")).messages.length;
+await second("POST", `/requests/${id}/close`, { deleteContacts: false });
+await runPipeline(lateRun.id);
+const lateRunAfter = (await second("GET", `/requests/${id}/runs`)).runs.find((r: any) => r.id === lateRun.id);
+ok(lateRunAfter.status === "cancelled", "closing a role stops its run for good");
+ok((await second("GET", `/requests/${id}`)).request.status === "closed", "the role stays closed");
+ok((await second("GET", "/outreach")).messages.length === messagesBefore, "a closed role's run contacts nobody");
+ok((await second("POST", `/requests/${id}/close`, { deleteContacts: false })).ok && (await second("GET", `/requests/${id}`)).events.filter((e: any) => e.action === "Closed the role").length === 1, "closing twice changes nothing");
+
 // ---------------------------------------------------------------- invitations and two-step login
 const adminNow = (await second("GET", "/auth/me")).user;
 const reissued = await second("POST", `/users/${adminNow.id}/invite`);
