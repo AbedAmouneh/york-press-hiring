@@ -13,6 +13,8 @@ export type EmailInput = {
   outboxOnly?: boolean;
   /** One-click unsubscribe URL for mail clients (List-Unsubscribe headers). */
   listUnsubscribe?: string;
+  /** Same key for the same logical email: a retry after a crash is not sent twice by the provider. */
+  idempotencyKey?: string;
 };
 
 /** Reserved test domains (RFC 2606/6761) used by sample data and demo accounts: never really mailed. */
@@ -44,7 +46,8 @@ export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; id?: 
   client ??= new Resend(env.resendKey);
   try {
     const headers = input.listUnsubscribe ? { "List-Unsubscribe": `<${input.listUnsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : undefined;
-    const res = await client.emails.send({ from, to: input.to, subject: input.subject, text: input.text, replyTo: input.replyTo, headers });
+    const payload = { from, to: input.to, subject: input.subject, text: input.text, replyTo: input.replyTo, headers };
+    const res = input.idempotencyKey ? await client.emails.send(payload, { idempotencyKey: input.idempotencyKey }) : await client.emails.send(payload);
     if (res.error) throw new Error(res.error.message);
     await db.insert(schema.emailLog).values({
       toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: logged,
