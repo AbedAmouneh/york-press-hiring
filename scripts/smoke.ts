@@ -309,6 +309,12 @@ const learning = await admin("GET", "/learning");
 ok(Array.isArray(learning.learned) && learning.minLabels === 12, "the learning status is readable");
 const roleWeightsNow = (await admin("GET", `/requests/${id}`)).request.scorecardWeights;
 ok(roleWeightsNow && Object.values(roleWeightsNow).reduce((a: number, b: any) => a + b, 0) === 100, "a sourced role keeps the scorecard it was scored with");
+const scoresOf = async () => Object.fromEntries((await admin("GET", `/requests/${id}/candidates`)).candidates.map((c: any) => [c.id, c.score]));
+const scoresBefore = await scoresOf();
+await admin("PATCH", `/requests/${id}/weights`, { must: 60, exp: 10, industry: 10, seniority: 5, trajectory: 5, remote: 5, signals: 5 });
+await admin("PATCH", `/requests/${id}/weights`, roleWeightsNow);
+const scoresAfter = await scoresOf();
+ok(Object.keys(scoresBefore).every((k) => scoresBefore[k] === scoresAfter[k]), "changing the weights and changing them back keeps every score");
 
 // ---------------------------------------------------------------- connection checks
 const testMail = await admin("POST", "/settings/test-email");
