@@ -19,6 +19,7 @@ export const CandidateStatusBadge = ({ status }: { status: CandidateStatus }) =>
 
 const O_LABEL: Record<string, [string, Tone]> = {
   queued: ["Email queued", "warn"],
+  sending: ["Sending", "info"],
   sent: ["Sent", "good"],
   failed: ["Failed", "bad"],
   cancelled: ["Cancelled", "neutral"],
