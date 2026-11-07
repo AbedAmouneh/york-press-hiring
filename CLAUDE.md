@@ -140,6 +140,11 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 - **Prompt injection:** profile and CV text is data inside `<candidate_data>` or `<cv>` tags;
   Claude output must pass a JSON schema.
 - **Exclusions:** current York Press employees, the do-not-contact list, people already screened.
+- **Opt-outs** (`server/services/suppression.ts`): every outreach email ends with a signed unsubscribe link (and
+  List-Unsubscribe headers). The link page only shows a confirm button; the POST, the do-not-contact list in Settings
+  and late SignalHire results all go through `suppress()`/`isSuppressed()`: unsent messages to the person are
+  cancelled on every role, an opt-out deletes their email and phone, the email queue re-checks right before sending,
+  and only an admin can take an opted-out person off the list.
 - **Outreach:** template only (Claude writes one personal line). Respect the kill switch and the
   daily cap. Every email states where the contact details came from. LinkedIn is approval-gated.
 - **Contacts:** SignalHire reveals only for the Top 10 (or a recruiter's manual click). Store the
