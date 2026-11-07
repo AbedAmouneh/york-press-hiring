@@ -208,7 +208,7 @@ export default function RoleDetail() {
           </div>
         </div>
         {isRecruiter && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {all.some((c) => !c.linkedinUrl && !c.isSample) && (
               <Button variant="outline" size="sm" onClick={findLinkedin} disabled={finding}>{finding ? <Spinner /> : <span className="rounded bg-[#0a66c2] px-1 text-[10px] font-bold leading-4 text-white">in</span>} Find LinkedIn profiles</Button>
             )}
@@ -244,7 +244,7 @@ export default function RoleDetail() {
       </Card>
 
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })} className="gap-4">
-        <TabsList variant="line" className="w-full justify-start gap-2 border-b pb-1 [&>button]:flex-none [&>button]:px-2">
+        <TabsList variant="line" className="w-full max-w-full justify-start gap-2 overflow-x-auto border-b pb-1 [&>button]:flex-none [&>button]:px-2">
           <TabsTrigger value="top">Top 10</TabsTrigger>
           <TabsTrigger value="all">All screened ({all.length})</TabsTrigger>
           <TabsTrigger value="applications">CVs received</TabsTrigger>
