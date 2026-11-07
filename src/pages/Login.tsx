@@ -81,14 +81,26 @@ export default function Login() {
           <Button type="submit" disabled={isSubmitting}>Sign in</Button>
         </form>
         <p className="mt-4 text-xs text-muted-foreground">Forgot your password? Ask your admin to send a new invite link.</p>
-        {me.data?.demoMode && me.data.demoPassword && (
+        {me.data?.demoMode && (
           <div className="mt-6 border-t pt-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Demo · sign in as</p>
             <div className="grid grid-cols-2 gap-2">
               {DEMO.map(([e, label]) => (
-                <Button key={e} variant="outline" size="sm" disabled={isSubmitting} onClick={() => signIn({ email: e, password: me.data!.demoPassword! })}>{label}</Button>
+                <Button
+                  key={e}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isSubmitting}
+                  // Where the demo password is public (local, previews) one click signs in; on a public site it
+                  // is secret, so the button only fills in the email.
+                  onClick={() => (me.data?.demoPassword ? signIn({ email: e, password: me.data.demoPassword }) : (form.setValue("email", e), form.setFocus("password")))}
+                >
+                  {label}
+                </Button>
               ))}
             </div>
+            {!me.data.demoPassword && <p className="mt-2 text-xs text-muted-foreground">Enter the demo password you were given.</p>}
           </div>
         )}
       </Card>
