@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getDb, schema } from "../../server/db/client.js";
-import { creditsAllowed, monthStart, signalhireBudget } from "../../server/services/credit-budget.js";
+import { creditsAllowed, monthStart, reserveReveals, settleReveals, signalhireBudget } from "../../server/services/credit-budget.js";
 import { updateSettings } from "../../server/services/settings.js";
 
 describe("creditsAllowed", () => {
@@ -68,6 +68,21 @@ describe("signalhireBudget", () => {
     expect((await signalhireBudget(now)).allowed).toBe(2);
     await updateSettings({ signalhireMonthlyLimit: 3 });
     expect((await signalhireBudget(now)).allowed).toBe(0);
+  });
+
+  it("lets only one of two reveals at the same moment take the last credit", async () => {
+    const db = await getDb();
+    const [role] = await db.select().from(schema.roleRequests).limit(1);
+    const people = await db.insert(schema.candidates).values([{ fullName: "Race A" }, { fullName: "Race B" }]).returning();
+    const rcs = await db.insert(schema.roleCandidates).values(people.map((p) => ({ requestId: role.id, candidateId: p.id }))).returning();
+    await updateSettings({ signalhireMonthlyLimit: 4 }); // 2 spent + 1 held: one credit left
+    const ask = (n: number) => reserveReveals([{ roleCandidateId: rcs[n].id, candidateId: people[n].id, item: `race-${n}` }], now);
+    const [a, b] = await Promise.all([ask(0), ask(1)]);
+    expect(a.rows.length + b.rows.length).toBe(1);
+    // A failed SignalHire call gives the credit back.
+    const held = [...a.rows, ...b.rows].map((r) => r.id);
+    await settleReveals(held, { failed: true });
+    expect((await signalhireBudget(now)).allowed).toBe(1);
   });
 
   it("never limits sample data", async () => {
