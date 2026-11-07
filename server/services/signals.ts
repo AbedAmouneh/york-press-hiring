@@ -88,9 +88,14 @@ export function computeSignals(p: Profile, role: Role, now = new Date()): Signal
     })
     .filter((x): x is { e: ExperienceItem; s: number; end: number } => x.s != null && x.end != null && x.end >= x.s);
 
-  // Relevant years: dated roles whose title shares a meaningful word with the role title.
+  // Relevant years: dated roles whose title shares a meaningful word with the role title, or whose title or
+  // description shows a core must-have ("Software Engineer … built Django REST APIs" counts for a Django role).
+  const { core, basic } = splitMustHaves(role.mustHaves);
+  const coreTerms = core.flatMap(mustHaveTerms);
   const roleWords = words(role.title).filter((w) => !/^(developer|engineer|specialist|officer|manager)$/.test(w) || words(role.title).length === 1);
-  const relevantRanges = dated.filter(({ e }) => roleWords.some((w) => e.title.toLowerCase().includes(w))).map(({ s, end }) => [s, end] as [number, number]);
+  const isRelevant = (e: ExperienceItem) =>
+    roleWords.some((w) => e.title.toLowerCase().includes(w)) || coreTerms.some((t) => mentions(`${e.title} ${e.summary ?? ""}`, t));
+  const relevantRanges = dated.filter(({ e }) => isRelevant(e)).map(({ s, end }) => [s, end] as [number, number]);
   const relevantYears = dated.length ? Math.round((coveredMonths(relevantRanges) / 12) * 10) / 10 : null;
   const totalYears = dated.length ? Math.round((coveredMonths(dated.map(({ s, end }) => [s, end])) / 12) * 10) / 10 : (p.totalYears ?? null);
 
@@ -104,19 +109,21 @@ export function computeSignals(p: Profile, role: Role, now = new Date()): Signal
   const band = LEVEL_YEARS.find(([re]) => re.test(role.seniority));
   const min = role.minYears ?? band?.[1] ?? null;
   const max = role.idealYears != null ? Math.max(role.idealYears + 3, min ?? 0) : band?.[2] ?? null;
-  const years = relevantYears ?? totalYears;
+  // No relevant role found doesn't mean no experience (titles vary a lot): fall back to total years.
+  const years = relevantYears ? relevantYears : totalYears;
   const title = `${p.currentTitle ?? ""} ${p.headline ?? ""}`;
   const wantsSenior = /senior|lead|principal|manager|head|director/i.test(role.seniority);
   let level: Signals["level"] = "unknown";
   if (years != null && min != null) {
-    if (years < Math.max(0, min - 1) || (JUNIOR_TITLE.test(title) && !/entry|junior|intern/i.test(role.seniority))) level = "below";
+    // Years decide. A "Junior" title only tips someone just under the minimum into "below", never a person
+    // who already has the years.
+    if (years < Math.max(0, min - 1) || (JUNIOR_TITLE.test(title) && years < min && !/entry|junior|intern/i.test(role.seniority))) level = "below";
     else if (max != null && years > max + 4 && SENIOR_TITLE.test(title) && !wantsSenior) level = "above";
     else level = "match";
   } else if (JUNIOR_TITLE.test(title) && !/entry|junior|intern/i.test(role.seniority)) level = "below";
 
   // Core must-haves: seen in the work itself (titles and role summaries) beats only being listed as a skill.
   // Basic ones (office software, degrees, soft skills) are rarely written down, so they are never counted as missing.
-  const { core, basic } = splitMustHaves(role.mustHaves);
   const workText = [p.headline ?? "", p.currentTitle ?? "", ...p.experience.map((e) => `${e.title} ${e.summary ?? ""}`)].join(" \n ");
   const skillText = p.skills.join(" \n ");
   const skillsInWork: string[] = [];
