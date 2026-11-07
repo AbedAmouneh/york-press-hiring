@@ -64,7 +64,9 @@ function TrackingForm({ detail: d, onSaved }: { detail: CandidateDetail; onSaved
   const { errors, isSubmitting } = form.formState;
   const save = form.handleSubmit(async (values) => {
     try {
-      await call(rpc["role-candidates"][":id"].$patch({ param: { id: rc.id }, json: values }));
+      // A hiring manager only sends their own decision and comment; status and dates are the recruiter's.
+      const json = d.isRecruiter ? values : { hmDecision: values.hmDecision, hmComment: values.hmComment };
+      await call(rpc["role-candidates"][":id"].$patch({ param: { id: rc.id }, json }));
       onSaved();
     } catch (e) {
       form.setError("root", { message: (e as Error).message });
