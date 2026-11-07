@@ -315,5 +315,15 @@ for (const u of (await team()).filter((x) => x.active && x.roles.includes("ceo")
 await second("POST", "/requests?submit=true", { title: "Nobody to approve", department: "Editorial", seniority: "Mid" });
 ok((await second("GET", "/notifications")).notifications.some((n: any) => n.title === "Nobody can approve Nobody to approve: add a CEO approver"), "with no CEO approver, admins are told nobody can approve the request");
 
+// ---------------------------------------------------------------- invitations and two-step login
+const adminNow = (await second("GET", "/auth/me")).user;
+const reissued = await second("POST", `/users/${adminNow.id}/invite`);
+const inviteToken = reissued.inviteLink.split("/invite/")[1];
+const redeemer = client();
+const redeemed = await redeemer("POST", `/auth/invite/${inviteToken}`, { password: "a-brand-new-password" });
+ok(redeemed.mfaRequired && (await redeemer("GET", "/auth/me")).user === null, "accepting a new invite to an account with two-step login still asks for the code");
+ok((await second("GET", "/auth/me")).user === null, "accepting an invite signs out the account's other sessions");
+ok((await client().raw("POST", `/auth/invite/${inviteToken}`, { password: "another-new-password" })).status === 404, "an invite link works once");
+
 console.log("\nAll smoke checks passed.");
 process.exit(0);
