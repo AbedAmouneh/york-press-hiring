@@ -11,6 +11,7 @@ import { revealContacts } from "../services/providers/signalhire.js";
 import { applyRevealResults } from "../services/pipeline.js";
 import { updateSettings } from "../services/settings.js";
 import { readCv } from "../services/cv-store.js";
+import { scoreApplication } from "../services/applications.js";
 import { revealAvailable } from "../services/providers/select.js";
 import { signalhireBudget } from "../services/credit-budget.js";
 import { findLinkedinUrls, linkedinLookupAvailable, probeLookup } from "../services/linkedin-finder.js";
@@ -210,6 +211,15 @@ export const candidateRoutes = new Hono<AppEnv>()
         sourcedMatch: contacts ? matchBy.get(x.email.toLowerCase()) ?? null : null,
       })),
     });
+  })
+  /** Score a CV again (e.g. after the AI service failed the first time). */
+  .post("/applications/:id/score", async (c) => {
+    const user = requireRole(c, "recruiter", "admin");
+    const db = await getDb();
+    const [a] = await db.select().from(schema.applications).where(eq(schema.applications.id, c.req.param("id")));
+    if (!a) throw new HTTPException(404, { message: "CV not found." });
+    const r = await loadRequest(a.requestId, user);
+    return c.json({ ok: await scoreApplication(a, r) });
   })
   .get("/applications/:id/cv", async (c) => {
     const db = await getDb();
