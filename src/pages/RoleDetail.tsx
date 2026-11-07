@@ -176,9 +176,9 @@ export default function RoleDetail() {
     } catch (e) { toast((e as Error).message, "error"); } finally { setFinding(false); }
   }
   async function closeRole() {
-    await call(rpc.requests[":id"].close.$post({ param: { id }, json: { deleteContacts } }));
+    const res = await call(rpc.requests[":id"].close.$post({ param: { id }, json: { deleteContacts } }));
     setClosing(false);
-    toast("Role closed. Weekly refresh stopped.");
+    toast(res.keptContacts ? `Role closed. Contact details kept for ${res.keptContacts} people on other open roles.` : "Role closed. Weekly refresh stopped.");
     qc.invalidateQueries();
   }
   function exportCsv() {
@@ -352,7 +352,7 @@ export default function RoleDetail() {
       <Modal open={closing} onOpenChange={setClosing} title={`Close ${r.title}?`} description="Closing stops the weekly refresh and cancels any outreach that hasn't been sent.">
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" checked={deleteContacts} onChange={(e) => setDeleteContacts(e.target.checked)} className="mt-1" />
-          <span>Also delete the email and phone numbers we collected for this role's candidates.</span>
+          <span>Also delete the email and phone numbers we collected for this role's candidates. People also on another open role keep theirs.</span>
         </label>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={() => setClosing(false)}>Keep open</Button>
