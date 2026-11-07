@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { and, asc, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, randomToken, requireRole, type AppEnv, type SessionUser } from "../auth.js";
@@ -305,7 +305,7 @@ export const requestRoutes = new Hono<AppEnv>()
     const r = await loadRequest(c.req.param("id"), user);
     const { deleteContacts } = c.req.valid("json");
     const db = await getDb();
-    if (r.status === "closed") return c.json({ ok: true });
+    if (r.status === "closed") return c.json({ ok: true, keptContacts: 0 });
     // Only approved roles are closed here; a request still waiting for the CEO is not the recruiter's to end.
     const closed = await db
       .update(schema.roleRequests)
@@ -317,12 +317,24 @@ export const requestRoutes = new Hono<AppEnv>()
     await cancelRuns(r.id);
     await db.update(schema.outreachMessages).set({ status: "cancelled" })
       .where(and(inArray(schema.outreachMessages.status, ["queued", "awaiting_approval", "approved"]), inArray(schema.outreachMessages.roleCandidateId, db.select({ id: schema.roleCandidates.id }).from(schema.roleCandidates).where(eq(schema.roleCandidates.requestId, r.id)))));
+    let kept = 0;
     if (deleteContacts) {
-      const ids = db.select({ id: schema.roleCandidates.candidateId }).from(schema.roleCandidates).where(eq(schema.roleCandidates.requestId, r.id));
-      await db.update(schema.candidates).set({ email: null, phone: null, contactSource: null, contactRetrievedAt: null }).where(inArray(schema.candidates.id, ids));
+      const rc = schema.roleCandidates;
+      const onThisRole = (await db.select({ id: rc.candidateId }).from(rc).where(eq(rc.requestId, r.id))).map((x) => x.id);
+      // People also on another open role keep their details: that role may still need to reach them.
+      const stillNeeded = onThisRole.length
+        ? new Set((await db
+          .select({ id: rc.candidateId })
+          .from(rc)
+          .innerJoin(schema.roleRequests, eq(schema.roleRequests.id, rc.requestId))
+          .where(and(inArray(rc.candidateId, onThisRole), ne(rc.requestId, r.id), inArray(schema.roleRequests.status, ["sourcing", "open"])))).map((x) => x.id))
+        : new Set<string>();
+      kept = stillNeeded.size;
+      const toDelete = onThisRole.filter((cid) => !stillNeeded.has(cid));
+      if (toDelete.length) await db.update(schema.candidates).set({ email: null, phone: null, contactSource: null, contactRetrievedAt: null }).where(inArray(schema.candidates.id, toDelete));
     }
-    await event(r.id, user, "Closed the role", deleteContacts ? "Contact details deleted" : null);
-    return c.json({ ok: true });
+    await event(r.id, user, "Closed the role", deleteContacts ? `Contact details deleted${kept ? ` (kept for ${kept} people on other open roles)` : ""}` : null);
+    return c.json({ ok: true, keptContacts: kept });
   })
   .get("/people/hiring-managers", async (c) => {
     const db = await getDb();
