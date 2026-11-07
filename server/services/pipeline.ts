@@ -163,6 +163,12 @@ function log(state: RunState, msg: string) {
   state.log.push({ at: new Date().toISOString(), msg });
 }
 
+/** Saves what the step is doing now, so the role page shows progress during long steps (scoring, the deep check). */
+async function showProgress(ctx: { run: Run; state: RunState }, text: string) {
+  ctx.state.progress = text;
+  await save(ctx.run.id, { state: ctx.state });
+}
+
 /**
  * "busy": another call holds the run's lock (it may have crashed; the lock expires after 6 minutes),
  * so the queue should retry later. "skipped": nothing to do (finished, failed or unknown run).
@@ -608,8 +614,10 @@ async function stepScore(ctx: Ctx): Promise<StepResult> {
     if (Date.now() > deadline) return "again";
     const rows = await unscored(ids, SCORE_CHUNK, state.rescoreBefore);
     if (!rows.length) break;
+    await showProgress(ctx, `Scoring ${Math.min(ids.length, ids.length - (await unscored(ids, undefined, state.rescoreBefore)).length + rows.length)} of ${ids.length}`);
     await scoreRows(rows, request, weights, run.id);
   }
+  state.progress = undefined;
   log(state, `Scored ${ids.length} candidates.`);
 }
 
@@ -792,10 +800,12 @@ async function stepDeep(ctx: Ctx): Promise<StepResult> {
   for (let i = 0; i < todo.length; i += SCORE_CHUNK) {
     if (Date.now() > deadline) return "again";
     const part = todo.slice(i, i + SCORE_CHUNK);
+    await showProgress(ctx, `Checking the top ${rows.length} in depth: ${done.size + part.length} of ${rows.length}`);
     await scoreRows(part, request, weights, run.id);
     for (const { rc } of part) done.add(rc.id);
     state.deepScored = [...done];
   }
+  state.progress = undefined;
   // The whole Top 10 before re-ranking, not only the shortlisted rows, or everyone already there counts as "moved in".
   const before = new Set((await db
     .select({ id: schema.roleCandidates.id })
