@@ -310,6 +310,28 @@ ok((await app.fetch(new Request(`http://localhost/api/applications/${application
   const listed = (await admin("GET", `/requests/${id}/applications`)).applications.find((a: any) => a.name === "Not Them");
   ok(listed.candidateId === null && listed.sourcedMatch?.roleCandidateId === sourced.id, "it isn't attached to them; the recruiter sees a possible match");
 }
+{
+  // Applicants get the same tracking as sourced candidates.
+  const rana = (await admin("GET", `/requests/${id}/applications`)).applications.find((a: any) => a.name === "Rana Haddad");
+  ok(rana.status === "new" && rana.hmDecision === null, "a new applicant starts as New with no decision");
+  await hm("PATCH", `/applications/${rana.id}`, { hmDecision: "yes", hmComment: "Strong portfolio" });
+  ok((await hm.raw("PATCH", `/applications/${rana.id}`, { status: "hired" })).status === 403, "the hiring manager can't change an applicant's status");
+  ok((await outsider.raw("PATCH", `/applications/${rana.id}`, { hmDecision: "no" })).status === 403, "someone without access to the role can't decide");
+  await recruiter("PATCH", `/applications/${rana.id}`, { status: "rejected" });
+  let mine = (await admin("GET", `/requests/${id}/applications`)).applications.find((a: any) => a.name === "Rana Haddad");
+  ok(mine.hmDecision === "yes" && mine.hmComment === "Strong portfolio" && mine.status === "rejected", "the hiring manager says Yes and the recruiter sets the status");
+  // Applying again from the same email: one row, the newest CV, the decision kept.
+  const again = new FormData();
+  again.set("name", "Rana Haddad");
+  again.set("email", "Rana.Haddad@example.test");
+  again.set("consent", "true");
+  again.set("cv", new File([cvText + "\nUpdated."], "rana-cv-2.txt", { type: "text/plain" }));
+  ok((await app.fetch(new Request(`http://localhost/api/public/apply/${applyToken}`, { method: "POST", body: again }))).ok, "the same person applies again");
+  const rows = (await admin("GET", `/requests/${id}/applications`)).applications.filter((a: any) => a.name === "Rana Haddad");
+  mine = rows[0];
+  ok(rows.length === 1 && mine.cvFileName === "rana-cv-2.txt" && mine.earlier.length === 1, "repeat applications from one email show as one row with the earlier CV under it");
+  ok(mine.hmDecision === "yes" && mine.status === "rejected", "the decision carries over to the new CV");
+}
 
 // ---------------------------------------------------------------- daily job and data retention
 const retention = await admin("GET", "/retention");
