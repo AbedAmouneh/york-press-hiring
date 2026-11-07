@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { requireAuth, type AppEnv } from "./auth.js";
-import { env } from "./env.js";
+import { env, missingProductionSecrets } from "./env.js";
 import { captureError } from "./monitoring.js";
 import { publicRoutes } from "./routes/public.js";
 import { requestRoutes } from "./routes/requests.js";
@@ -17,6 +17,16 @@ import { apiHeaders, noStore, sameOrigin } from "./security.js";
 const app = new Hono<AppEnv>().basePath("/api");
 
 app.use("*", apiHeaders, noStore, sameOrigin);
+
+// Production never runs on the development secrets that are public in this repo: it answers 503 until they're set.
+app.use("*", async (c, next) => {
+  const missing = missingProductionSecrets();
+  if (missing.length) {
+    console.error(`Missing production secrets: ${missing.join(", ")}. Set them in Vercel and redeploy.`);
+    return c.json({ error: "The server isn't fully configured yet. Please try again later." }, 503);
+  }
+  return next();
+});
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
