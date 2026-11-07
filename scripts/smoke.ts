@@ -433,6 +433,13 @@ ok(lateRunAfter.status === "cancelled", "closing a role stops its run for good")
 ok((await second("GET", `/requests/${id}`)).request.status === "closed", "the role stays closed");
 ok((await second("GET", "/outreach")).messages.length === messagesBefore, "a closed role's run contacts nobody");
 ok((await second("POST", `/requests/${id}/close`, { deleteContacts: false })).ok && (await second("GET", `/requests/${id}`)).events.filter((e: any) => e.action === "Closed the role").length === 1, "closing twice changes nothing");
+ok((await second("POST", `/requests/${id}/reopen`)).ok && (await second("GET", `/requests/${id}`)).request.status === "open", "a closed role can be reopened");
+ok((await second.raw("POST", `/requests/${id}/reopen`)).status === 400, "only a closed role can be reopened");
+// The request still waiting for the CEO: its requester takes it back, then deletes the draft.
+ok((await second("POST", `/requests/${waiting.id}/withdraw`)).ok && (await second("GET", `/requests/${waiting.id}`)).request.status === "draft", "a waiting request can be withdrawn and becomes a draft");
+ok((await manager.raw("DELETE", `/requests/${waiting.id}`)).status === 403, "someone else can't delete it");
+ok((await second("DELETE", `/requests/${waiting.id}`)).ok && (await second.raw("GET", `/requests/${waiting.id}`)).status === 404, "the requester deletes the draft");
+ok((await second.raw("DELETE", `/requests/${id}`)).status === 400, "an approved role can't be deleted");
 {
   // One person on two open roles: closing the first with "delete contacts" keeps their details for the second.
   const me = (await second("GET", "/auth/me")).user;
