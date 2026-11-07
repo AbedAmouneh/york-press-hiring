@@ -11,6 +11,8 @@ export type EmailInput = {
   kind: "system" | "outreach";
   /** Keep it in the outbox even when Resend is live (sample candidates, test accounts). */
   outboxOnly?: boolean;
+  /** One-click unsubscribe URL for mail clients (List-Unsubscribe headers). */
+  listUnsubscribe?: string;
 };
 
 /** Reserved test domains (RFC 2606/6761) used by sample data and demo accounts: never really mailed. */
@@ -41,7 +43,8 @@ export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; id?: 
   }
   client ??= new Resend(env.resendKey);
   try {
-    const res = await client.emails.send({ from, to: input.to, subject: input.subject, text: input.text, replyTo: input.replyTo });
+    const headers = input.listUnsubscribe ? { "List-Unsubscribe": `<${input.listUnsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : undefined;
+    const res = await client.emails.send({ from, to: input.to, subject: input.subject, text: input.text, replyTo: input.replyTo, headers });
     if (res.error) throw new Error(res.error.message);
     await db.insert(schema.emailLog).values({
       toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: logged,
