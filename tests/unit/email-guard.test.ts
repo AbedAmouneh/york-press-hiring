@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 const resend = vi.hoisted(() => ({ send: vi.fn(async () => ({ data: { id: "re_1" }, error: null })) }));
 vi.mock("resend", () => ({ Resend: class { emails = { send: resend.send }; } }));
@@ -98,5 +98,45 @@ describe("with a live Resend key", () => {
     expect(resend.send).not.toHaveBeenCalled();
     const [after] = await db.select().from(schema.outreachMessages).where(eq(schema.outreachMessages.id, msg.id));
     expect(after.status).toBe("cancelled");
+  });
+});
+
+describe("sending from several places at once", () => {
+  async function queueTwo(tag: string) {
+    const db = await getDb();
+    const [u] = await db.insert(schema.users).values({ email: `r-${tag}@york-press.test`, name: "Recruiter", roles: ["recruiter"] }).returning();
+    const [role] = await db.insert(schema.roleRequests).values({ title: "Editor", department: "Editorial", seniority: "Senior", requesterId: u.id, status: "open", applyToken: `t-${tag}` }).returning();
+    const ids: string[] = [];
+    for (const n of [1, 2]) {
+      const [person] = await db.insert(schema.candidates).values({ fullName: `Person ${tag}${n}`, email: `p-${tag}${n}@realmail.com` }).returning();
+      const [rc] = await db.insert(schema.roleCandidates).values({ requestId: role.id, candidateId: person.id }).returning();
+      const [msg] = await db.insert(schema.outreachMessages).values({ roleCandidateId: rc.id, channel: "email", toAddress: person.email!, subject: "Role", body: "Hello", status: "queued" }).returning();
+      ids.push(msg.id);
+    }
+    return ids;
+  }
+
+  it("never sends one message twice or passes the daily cap when two drains run together", async () => {
+    const ids = await queueTwo("race");
+    const { sentTodayCount } = await import("../../server/services/outreach.js");
+    const { updateSettings } = await import("../../server/services/settings.js");
+    await updateSettings({ autoSendEnabled: true, dailySendCap: (await sentTodayCount()) + 1 });
+    const [a, b] = await Promise.all([drainEmailQueue(), drainEmailQueue()]);
+    expect(a.sent + b.sent).toBe(1);
+    const db = await getDb();
+    const rows = await db.select().from(schema.outreachMessages).where(inArray(schema.outreachMessages.id, ids));
+    expect(rows.map((r) => r.status).sort()).toEqual(["queued", "sent"]);
+    await updateSettings({ dailySendCap: 500 });
+  });
+
+  it("retries an email a crashed worker left half-sent, with the same idempotency key", async () => {
+    vi.stubEnv("RESEND_API_KEY", "re_live");
+    const [id] = await queueTwo("stuck");
+    const db = await getDb();
+    await db.update(schema.outreachMessages).set({ status: "sending", claimedAt: new Date(Date.now() - 11 * 60_000) }).where(eq(schema.outreachMessages.id, id));
+    await drainEmailQueue();
+    const [row] = await db.select().from(schema.outreachMessages).where(eq(schema.outreachMessages.id, id));
+    expect(row.status).toBe("sent");
+    expect(resend.send).toHaveBeenCalledWith(expect.anything(), { idempotencyKey: `outreach-${id}` });
   });
 });
