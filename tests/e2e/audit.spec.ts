@@ -35,6 +35,14 @@ test("a recruiter can open an email to read it", async ({ page }) => {
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
+  test("the role page has no sideways scroll and every action is reachable", async ({ page }) => {
+    await signInAs(page, "Recruiter");
+    await page.goto("/roles");
+    await page.getByRole("link", { name: /Senior Product Designer/ }).click();
+    await expect(page.getByRole("button", { name: "Score again" })).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+
   test("the menu opens and takes you to a page", async ({ page }) => {
     await signInAs(page, "Recruiter");
     await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
