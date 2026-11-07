@@ -88,6 +88,38 @@ describe("computeSignals", () => {
     expect(s.locationFit).toBe("mismatch");
   });
 
+  it("counts jobs whose work shows a core must-have, whatever the job title", () => {
+    const django = { ...role, title: "Django Backend Developer", seniority: "Mid", minYears: 3, idealYears: 5, mustHaves: ["Django / Django REST Framework (3+ years)", "Python"], locationPolicy: "Remote" };
+    const s = computeSignals(person({
+      currentTitle: "Senior Software Engineer",
+      headline: "Senior Software Engineer",
+      experience: [
+        { title: "Senior Software Engineer", company: "A", start: "2023-06", end: null, summary: "Django REST Framework APIs" },
+        { title: "Software Engineer", company: "B", start: "2017-05", end: "2023-05", summary: "Payments platform in Java" },
+      ],
+    }), django, now);
+    expect(s.relevantYears).toBe(3.4); // Jun 2023 → Nov 2026: the Django job, not the Java one
+    expect(s.level).toBe("match");
+  });
+
+  it("falls back to total years when no job title or description matches", () => {
+    const s = computeSignals(person({
+      currentTitle: "Team Lead",
+      experience: [{ title: "Team Lead", company: "A", start: "2020-01", end: null }],
+    }), { ...role, title: "Django Backend Developer", mustHaves: ["Django"], minYears: 3 }, now);
+    expect(s.relevantYears).toBe(0);
+    expect(s.level).toBe("match");
+  });
+
+  it("doesn't call someone with enough years 'below' just because their title says Junior", () => {
+    const s = computeSignals(person({
+      currentTitle: "Junior Frontend Developer",
+      experience: [{ title: "Junior Frontend Developer", company: "A", start: "2022-07", end: null }],
+    }), role, now);
+    expect(s.relevantYears).toBe(4.3); // Jul 2022 → Nov 2026
+    expect(s.level).toBe("match");
+  });
+
   it("calls a much more senior lead 'above' a mid-level role", () => {
     const s = computeSignals(person({
       currentTitle: "Head of Frontend",
