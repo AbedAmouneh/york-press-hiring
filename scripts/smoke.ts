@@ -184,6 +184,8 @@ const hm = client();
 await hm("POST", "/auth/login", { email: "demo.manager@york-press.test", password: "demo-york-2026" });
 await hm("PATCH", `/role-candidates/${candidates[0].id}`, { hmDecision: "yes", hmComment: "Interview" });
 ok(true, "hiring manager recorded a decision");
+ok((await hm.raw("PATCH", `/role-candidates/${candidates[0].id}`, { status: "hired" })).status === 403, "a hiring manager can't set a candidate's status");
+ok((await hm.raw("PATCH", `/role-candidates/${candidates[0].id}`, {})).status === 400, "an empty change is refused");
 const weekly = await admin("POST", `/requests/${id}/runs`);
 ok(weekly.runId, "manual refresh started");
 await new Promise((r) => setTimeout(r, 4000));
