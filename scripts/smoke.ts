@@ -65,6 +65,8 @@ ok(starter.length === 29 && accountant?.seniority === "Entry" && accountant.jdTe
 ok((await manager.raw("POST", "/positions", { title: "Sneaky", department: "Editorial", seniority: "Mid" })).status === 403, "managers can't change the list");
 const recruiter = client();
 await recruiter("POST", "/auth/login", { email: "demo.recruiter@york-press.test", password: "demo-york-2026" });
+const inviteMail = (await recruiter("GET", "/outbox")).emails.find((e: any) => e.subject === "You're invited to York Press Hiring");
+ok(inviteMail && inviteMail.body.includes("/invite/[hidden]") && !/\/invite\/(?!\[hidden\])[A-Za-z0-9_-]+/.test(JSON.stringify(inviteMail)), "a recruiter can't read an invitation link from the outbox");
 const { position } = await recruiter("POST", "/positions", { title: "Audio Producer", department: "Product & Technology", seniority: "Mid", mustHaves: ["Audio editing"], minYears: 2, idealYears: 4 });
 ok(position.languages.length === 0 && position.active, "a recruiter added a position");
 ok((await recruiter.raw("POST", "/positions", { title: "audio producer", department: "Editorial", seniority: "Mid" })).status === 409, "the same title can't be added twice");
