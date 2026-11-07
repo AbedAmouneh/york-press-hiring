@@ -11,7 +11,7 @@ import { canViewRequest, isStaff, loadRequest } from "./access.js";
 import { notifyRoles, notifyUsers, usersWithRoles } from "../services/notify.js";
 import { assertWithinLimits, MESSAGE_LIMITS, recordHit } from "../services/rate-limit.js";
 import { decisionNotice } from "../services/decision-notice.js";
-import { startRun } from "../services/pipeline.js";
+import { cancelRuns, startRun } from "../services/pipeline.js";
 import { json, query } from "../validate.js";
 import { redactDeep, redactSecrets } from "../env.js";
 
@@ -284,7 +284,16 @@ export const requestRoutes = new Hono<AppEnv>()
     const r = await loadRequest(c.req.param("id"), user);
     const { deleteContacts } = c.req.valid("json");
     const db = await getDb();
-    await db.update(schema.roleRequests).set({ status: "closed", closedAt: new Date(), updatedAt: new Date() }).where(eq(schema.roleRequests.id, r.id));
+    if (r.status === "closed") return c.json({ ok: true });
+    // Only approved roles are closed here; a request still waiting for the CEO is not the recruiter's to end.
+    const closed = await db
+      .update(schema.roleRequests)
+      .set({ status: "closed", closedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(schema.roleRequests.id, r.id), inArray(schema.roleRequests.status, ["sourcing", "open"])))
+      .returning({ id: schema.roleRequests.id });
+    if (!closed.length) throw new HTTPException(400, { message: "Only approved roles can be closed." });
+    // Stop its sourcing run for good, so nothing more is searched, revealed or sent.
+    await cancelRuns(r.id);
     await db.update(schema.outreachMessages).set({ status: "cancelled" })
       .where(and(inArray(schema.outreachMessages.status, ["queued", "awaiting_approval", "approved"]), inArray(schema.outreachMessages.roleCandidateId, db.select({ id: schema.roleCandidates.id }).from(schema.roleCandidates).where(eq(schema.roleCandidates.requestId, r.id)))));
     if (deleteContacts) {
