@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lookupBody, readLookup, slugMatchesName } from "../../server/services/linkedin-finder.js";
+import { describeMisses, lookupBody, readLookup, slugMatchesName } from "../../server/services/linkedin-finder.js";
 
 describe("slugMatchesName", () => {
   it("accepts a profile address carrying the first or last name", () => {
@@ -36,6 +36,21 @@ describe("LinkedIn lookup", () => {
   it("drops a link that wasn't searched for, belongs to someone else, or is missing", () => {
     expect(readLookup(answer("https://www.linkedin.com/in/nour-haidar"), "Nour Haidar").url).toBeNull();
     expect(readLookup(answer("https://www.linkedin.com/in/sami-khoury", ["q"]), "Nour Haidar").url).toBeNull();
-    expect(readLookup(answer("NONE", ["q"]), "Nour Haidar")).toEqual({ url: null, searches: 1 });
+    expect(readLookup(answer("NONE", ["q"]), "Nour Haidar")).toEqual({ url: null, searches: 1, miss: "not_found" });
+  });
+});
+
+describe("why a lookup found nothing", () => {
+  it("tells apart no search, no result and a link for someone else", () => {
+    const searched = (text: string) => ({ steps: [{ type: "google_search_call", arguments: { queries: ["Rana Haddad editor linkedin"] } }], output_text: text });
+    expect(readLookup({ output_text: "https://www.linkedin.com/in/rana-haddad" }, "Rana Haddad").miss).toBe("no_search");
+    expect(readLookup(searched("NONE"), "Rana Haddad").miss).toBe("not_found");
+    expect(readLookup(searched("https://www.linkedin.com/in/someone-else-12"), "Rana Haddad").miss).toBe("name_mismatch");
+    expect(readLookup(searched("https://www.linkedin.com/in/rana-haddad-1a"), "Rana Haddad")).toMatchObject({ url: "https://www.linkedin.com/in/rana-haddad-1a" });
+  });
+
+  it("summarises the reasons for the run log", () => {
+    expect(describeMisses({ misses: { not_found: 12, name_mismatch: 3, no_search: 0 }, failed: 2, error: "quota exceeded" }))
+      .toBe("12 not in the search results, 3 link(s) that didn't match the name, 2 failed: quota exceeded");
   });
 });
