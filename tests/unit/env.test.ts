@@ -26,6 +26,33 @@ describe("app URL", () => {
   });
 });
 
+describe("demo password", () => {
+  it("uses the public demo password locally and on previews, and shows it", () => {
+    vi.stubEnv("VERCEL", "");
+    expect(env.demoPasswordIsPublic).toBe(true);
+    expect(env.demoPassword).toBe("demo-york-2026");
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    expect(env.demoPassword).toBe("demo-york-2026");
+  });
+
+  it("never accepts the public password on a public deployment", () => {
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("DEMO_PASSWORD", "");
+    expect(env.demoPasswordIsPublic).toBe(false);
+    expect(env.demoPassword).toBe("");
+  });
+
+  it("uses DEMO_PASSWORD when set and keeps it secret", () => {
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("DEMO_PASSWORD", "a-secret-demo-pass");
+    expect(env.demoPassword).toBe("a-secret-demo-pass");
+    expect(env.demoPasswordIsPublic).toBe(false);
+  });
+});
+
 describe("API keys", () => {
   it("drop spaces and line breaks pasted inside a key", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", " sk-ant-api03-abc\n def ");
