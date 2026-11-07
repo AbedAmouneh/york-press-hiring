@@ -1,4 +1,4 @@
-import { and, arrayOverlaps, asc, eq, gte, inArray, ne, or, sql } from "drizzle-orm";
+import { and, arrayOverlaps, asc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
 import { getSettings } from "./settings.js";
 import { sendEmail, senderFor } from "./email.js";
@@ -7,16 +7,12 @@ import { personalLine } from "./claude.js";
 import { addBusinessDays, localDate, startOfLocalDay } from "./dates.js";
 import { toAI, toReq } from "./mappers.js";
 import { midSentence } from "./wording.js";
+import { isSuppressed, unsubscribeLink } from "./suppression.js";
 
-export async function isSuppressed(c: { id: string; email: string | null; linkedinUrl: string | null }) {
-  const db = await getDb();
-  const s = schema.suppressionList;
-  const conds = [eq(s.candidateId, c.id)];
-  if (c.email) conds.push(eq(s.email, c.email.toLowerCase()));
-  if (c.linkedinUrl) conds.push(eq(s.linkedinUrl, c.linkedinUrl));
-  const rows = await db.select({ id: s.id }).from(s).where(or(...conds)).limit(1);
-  return rows.length > 0;
-}
+export { isSuppressed };
+
+/** Every outreach email ends with a one-click way to stop contact and delete the person's details. */
+export const unsubscribeFooter = (candidateId: string) => `\n\nTo stop hearing from us and have your details deleted: ${unsubscribeLink(candidateId)}`;
 
 async function senderForRequest(request: typeof schema.roleRequests.$inferSelect) {
   const db = await getDb();
@@ -79,7 +75,7 @@ export async function queueOutreach(requestId: string, roleCandidateIds: string[
       senderId: sender?.id ?? null,
       toAddress: channel === "email" ? c.email! : c.linkedinUrl!,
       subject: template.subject ? fillTemplate(template.subject, vars) : null,
-      body: fillTemplate(template.body, vars).slice(0, channel === "linkedin" ? 300 : 5000),
+      body: channel === "linkedin" ? fillTemplate(template.body, vars).slice(0, 300) : fillTemplate(template.body, vars).slice(0, 4800) + unsubscribeFooter(c.id),
       status: channel === "email" ? "queued" : "awaiting_approval",
     });
     if (channel === "email") email++;
@@ -121,11 +117,17 @@ export async function drainEmailQueue() {
   for (const m of queued.slice(0, Math.max(0, room))) {
     const [sender] = m.senderId ? await db.select().from(schema.users).where(eq(schema.users.id, m.senderId)) : [];
     const [person] = await db
-      .select({ isSample: schema.candidates.isSample })
+      .select({ id: schema.candidates.id, isSample: schema.candidates.isSample, email: schema.candidates.email, linkedinUrl: schema.candidates.linkedinUrl })
       .from(schema.roleCandidates)
       .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
       .where(eq(schema.roleCandidates.id, m.roleCandidateId));
+    // Someone may have opted out after the email was queued: check again right before sending.
+    if (!person || (await isSuppressed({ ...person, email: person.email ?? m.toAddress }))) {
+      await db.update(schema.outreachMessages).set({ status: "cancelled" }).where(eq(schema.outreachMessages.id, m.id));
+      continue;
+    }
     const res = await sendEmail({
+      listUnsubscribe: unsubscribeLink(person.id),
       kind: "outreach",
       outboxOnly: person?.isSample ?? false,
       to: m.toAddress,
