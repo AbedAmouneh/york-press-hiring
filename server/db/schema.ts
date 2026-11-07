@@ -142,7 +142,7 @@ export const sourcingRuns = pgTable("sourcing_runs", {
   id: id(),
   requestId: uuid("request_id").notNull().references(() => roleRequests.id, { onDelete: "cascade" }),
   kind: text("kind").$type<"initial" | "weekly" | "manual" | "rescore">().notNull().default("initial"), // initial | weekly | manual | rescore
-  status: text("status").$type<"queued" | "running" | "waiting" | "done" | "failed">().notNull().default("queued"), // queued | running | waiting | done | failed
+  status: text("status").$type<"queued" | "running" | "waiting" | "done" | "failed" | "cancelled">().notNull().default("queued"), // queued | running | waiting | done | failed | cancelled (role closed)
   step: text("step").notNull().default("brief"),
   state: jsonb("state").$type<RunState>().notNull().default({ log: [] }),
   found: integer("found").notNull().default(0),
