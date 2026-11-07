@@ -1,7 +1,7 @@
 // Form schemas for react-hook-form. Each one keeps the browser's field shape (text inputs, one item
 // per line) and pipes into the shared API schema, so the browser enforces the same rules as the server.
 import { z } from "zod";
-import { ApplyFields, cvProblem, InvitePasswordInput, LocationInput, ManagerInvite, PositionInput, RequestInput, SetupInput } from "../../shared/schemas";
+import { ApplyFields, cvProblem, InvitePasswordInput, LocationInput, ManagerInvite, PositionInput, RequestInput, SetupInput, submitProblems } from "../../shared/schemas";
 
 /** "a\nb\n\nc" → ["a", "b", "c"] */
 export const lines = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
@@ -80,9 +80,7 @@ const toRequestInput = (f: RequestFormValues) => ({
 
 /** All rules run in one pass so every error shows at once: three form-only rules, then the API's. */
 export const RequestForm = RequestFormFields.superRefine((f, ctx) => {
-  if (!f.locationId) ctx.addIssue({ code: "custom", path: ["locationId"], message: "Choose where this person will work." });
-  if (!f.currency) ctx.addIssue({ code: "custom", path: ["currency"], message: "Choose a currency." });
-  if (!f.justification.trim()) ctx.addIssue({ code: "custom", path: ["justification"], message: "Explain why this role is needed." });
+  for (const p of submitProblems(f)) ctx.addIssue({ code: "custom", path: [p.path], message: p.message });
   validateWith(RequestInput, toRequestInput(f), ctx);
 }).transform((f) => RequestInput.parse(toRequestInput(f)));
 
