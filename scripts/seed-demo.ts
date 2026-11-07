@@ -34,17 +34,19 @@ if ((await admin("GET", "/setup")).needsSetup) {
 
 const manager = client();
 await manager("POST", "/auth/login", { email: "demo.manager@york-press.test", password: "demo-york-2026" });
+// Submitted requests need a hiring location (any from the starter list).
+const place = (await manager("GET", "/locations")).locations.find((l: any) => l.country === "Lebanon") ?? (await manager("GET", "/locations")).locations[0];
 const role = await manager("POST", "/requests?submit=true", {
   title: "Senior Product Designer", department: "Product & Technology", seniority: "Senior", headcount: 1,
   jdText: "Own the design of York-E, our digital learning platform used by schools across the region.",
   mustHaves: ["Figma", "Design systems", "User research"], niceToHaves: ["Edtech or publishing"], dealBreakers: [],
   minYears: 5, idealYears: 8, languages: ["English", "Arabic"], locationPolicy: "Remote, MENA time zones", searchLocations: ["Lebanon"],
-  salaryMin: 45000, salaryMax: 65000, currency: "USD", justification: "York-E needs a dedicated designer.",
+  salaryMin: 45000, salaryMax: 65000, currency: "USD", justification: "York-E needs a dedicated designer.", locationId: place.id,
 });
 await manager("POST", "/requests?submit=true", {
   title: "Finance Manager", department: "Finance", seniority: "Manager", headcount: 1, jdText: "Lead month-end close and budgeting.",
   mustHaves: ["IFRS", "Budgeting"], niceToHaves: [], dealBreakers: [], minYears: 7, idealYears: 10, languages: ["English"],
-  locationPolicy: "Remote", searchLocations: [], salaryMin: 60000, salaryMax: 80000, currency: "USD", justification: "Backfill.",
+  locationPolicy: "Remote", searchLocations: [], salaryMin: 60000, salaryMax: 80000, currency: "USD", justification: "Backfill.", locationId: place.id,
 });
 
 // The real admin account needs two-step login, so the demo recruiter watches the run.
