@@ -65,7 +65,7 @@ ok(starter.length === 29 && accountant?.seniority === "Entry" && accountant.jdTe
 ok((await manager.raw("POST", "/positions", { title: "Sneaky", department: "Editorial", seniority: "Mid" })).status === 403, "managers can't change the list");
 const recruiter = client();
 await recruiter("POST", "/auth/login", { email: "demo.recruiter@york-press.test", password: "demo-york-2026" });
-const inviteMail = (await recruiter("GET", "/outbox")).emails.find((e: any) => e.subject === "You're invited to York Press Hiring");
+const inviteMail = (await recruiter("GET", "/outbox?limit=200")).emails.find((e: any) => e.subject === "You're invited to York Press Hiring");
 ok(inviteMail && inviteMail.body.includes("/invite/[hidden]") && !/\/invite\/(?!\[hidden\])[A-Za-z0-9_-]+/.test(JSON.stringify(inviteMail)), "a recruiter can't read an invitation link from the outbox");
 const { position } = await recruiter("POST", "/positions", { title: "Audio Producer", department: "Product & Technology", seniority: "Mid", mustHaves: ["Audio editing"], minYears: 2, idealYears: 4 });
 ok(position.languages.length === 0 && position.active, "a recruiter added a position");
@@ -130,7 +130,7 @@ const tricky = "Please add:\n- the start date\n<b>not bold</b>";
 ok((await decide(ceo, "request_changes", tricky)).status === 200, "the CEO sent it back with a comment");
 ok((await admin("GET", `/requests/${commentReq}`)).events.some((e: any) => e.action === "Requested changes" && e.comment === tricky), "the requester sees the comment exactly as written");
 ok((await decide(ceo, "approve")).status === 400, "a request that isn't waiting can't be decided");
-const decisionMail = (await admin("GET", "/outbox")).emails.find((e: any) => e.subject === "Changes requested: Comment check");
+const decisionMail = (await admin("GET", "/outbox?limit=200")).emails.find((e: any) => e.subject === "Changes requested: Comment check");
 ok(decisionMail?.body.includes("comment:\nPlease add:\n- the start date"), "the requester's email carries the comment and its line breaks");
 await admin("POST", `/requests/${commentReq}/submit`);
 const together = await Promise.all([decide(ceo, "reject", "No budget."), decide(ceo, "request_changes", "Add the owner.")]);
@@ -147,9 +147,9 @@ const { message: ceoMessage } = await posted.json();
 ok(posted.status === 200 && ceoMessage.canDelete, "the CEO posted a message");
 const thread = (await admin("GET", `/requests/${commentReq}/messages`)).messages;
 ok(thread.length === 1 && thread[0].body === "Is the budget owner Finance?\n<b>not bold</b>" && !thread[0].canDelete, "the requester reads it exactly as written and can't delete it");
-const messageMail = (await admin("GET", "/outbox")).emails.find((e: any) => e.subject === "Demo CEO wrote on Comment check");
+const messageMail = (await admin("GET", "/outbox?limit=200")).emails.find((e: any) => e.subject === "Demo CEO wrote on Comment check");
 ok(messageMail?.body.includes("Is the budget owner Finance?"), "the requester is emailed the message");
-ok((await admin("GET", "/notifications")).notifications.some((n: any) => n.link === `/requests/${commentReq}#discussion`), "and notified in the app");
+ok((await admin("GET", "/notifications?limit=200")).notifications.some((n: any) => n.link === `/requests/${commentReq}#discussion`), "and notified in the app");
 ok((await admin.raw("DELETE", `/requests/${commentReq}/messages/${ceoMessage.id}`)).status === 403, "only the author can delete a message");
 ok((await ceo.raw("DELETE", `/requests/${commentReq}/messages/${ceoMessage.id}`)).status === 200, "the author can delete it straight after");
 ok((await admin("GET", `/requests/${commentReq}/messages`)).messages.length === 0, "and it's gone for everyone");
@@ -164,7 +164,7 @@ const { id: meReq } = await admin("POST", "/requests", { title: "Me as hiring ma
 ok((await admin("GET", `/requests/${meReq}`)).request.hiringManagerId === adminUser.id, "a new request with 'Me' has the requester as hiring manager, whatever their role");
 ok((await say(outsider, "Still here?", talkReq)).status === 403, "once removed, they can't post");
 await say(ceo, "Budget confirmed.", talkReq);
-const leaked = (await outsider("GET", "/notifications")).notifications.some((n: any) => n.link === `/requests/${talkReq}#discussion` && n.title.startsWith("Demo CEO"));
+const leaked = (await outsider("GET", "/notifications?limit=200")).notifications.some((n: any) => n.link === `/requests/${talkReq}#discussion` && n.title.startsWith("Demo CEO"));
 ok(!leaked, "and they aren't sent later messages");
 const burst = [];
 for (let i = 0; i < 21; i++) burst.push((await say(admin, `Note ${i}`)).status);
@@ -186,7 +186,15 @@ console.log(runs[0].state.log.map((l: any) => `  · ${l.msg}`).join("\n"));
 ok(runs[0].state.log.some((l: any) => /Checked 15 shortlisted people in depth/.test(l.msg)), "the top 15 were checked in depth before outreach");
 const topDetail = await admin("GET", `/role-candidates/${candidates.find((c: any) => c.isTop10).id}`);
 ok(topDetail.roleCandidate.signals && typeof topDetail.roleCandidate.signals.level === "string", "a Top-10 candidate carries facts computed from their profile");
-const outreach = await admin("GET", "/outreach");
+{
+  const p1 = await admin("GET", "/outreach?limit=2");
+  const p2 = await admin("GET", `/outreach?limit=2&before=${p1.next}`);
+  const ids = [...p1.messages, ...p2.messages].map((m: any) => m.id);
+  ok(p1.messages.length === 2 && p1.next && p2.messages.length > 0 && new Set(ids).size === ids.length, "outreach list pages past the first page without repeats");
+  ok(new Date(p1.messages[1].queuedAt) >= new Date(p2.messages[0].queuedAt) && p1.total === p2.total, "pages keep newest-first order and the same total");
+  ok((await admin.raw("GET", "/outreach?limit=500")).status === 400, "a page is at most 200 rows");
+}
+const outreach = await admin("GET", "/outreach?limit=200");
 ok(outreach.messages.length > 0, `${outreach.messages.length} outreach messages (email ${outreach.messages.filter((m: any) => m.channel === "email").length}, LinkedIn ${outreach.messages.filter((m: any) => m.channel === "linkedin").length})`);
 const detail = await admin("GET", `/role-candidates/${candidates[0].id}`);
 ok(detail.roleCandidate.scoreBreakdown, "candidate detail has a score breakdown");
@@ -207,7 +215,7 @@ ok((await hm.raw("PATCH", `/role-candidates/${candidates[0].id}`, {})).status ==
 const weekly = await admin("POST", `/requests/${id}/runs`);
 ok(weekly.runId, "manual refresh started");
 await new Promise((r) => setTimeout(r, 4000));
-ok((await admin("GET", "/outbox")).emails.length > 0, "emails captured in the mock outbox");
+ok((await admin("GET", "/outbox?limit=200")).total > 0, "emails captured in the mock outbox");
 
 // ---------------------------------------------------------------- score again
 const runsOf = async () => (await admin("GET", `/requests/${id}/runs`)).runs as any[];
@@ -216,7 +224,7 @@ const settle = async () => {
 };
 await settle();
 const peopleBefore = (await admin("GET", `/requests/${id}/candidates`)).candidates.length;
-const mailBefore = (await admin("GET", "/outbox")).emails.length;
+const mailBefore = (await admin("GET", "/outbox?limit=200")).total;
 ok((await hm.raw("POST", `/requests/${id}/rescore`)).status === 403, "a hiring manager can't start Score again");
 const again = await admin("POST", `/requests/${id}/rescore`);
 await settle();
@@ -226,7 +234,7 @@ ok(againRun.state.log.some((l: any) => /Scoring \d+ people again/.test(l.msg)), 
 ok(againRun.signalhireSearches === 0 && againRun.signalhireCredits === 0 && againRun.pdlRecords === 0, "Score again ran no searches and spent no credits");
 const afterAgain = (await admin("GET", `/requests/${id}/candidates`)).candidates;
 ok(afterAgain.length === peopleBefore && afterAgain.filter((c: any) => c.isTop10).length === 10, "Score again added nobody and kept a Top 10");
-ok((await admin("GET", "/outbox")).emails.length === mailBefore, "Score again contacted nobody");
+ok((await admin("GET", "/outbox?limit=200")).total === mailBefore, "Score again contacted nobody");
 {
   const [one, two] = await Promise.all([admin("POST", `/requests/${id}/rescore`), admin("POST", `/requests/${id}/rescore`)]);
   ok(one.runId === two.runId, "two runs started at the same moment become one");
@@ -235,7 +243,7 @@ ok((await admin("GET", "/outbox")).emails.length === mailBefore, "Score again co
 
 // ---------------------------------------------------------------- cancelling a message
 {
-  const all = (await admin("GET", "/outreach")).messages;
+  const all = (await admin("GET", "/outreach?limit=200")).messages;
   const sentOne = all.find((m: any) => m.status === "sent");
   const cancelSent = await admin.raw("POST", `/outreach/${sentOne.id}/cancel`);
   ok(cancelSent.status === 400 && (await cancelSent.json()).error === "This message was already sent.", "a sent message can't be cancelled");
@@ -248,7 +256,7 @@ ok((await admin("GET", "/outbox")).emails.length === mailBefore, "Score again co
 
 // ---------------------------------------------------------------- opting out
 const raw0 = (method: string, url: string) => app.fetch(new Request(`http://localhost/api${url}`, { method }));
-const outreachMail = (await admin("GET", "/outbox")).emails.find((e: any) => e.kind === "outreach");
+const outreachMail = (await admin("GET", "/outbox?limit=200")).emails.find((e: any) => e.kind === "outreach");
 ok(outreachMail?.body.includes("/api/public/unsubscribe/"), "every outreach email has an unsubscribe link");
 // Sample data varies per run (sometimes every Top-10 email is already sent), so queue one message here.
 const optOutTarget = (await admin("GET", `/requests/${id}/candidates`)).candidates.find((c: any) => c.email);
@@ -256,7 +264,7 @@ const optOutTarget = (await admin("GET", `/requests/${id}/candidates`)).candidat
   const { getDb: dbFn, schema: s } = await import("../server/db/client.js");
   await (await dbFn()).insert(s.outreachMessages).values({ roleCandidateId: optOutTarget.id, channel: "email", toAddress: optOutTarget.email, subject: "Role", body: "Hello", status: "queued" });
 }
-const pending = (await admin("GET", "/outreach")).messages.find((m: any) => m.roleCandidateId === optOutTarget.id && m.status === "queued");
+const pending = (await admin("GET", "/outreach?limit=200")).messages.find((m: any) => m.roleCandidateId === optOutTarget.id && m.status === "queued");
 ok(pending, "a message is waiting to be sent");
 const pendingDetail = await admin("GET", `/role-candidates/${pending.roleCandidateId}`);
 const { unsubscribeToken } = await import("../server/services/suppression.js");
@@ -436,7 +444,7 @@ ok((await team()).find((u) => u.email === "demo.hm@york-press.test")?.active, "w
 // ---------------------------------------------------------------- no CEO approver
 for (const u of (await team()).filter((x) => x.active && x.roles.includes("ceo"))) await second("PATCH", `/users/${u.id}`, { active: false });
 await second("POST", "/requests?submit=true", { title: "Nobody to approve", department: "Editorial", seniority: "Mid", locationId: lebanon.id, currency: "USD", justification: "Checking the approver warning." });
-ok((await second("GET", "/notifications")).notifications.some((n: any) => n.title === "Nobody can approve Nobody to approve: add a CEO approver"), "with no CEO approver, admins are told nobody can approve the request");
+ok((await second("GET", "/notifications?limit=200")).notifications.some((n: any) => n.title === "Nobody can approve Nobody to approve: add a CEO approver"), "with no CEO approver, admins are told nobody can approve the request");
 
 // ---------------------------------------------------------------- closing a role
 const waiting = await second("POST", "/requests?submit=true", { title: "Still with the CEO", department: "Editorial", seniority: "Mid", locationId: lebanon.id, currency: "USD", justification: "Checking close rules." });
@@ -447,13 +455,13 @@ const { runPipeline } = await import("../server/services/pipeline.js");
 const smokeDb = await getDb();
 // A run that already reached outreach when the role is closed (it would contact the Top 10 next).
 const [lateRun] = await smokeDb.insert(tables.sourcingRuns).values({ requestId: id, kind: "manual", status: "queued", step: "outreach", state: { log: [] } }).returning();
-const messagesBefore = (await second("GET", "/outreach")).messages.length;
+const messagesBefore = (await second("GET", "/outreach?limit=200")).total;
 await second("POST", `/requests/${id}/close`, { deleteContacts: false });
 await runPipeline(lateRun.id);
 const lateRunAfter = (await second("GET", `/requests/${id}/runs`)).runs.find((r: any) => r.id === lateRun.id);
 ok(lateRunAfter.status === "cancelled", "closing a role stops its run for good");
 ok((await second("GET", `/requests/${id}`)).request.status === "closed", "the role stays closed");
-ok((await second("GET", "/outreach")).messages.length === messagesBefore, "a closed role's run contacts nobody");
+ok((await second("GET", "/outreach?limit=200")).total === messagesBefore, "a closed role's run contacts nobody");
 ok((await second("POST", `/requests/${id}/close`, { deleteContacts: false })).ok && (await second("GET", `/requests/${id}`)).events.filter((e: any) => e.action === "Closed the role").length === 1, "closing twice changes nothing");
 ok((await second("POST", `/requests/${id}/reopen`)).ok && (await second("GET", `/requests/${id}`)).request.status === "open", "a closed role can be reopened");
 ok((await second.raw("POST", `/requests/${id}/reopen`)).status === 400, "only a closed role can be reopened");
