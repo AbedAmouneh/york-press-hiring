@@ -57,6 +57,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   Must-haves are split by `shared/must-haves.ts` into core skills and basic requirements (office software, degrees,
   soft skills, plain language ability). Only core ones are checked and scored; basic ones are shown as "not scored"
   and never count as gaps, for every role. A role that lists only basic ones scores them all as core.
+  "Score again" (`POST /requests/:id/rescore`, run kind `rescore`) re-scores everyone already on a role with the
+  current rules and ranks them: brief, score and rank only. No searches, reveals, web search, contenders or outreach,
+  so it never contacts anyone; it logs how many Top-10 people now qualify but haven't been contacted.
 - `server/services/learning.ts`: the scorecard learns from decisions (hiring manager Yes = 1, No = 0; interview or
   hired = 1). Daily (cron) it tunes the criterion weights per department and across departments to rank past
   decisions better (pairwise accuracy), in whole points, at most ±5 per cycle and ±10 from the defaults, only with
