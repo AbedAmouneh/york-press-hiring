@@ -21,10 +21,13 @@ const canSeeContacts = (u: SessionUser, r: typeof schema.roleRequests.$inferSele
 async function latestOutreach(rcIds: string[]) {
   if (!rcIds.length) return new Map<string, typeof schema.outreachMessages.$inferSelect>();
   const db = await getDb();
-  const msgs = await db.select().from(schema.outreachMessages).where(inArray(schema.outreachMessages.roleCandidateId, rcIds)).orderBy(desc(schema.outreachMessages.queuedAt));
-  const m = new Map<string, typeof msgs[number]>();
-  for (const x of msgs) if (!m.has(x.roleCandidateId)) m.set(x.roleCandidateId, x);
-  return m;
+  // The newest message per candidate only, not every message ever queued.
+  const msgs = await db
+    .selectDistinctOn([schema.outreachMessages.roleCandidateId])
+    .from(schema.outreachMessages)
+    .where(inArray(schema.outreachMessages.roleCandidateId, rcIds))
+    .orderBy(schema.outreachMessages.roleCandidateId, desc(schema.outreachMessages.queuedAt));
+  return new Map(msgs.map((x) => [x.roleCandidateId, x]));
 }
 
 async function loadRc(id: string, user: SessionUser) {
