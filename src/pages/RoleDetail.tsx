@@ -276,7 +276,15 @@ export default function RoleDetail() {
                 {apps.data.applications.map((a) => (
                   <TableRow key={a.id}>
                     <Td className="num whitespace-nowrap text-xs">{fmtDateTime(a.createdAt)}</Td>
-                    <Td><div className="font-medium">{a.name}</div><div className="text-xs text-muted-foreground">{a.email}</div></Td>
+                    <Td>
+                      <div className="font-medium">{a.name}</div>
+                      <div className="text-xs text-muted-foreground">{a.email}</div>
+                      {a.sourcedMatch && (
+                        <button type="button" className="mt-1 text-xs underline" onClick={() => setOpen(a.sourcedMatch!.roleCandidateId)} title="Same email as someone already found for this role. The email isn't verified.">
+                          Same email as {a.sourcedMatch.rank ? `#${a.sourcedMatch.rank}` : "a sourced candidate"}
+                        </button>
+                      )}
+                    </Td>
                     <Td><ScoreBar value={a.score} /></Td>
                     <Td className="max-w-md text-xs">{a.analysis?.why}{a.analysis?.gaps && <div className="mt-1 text-muted-foreground">Gaps: {a.analysis.gaps}</div>}</Td>
                     <Td>{a.email ? <a className="text-sm underline" href={`/api/applications/${a.id}/cv`}>{a.cvFileName}</a> : "—"}</Td>
