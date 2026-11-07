@@ -58,12 +58,11 @@ export const publicRoutes = new Hono()
     const body = c.req.valid("json");
     // On a production deployment only someone with the deployment's SETUP_KEY can claim the empty install.
     if (setupKeyRequired()) {
-      const limits = INVITE_LIMITS(clientIp(c));
-      await assertWithinLimits(limits);
+      const attempt = await admit(INVITE_LIMITS(clientIp(c)));
       if (!env.setupKey || !sameSecret(body.setupKey ?? "", env.setupKey)) {
-        await recordHit(limits);
         throw new HTTPException(403, { message: env.setupKey ? "That setup key isn't right." : "Set SETUP_KEY in Vercel, redeploy, then enter it here." });
       }
+      await release(attempt);
     }
     const { admin, invites } = await runSetup(body);
     await createSession(c, admin.id);
