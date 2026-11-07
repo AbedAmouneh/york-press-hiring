@@ -232,7 +232,13 @@ ok((await admin("GET", "/outbox")).emails.length === mailBefore, "Score again co
 const raw0 = (method: string, url: string) => app.fetch(new Request(`http://localhost/api${url}`, { method }));
 const outreachMail = (await admin("GET", "/outbox")).emails.find((e: any) => e.kind === "outreach");
 ok(outreachMail?.body.includes("/api/public/unsubscribe/"), "every outreach email has an unsubscribe link");
-const pending = (await admin("GET", "/outreach")).messages.find((m: any) => ["queued", "awaiting_approval", "approved"].includes(m.status));
+// Sample data varies per run (sometimes every Top-10 email is already sent), so queue one message here.
+const optOutTarget = (await admin("GET", `/requests/${id}/candidates`)).candidates.find((c: any) => c.email);
+{
+  const { getDb: dbFn, schema: s } = await import("../server/db/client.js");
+  await (await dbFn()).insert(s.outreachMessages).values({ roleCandidateId: optOutTarget.id, channel: "email", toAddress: optOutTarget.email, subject: "Role", body: "Hello", status: "queued" });
+}
+const pending = (await admin("GET", "/outreach")).messages.find((m: any) => m.roleCandidateId === optOutTarget.id && m.status === "queued");
 ok(pending, "a message is waiting to be sent");
 const pendingDetail = await admin("GET", `/role-candidates/${pending.roleCandidateId}`);
 const { unsubscribeToken } = await import("../server/services/suppression.js");
