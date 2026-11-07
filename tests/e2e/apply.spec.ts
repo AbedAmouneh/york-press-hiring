@@ -29,4 +29,12 @@ test("a candidate uploads a CV on the public apply page", async ({ page, browser
   await page.getByRole("link", { name: /Senior Product Designer/ }).click();
   await page.getByRole("tab", { name: "CVs received" }).click();
   await expect(page.getByText("Rana Haddad")).toBeVisible();
+
+  // Applicants are tracked like sourced candidates: a status and a Yes / Maybe / No.
+  const row = page.getByRole("row").filter({ hasText: "Rana Haddad" });
+  await row.getByLabel("Status for Rana Haddad").selectOption("interview");
+  await row.getByRole("button", { name: "yes" }).click();
+  await expect(row.getByRole("button", { name: "yes" })).toHaveAttribute("aria-pressed", "true");
+  await page.reload();
+  await expect(page.getByRole("row").filter({ hasText: "Rana Haddad" }).getByLabel("Status for Rana Haddad")).toHaveValue("interview");
 });
