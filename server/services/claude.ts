@@ -392,6 +392,22 @@ export function totalScore(breakdown: ScoreBreakdown, weights: Weights, dealBrea
   return { breakdown: clean, score: dealBreakerMissing ? Math.min(40, scaled) : scaled };
 }
 
+/** Each criterion's share of its maximum (0..1), unrounded, so a score can be re-weighted without drift. */
+export function scoreFractions(breakdown: ScoreBreakdown, weights: Weights): Fractions {
+  return Object.fromEntries(CRITERIA.map((c) => {
+    const max = weights[c.key];
+    const v = Number(breakdown[c.key] ?? 0);
+    return [c.key, max > 0 && Number.isFinite(v) ? Math.max(0, Math.min(1, v / max)) : 0];
+  })) as Fractions;
+}
+
+/** Score from stored shares under (new) weights: the same weights always give the same score. */
+export function scoreWithWeights(fractions: Fractions, weights: Weights, dealBreakerMissing: boolean) {
+  return totalScore(Object.fromEntries(CRITERIA.map((c) => [c.key, (fractions[c.key] ?? 0) * weights[c.key]])) as ScoreBreakdown, weights, dealBreakerMissing);
+}
+
+export type Fractions = Record<CriterionKey, number>;
+
 const tokens = (s: string) => s.toLowerCase().split(/[^a-z0-9+#.]+/).filter((w) => w.length > 2);
 
 function mockScore(r: Req, weights: Weights, c: CandidateForAI): ScoreResult {
