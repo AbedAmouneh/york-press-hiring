@@ -103,6 +103,12 @@ function WeightsEditor({ request, onSaved }: { request: RequestRow; onSaved: () 
   );
 }
 
+/** What the role page says a run is doing, by step. */
+const STEP_LABEL: Record<string, string> = {
+  brief: "Finding candidates", search: "Finding candidates", enrich: "Finding candidates",
+  score: "Scoring", rank: "Scoring", reveal: "Checking the top 15", deep: "Checking the top 15", outreach: "Contacting the Top 10",
+};
+
 export default function RoleDetail() {
   const { id = "" } = useParams();
   const [params, setParams] = useSearchParams();
@@ -225,7 +231,7 @@ export default function RoleDetail() {
       {running && (
         <div role="status" className="mb-4 flex items-center gap-2.5 rounded-lg bg-accent px-4 py-2.5 text-sm">
           <Spinner className="text-primary" />
-          <span>{running.kind === "rescore" ? "Scoring again" : "Finding candidates"} · {running.state.log.at(-1)?.msg ?? "starting…"}</span>
+          <span>{running.kind === "rescore" ? "Scoring again" : STEP_LABEL[running.step] ?? "Finding candidates"} · {running.state.progress ?? running.state.log.at(-1)?.msg ?? "starting…"}</span>
         </div>
       )}
       {lastRun?.status === "failed" && !running && (
