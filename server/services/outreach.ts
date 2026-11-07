@@ -29,13 +29,34 @@ async function senderForRequest(request: typeof schema.roleRequests.$inferSelect
   return u ?? null;
 }
 
+/** How long after one role's message the same person isn't contacted automatically for another role. */
+export const RECONTACT_DAYS = 30;
+
+/** True when the person has a message (queued, waiting or sent) for another role in the last RECONTACT_DAYS days. */
+async function contactedRecently(candidateId: string, roleCandidateId: string) {
+  const db = await getDb();
+  const m = schema.outreachMessages;
+  const rows = await db
+    .select({ id: m.id })
+    .from(m)
+    .innerJoin(schema.roleCandidates, eq(schema.roleCandidates.id, m.roleCandidateId))
+    .where(and(
+      eq(schema.roleCandidates.candidateId, candidateId),
+      ne(m.roleCandidateId, roleCandidateId),
+      inArray(m.status, ["queued", "awaiting_approval", "approved", "sent"]),
+      gte(m.queuedAt, new Date(Date.now() - RECONTACT_DAYS * 864e5)),
+    ))
+    .limit(1);
+  return rows.length > 0;
+}
+
 /** Create outreach messages (email if we have an address, otherwise LinkedIn) for the given role candidates. */
 export async function queueOutreach(requestId: string, roleCandidateIds: string[], runId?: string | null) {
-  if (!roleCandidateIds.length) return { email: 0, linkedin: 0, skipped: 0 };
+  if (!roleCandidateIds.length) return { email: 0, linkedin: 0, skipped: 0, recentlyContacted: 0 };
   const db = await getDb();
   const [request] = await db.select().from(schema.roleRequests).where(eq(schema.roleRequests.id, requestId));
   // A closed role never contacts anyone, even if a run that started earlier gets here.
-  if (!request || !["sourcing", "open"].includes(request.status)) return { email: 0, linkedin: 0, skipped: roleCandidateIds.length };
+  if (!request || !["sourcing", "open"].includes(request.status)) return { email: 0, linkedin: 0, skipped: roleCandidateIds.length, recentlyContacted: 0 };
   const sender = await senderForRequest(request);
   const rows = await db
     .select({ rc: schema.roleCandidates, c: schema.candidates })
@@ -49,9 +70,11 @@ export async function queueOutreach(requestId: string, roleCandidateIds: string[
   const already = new Set(existing.map((e) => e.rcId));
   const emailT = await templateFor("email", request.department);
   const liT = await templateFor("linkedin", request.department);
-  let email = 0, linkedin = 0, skipped = 0;
+  let email = 0, linkedin = 0, skipped = 0, recentlyContacted = 0;
   for (const { rc, c } of rows) {
     if (already.has(rc.id) || (await isSuppressed(c))) { skipped++; continue; }
+    // Someone we contacted for another role recently isn't contacted again automatically; a recruiter can still do it.
+    if (await contactedRecently(c.id, rc.id)) { skipped++; recentlyContacted++; continue; }
     const channel = c.email ? "email" : c.linkedinUrl ? "linkedin" : null;
     const template = channel === "email" ? emailT : liT;
     if (!channel || !template) { skipped++; continue; }
@@ -83,7 +106,7 @@ export async function queueOutreach(requestId: string, roleCandidateIds: string[
     if (channel === "email") email++;
     else linkedin++;
   }
-  return { email, linkedin, skipped };
+  return { email, linkedin, skipped, recentlyContacted };
 }
 
 export async function sentTodayCount() {
