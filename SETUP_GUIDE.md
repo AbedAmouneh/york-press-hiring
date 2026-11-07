@@ -24,6 +24,7 @@ The code lives at **https://github.com/AbedAmouneh/york-press-hiring**. The loca
    | `CRON_SECRET` | another long random string |
    | `DEMO_MODE` | `true` (creates demo accounts for each role) |
    | `DEMO_PASSWORD` | a private password for the demo accounts (required on a public site; the built-in one only works locally and on previews) |
+   | `SETUP_KEY` | a long random string; first-run setup on a production site asks for it, so nobody else can claim a fresh install |
    | `EMAIL_FROM` | `York Press Careers <careers@york-press.com>` |
 
 4. Click **Deploy**. The first deploy will show an error page until the database exists — that's expected.
