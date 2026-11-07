@@ -208,6 +208,26 @@ const afterAgain = (await admin("GET", `/requests/${id}/candidates`)).candidates
 ok(afterAgain.length === peopleBefore && afterAgain.filter((c: any) => c.isTop10).length === 10, "Score again added nobody and kept a Top 10");
 ok((await admin("GET", "/outbox")).emails.length === mailBefore, "Score again contacted nobody");
 
+// ---------------------------------------------------------------- opting out
+const raw0 = (method: string, url: string) => app.fetch(new Request(`http://localhost/api${url}`, { method }));
+const outreachMail = (await admin("GET", "/outbox")).emails.find((e: any) => e.kind === "outreach");
+ok(outreachMail?.body.includes("/api/public/unsubscribe/"), "every outreach email has an unsubscribe link");
+const pending = (await admin("GET", "/outreach")).messages.find((m: any) => ["queued", "awaiting_approval", "approved"].includes(m.status));
+ok(pending, "a message is waiting to be sent");
+const pendingDetail = await admin("GET", `/role-candidates/${pending.roleCandidateId}`);
+const { unsubscribeToken } = await import("../server/services/suppression.js");
+const optOutToken = unsubscribeToken(pendingDetail.candidate.id);
+const confirmPage = await raw0("GET", `/public/unsubscribe/${optOutToken}`);
+ok(confirmPage.status === 200 && (await confirmPage.text()).includes("Yes, stop and delete"), "opening the unsubscribe link only asks to confirm");
+ok((await raw0("GET", `/public/unsubscribe/${pendingDetail.candidate.id}.forged`)).status === 404, "a made-up unsubscribe link does nothing");
+ok((await raw0("POST", `/public/unsubscribe/${optOutToken}`)).status === 200, "the candidate confirms the opt-out");
+const afterOptOut = await admin("GET", `/role-candidates/${pending.roleCandidateId}`);
+ok(afterOptOut.messages.every((m: any) => !["queued", "awaiting_approval", "approved"].includes(m.status)), "opting out cancels every unsent message to them");
+ok(!afterOptOut.candidate.hasEmail && !afterOptOut.candidate.phone, "opting out deletes their email and phone");
+const optOutEntry = (await admin("GET", "/suppression")).entries.find((e: any) => e.candidateId === pendingDetail.candidate.id);
+ok(optOutEntry?.reason === "opted_out", "they're on the do-not-contact list");
+ok((await recruiter.raw("DELETE", `/suppression/${optOutEntry.id}`)).status === 403, "a recruiter can't take an opted-out person off the list");
+
 // ---------------------------------------------------------------- CV upload and download
 const { applyToken } = (await admin("GET", `/requests/${id}`)).request;
 const cvText = "Rana Haddad\nSenior Product Designer, 9 years. Figma, design systems, user research.";
