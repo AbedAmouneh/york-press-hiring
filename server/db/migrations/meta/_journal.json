@@ -155,6 +155,20 @@
       "when": 1794214416670,
       "tag": "0021_cancel-automatic-emails",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794215596475,
+      "tag": "0022_universities",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794215608772,
+      "tag": "0023_seed-universities",
+      "breakpoints": true
     }
   ]
 }
