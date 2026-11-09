@@ -112,6 +112,17 @@ describe("browser forms reuse the API rules", () => {
     expect(PositionForm.parse({ ...base, employmentType: "", salaryPeriod: "" })).toMatchObject({ employmentType: null, salaryPeriod: null });
   });
 
+  it("reads numbers as typed: decimals for pay, whole numbers for years and hours", () => {
+    const base = { ...emptyRequest, title: "Illustrator" };
+    expect(RequestDraftForm.parse({ ...base, salaryMin: "12.50", salaryMax: "2,500" })).toMatchObject({ salaryMin: 12.5, salaryMax: 2500 });
+    expect(messages(RequestDraftForm.safeParse({ ...base, salaryMin: "12.505" }))).toEqual({ salaryMin: "Use at most two decimals." });
+    expect(messages(RequestDraftForm.safeParse({ ...base, salaryMin: "about 20" }))).toEqual({ salaryMin: "Enter an amount, like 2500 or 12.50." });
+    // "2.5" used to become 25 years.
+    expect(messages(RequestDraftForm.safeParse({ ...base, minYears: "2.5" }))).toEqual({ minYears: "Enter a whole number." });
+    expect(messages(RequestDraftForm.safeParse({ ...base, employmentType: "part_time", hoursPerWeek: "abc" }))).toEqual({ hoursPerWeek: "Enter the hours as a whole number." });
+    expect(RequestInput.parse({ title: "Editor", department: "Editorial", seniority: "Mid", salaryMin: "15.75" }).salaryMin).toBe(15.75);
+  });
+
   it("only keeps the details that belong to the employment type", () => {
     const filled = { ...emptyRequest, title: "Illustrator", hoursPerWeek: "20", contractLength: "3 months", workload: "10 drawings a month", projectDescription: "Book covers" };
     expect(RequestDraftForm.parse({ ...filled, employmentType: "part_time" })).toMatchObject({ hoursPerWeek: 20, contractLength: null, workload: null, projectDescription: null });
