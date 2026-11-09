@@ -70,7 +70,8 @@ function suggestionsFrom(p: Position): Partial<Record<Suggestable, string>> {
     department: p.department, seniority: p.seniority, jdText: p.jdText, mustHaves: p.mustHaves.join("\n"), niceToHaves: p.niceToHaves.join("\n"),
     minYears: p.minYears?.toString() ?? "", idealYears: p.idealYears?.toString() ?? "", languages: p.languages.join(", "),
     // Type before pay basis: setting the type moves an untouched pay basis to its default, then the position's own basis wins.
-    employmentType: p.employmentType ?? "", salaryPeriod: p.salaryPeriod ?? "",
+    // A position without a usual type means Full time, so it also undoes a type suggested by the previous pick.
+    employmentType: p.employmentType ?? "full_time", salaryPeriod: p.salaryPeriod ?? "",
   };
   return Object.fromEntries(Object.entries(out).filter(([, v]) => v)) as Partial<Record<Suggestable, string>>;
 }
