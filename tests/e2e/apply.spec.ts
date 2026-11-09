@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signInAs } from "./helpers";
+import { designerLink, signInAs } from "./helpers";
 
 test("a candidate uploads a CV on the public apply page", async ({ page, browser }) => {
   // Find the open role's apply link the way a recruiter would get it: from the API.
@@ -26,7 +26,7 @@ test("a candidate uploads a CV on the public apply page", async ({ page, browser
   await candidate.close();
 
   // The recruiter sees it on the role.
-  await page.getByRole("link", { name: /Senior Product Designer/ }).click();
+  await designerLink(page).click();
   await page.getByRole("tab", { name: "CVs received" }).click();
   await expect(page.getByText("Rana Haddad")).toBeVisible();
 

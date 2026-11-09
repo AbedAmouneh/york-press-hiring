@@ -18,11 +18,13 @@ test("the LinkedIn queue keeps the two sections Cowork reads, and approving move
   }
 });
 
-test("email outreach opens on everything when nothing is queued", async ({ page }) => {
+test("the outreach page lists what people sent and has no automatic send button", async ({ page }) => {
   await signInAs(page, "Recruiter");
   await page.goto("/outreach");
   await expect(page.getByText(/sent today/)).toBeVisible();
-  const filters = page.getByRole("group", { name: "Filter emails" });
+  await expect(page.getByText("Messages go out only when someone presses Contact on a role page.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Send queued/ })).toHaveCount(0);
+  const filters = page.getByRole("group", { name: "Filter messages" });
   await expect(filters.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "true");
 });
 
