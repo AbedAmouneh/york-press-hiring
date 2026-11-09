@@ -40,6 +40,16 @@ describe("mustHaveTerms", () => {
     expect(mustHaveTerms("2+ years of professional experience with React")).toEqual(["react"]);
   });
 
+  it("drops a 'portfolio of' wrapper, which profiles never say", () => {
+    expect(mustHaveTerms("Portfolio of children's or educational illustration")).toEqual(["children", "educational illustration"]);
+    expect(mustHaveTerms("Strong portfolio showing UI design")).toEqual(["ui design"]);
+    expect(mustHaveTerms("Portfolio")).toEqual(["portfolio"]);
+  });
+
+  it("finds a children's illustrator for a children's portfolio must-have", () => {
+    expect(mustHaveTerms("Portfolio of children's or educational illustration").some((t) => mentions("Children's Book Illustrator", t))).toBe(true);
+  });
+
   it("keeps skills that start with a digit", () => {
     expect(mustHaveTerms("2D animation")).toEqual(["2d animation"]);
     expect(mustHaveTerms("3D basics")).toEqual(["3d basics"]);
