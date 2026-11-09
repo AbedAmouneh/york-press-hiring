@@ -1,6 +1,6 @@
 // Validation rules shared by the API (request parsing) and the React forms (react-hook-form resolver).
 import { z } from "zod";
-import { CANDIDATE_STATUSES, CRITERIA, CURRENCIES, DEPARTMENTS, HM_DECISIONS, ROLES } from "./types.js";
+import { CANDIDATE_STATUSES, CRITERIA, CURRENCIES, DEPARTMENTS, EMPLOYMENT_TYPES, HM_DECISIONS, PAY_PERIODS, ROLES } from "./types.js";
 import { MESSAGE_MAX } from "./messages.js";
 
 const email = z.email("Enter a valid email address.");
@@ -58,7 +58,14 @@ export const RequestFields = z.object({
   salaryMin: z.coerce.number<number | string>().int().min(0).nullable().optional(),
   salaryMax: z.coerce.number<number | string>().int().min(0).nullable().optional(),
   currency: z.enum(CURRENCIES, "Choose a currency.").nullable().optional(),
-  salaryPeriod: z.enum(["year", "month"]).default("month"),
+  employmentType: z.enum(EMPLOYMENT_TYPES, "Choose the type of employment.").default("full_time"),
+  salaryPeriod: z.enum(PAY_PERIODS, "Choose how pay is quoted.").default("month"),
+  /** Part time. */
+  hoursPerWeek: z.coerce.number<number | string>().int().min(1, "At least 1 hour.").max(60, "At most 60 hours.").nullable().optional(),
+  /** Contractor and freelance. */
+  contractLength: z.string().trim().max(80, "Keep it short, e.g. 6 months.").nullable().optional(),
+  workload: z.string().trim().max(120, "Keep it short, e.g. 10 days a month.").nullable().optional(),
+  projectDescription: z.string().trim().max(2000, "Keep the project description under 2,000 characters.").nullable().optional(),
   justification: z.string().default(""),
   targetCompanies: list,
   avoidCompanies: list,
@@ -234,6 +241,9 @@ const PositionFields = z.object({
   minYears: optionalInt(40),
   idealYears: optionalInt(40),
   jdText: z.string().max(20000, "Keep the job description under 20,000 characters."),
+  /** The usual type and pay basis a request for this position starts with. */
+  employmentType: z.enum(EMPLOYMENT_TYPES).nullable(),
+  salaryPeriod: z.enum(PAY_PERIODS).nullable(),
   active: z.boolean(),
 });
 export const PositionInput = PositionFields.extend({
@@ -241,6 +251,8 @@ export const PositionInput = PositionFields.extend({
   niceToHaves: items.default([]),
   languages: items.default([]),
   jdText: PositionFields.shape.jdText.default(""),
+  employmentType: PositionFields.shape.employmentType.default(null),
+  salaryPeriod: PositionFields.shape.salaryPeriod.default(null),
   active: z.boolean().default(true),
 }).refine(yearsRule, yearsMessage);
 /** Only the fields sent are changed (no defaults, so a rename doesn't clear the lists). */
