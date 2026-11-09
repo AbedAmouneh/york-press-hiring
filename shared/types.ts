@@ -32,7 +32,24 @@ export const REQUEST_STATUS_LABELS: Record<RequestStatus, string> = {
   closed: "Closed",
 };
 
-export const CANDIDATE_STATUSES = ["new", "contacted", "replied", "interview", "rejected", "hired"] as const;
+export const EMPLOYMENT_TYPES = ["full_time", "part_time", "contractor", "freelance"] as const;
+export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
+export const EMPLOYMENT_LABELS: Record<EmploymentType, string> = {
+  full_time: "Full time",
+  part_time: "Part time",
+  contractor: "Contractor",
+  freelance: "Freelance",
+};
+
+/** How pay is quoted. Each employment type starts on one (`PAY_DEFAULT`), and any request can switch. */
+export const PAY_PERIODS = ["hour", "day", "month", "year", "project"] as const;
+export type PayPeriod = (typeof PAY_PERIODS)[number];
+export const PAY_LABELS: Record<PayPeriod, string> = { hour: "Per hour", day: "Per day", month: "Per month", year: "Per year", project: "Per project" };
+export const PAY_DEFAULT: Record<EmploymentType, PayPeriod> = { full_time: "month", part_time: "month", contractor: "day", freelance: "hour" };
+/** Contractors and freelancers get contract length, workload and a project description. */
+export const isContractWork = (t: EmploymentType) => t === "contractor" || t === "freelance";
+
+export const CANDIDATE_STATUSES =["new", "contacted", "replied", "interview", "rejected", "hired"] as const;
 export type CandidateStatus = (typeof CANDIDATE_STATUSES)[number];
 
 export const HM_DECISIONS = ["yes", "maybe", "no"] as const;
