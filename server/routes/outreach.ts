@@ -8,7 +8,8 @@ import { z } from "zod";
 import { OUTREACH_STATUSES } from "../../shared/types.js";
 import { OutreachEdit } from "../../shared/schemas.js";
 import { requireRole, type AppEnv } from "../auth.js";
-import { drainEmailQueue, markContacted, sentTodayCount } from "../services/outreach.js";
+import { ContactError, markContacted, sentTodayCount, undoWhatsapp } from "../services/outreach.js";
+import { canEditCandidates, loadRequest } from "./access.js";
 import { getSettings } from "../services/settings.js";
 
 async function loadMessage(id: string) {
@@ -20,7 +21,7 @@ async function loadMessage(id: string) {
 
 export const outreachRoutes = new Hono<AppEnv>()
   .get("/outreach", query(z.object({
-    channel: z.enum(["email", "linkedin"]).optional(),
+    channel: z.enum(["email", "linkedin", "whatsapp"]).optional(),
     /** Comma-separated, e.g. "awaiting_approval,approved". */
     status: z.string().transform((v) => v.split(",")).pipe(z.array(z.enum(OUTREACH_STATUSES))).optional(),
     ...PageQuery,
@@ -106,10 +107,22 @@ export const outreachRoutes = new Hono<AppEnv>()
     if (msg.channel !== "linkedin" || msg.status !== "approved") throw new HTTPException(400, { message: "Approve the message before marking it sent." });
     const db = await getDb();
     await db.update(schema.outreachMessages).set({ status: "sent", sentAt: new Date() }).where(eq(schema.outreachMessages.id, msg.id));
-    await markContacted(msg.roleCandidateId);
+    await markContacted(msg.roleCandidateId, msg.kind);
     return c.json({ ok: true });
   })
-  .post("/outreach/send-now", async (c) => {
-    requireRole(c, "recruiter", "admin");
-    return c.json(await drainEmailQueue());
+  /** WhatsApp: the message was recorded as sent when WhatsApp opened; undo it if it wasn't actually sent. */
+  .post("/outreach/:id/undo", async (c) => {
+    const user = c.get("user");
+    const msg = await loadMessage(c.req.param("id"));
+    const db = await getDb();
+    const [rc] = await db.select({ requestId: schema.roleCandidates.requestId }).from(schema.roleCandidates).where(eq(schema.roleCandidates.id, msg.roleCandidateId));
+    const request = await loadRequest(rc.requestId, user);
+    if (!canEditCandidates(user, request)) throw new HTTPException(403, { message: "Only recruiters and this role's hiring manager can change contacts." });
+    try {
+      await undoWhatsapp(msg.id);
+    } catch (e) {
+      if (e instanceof ContactError) throw new HTTPException(400, { message: e.message });
+      throw e;
+    }
+    return c.json({ ok: true });
   });
