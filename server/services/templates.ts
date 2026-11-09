@@ -12,6 +12,7 @@ export const PLACEHOLDERS = [
   "data_source",
   "recruiter_name",
   "company",
+  "employment",
 ] as const;
 
 const DEPT_PITCH: Record<string, string> = {
