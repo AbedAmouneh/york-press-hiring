@@ -125,6 +125,7 @@ test.describe("saved positions and locations", () => {
     await expect(page.getByText("Ideal years should be at least the minimum.")).toBeVisible();
     await page.getByLabel("Ideal years").fill("7");
     await page.getByLabel("Job description").fill("Produce our audio lessons and podcasts.");
+    await page.getByLabel("Usual employment type").selectOption("contractor");
     await page.getByRole("button", { name: "Add position" }).last().click();
     await expect(page.getByRole("cell", { name: "Audio Producer", exact: true })).toBeVisible();
 
@@ -143,6 +144,8 @@ test.describe("saved positions and locations", () => {
     await page.getByRole("combobox", { name: "Job title" }).fill("audio");
     await page.getByRole("option", { name: /^Audio Producer/ }).click();
     await expect(page.getByLabel("Job description")).toHaveValue("Produce our audio lessons and podcasts.");
+    await expect(page.getByLabel("Employment type")).toHaveValue("contractor");
+    await expect(page.getByLabel("Per", { exact: true })).toHaveValue("day");
     await page.getByLabel("Location", { exact: true }).selectOption({ label: "Riyadh, Saudi Arabia" });
     await expect(page.getByLabel("Location policy")).toHaveValue("Hybrid, Riyadh, Saudi Arabia");
     await expect(page.getByLabel("Working hours")).toHaveValue("Sun–Thu 8:00–16:00");
