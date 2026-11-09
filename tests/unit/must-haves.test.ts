@@ -25,6 +25,8 @@ describe("isBasicMustHave", () => {
     "Microsoft Excel and Office",
     "Willingness to travel",
     "Driving licence",
+    "Working to briefs and deadlines",
+    "Ability to meet tight deadlines",
   ])("treats %s as basic", (m) => expect(isBasicMustHave(m)).toBe(true));
 
   it.each([
@@ -45,6 +47,8 @@ describe("isBasicMustHave", () => {
     "CPA, ACCA or ACA",
     "5+ years software engineering",
     "3+ years",
+    "Writing legal briefs",
+    "Consistent characters and style across a series",
   ])("keeps %s as core", (m) => expect(isBasicMustHave(m)).toBe(false));
 });
 
