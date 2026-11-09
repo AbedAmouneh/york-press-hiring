@@ -128,6 +128,7 @@ test.describe("saved positions and locations", () => {
     await page.getByLabel("Usual employment type").selectOption("contractor");
     await page.getByRole("button", { name: "Add position" }).last().click();
     await expect(page.getByRole("cell", { name: "Audio Producer", exact: true })).toBeVisible();
+    await expect(page.getByRole("row", { name: /Audio Producer/ })).toContainText("Contractor");
 
     await page.getByRole("tab", { name: "Locations" }).click();
     await page.getByRole("button", { name: "Add location" }).click();
@@ -146,6 +147,13 @@ test.describe("saved positions and locations", () => {
     await expect(page.getByLabel("Job description")).toHaveValue("Produce our audio lessons and podcasts.");
     await expect(page.getByLabel("Employment type")).toHaveValue("contractor");
     await expect(page.getByLabel("Per", { exact: true })).toHaveValue("day");
+    // A position with no usual type puts the suggested type back to Full time.
+    await page.getByRole("combobox", { name: "Job title" }).fill("accountant");
+    await page.getByRole("option", { name: /^Accountant/ }).first().click();
+    await expect(page.getByLabel("Employment type")).toHaveValue("full_time");
+    await expect(page.getByLabel("Per", { exact: true })).toHaveValue("month");
+    await page.getByRole("combobox", { name: "Job title" }).fill("audio");
+    await page.getByRole("option", { name: /^Audio Producer/ }).click();
     await page.getByLabel("Location", { exact: true }).selectOption({ label: "Riyadh, Saudi Arabia" });
     await expect(page.getByLabel("Location policy")).toHaveValue("Hybrid, Riyadh, Saudi Arabia");
     await expect(page.getByLabel("Working hours")).toHaveValue("Sun–Thu 8:00–16:00");
