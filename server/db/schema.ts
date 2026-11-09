@@ -77,6 +77,8 @@ export const roleRequests = pgTable("role_requests", {
   avoidCompanies: text("avoid_companies").array().notNull().default(sql`'{}'::text[]`),
   locationId: uuid("location_id").references((): AnyPgColumn => locations.id, { onDelete: "set null" }),
   workingHours: text("working_hours"),
+  /** Optional: search only people who studied (or study) at these universities. Empty = everyone. */
+  universities: text("universities").array().notNull().default(sql`'{}'::text[]`),
   requesterId: uuid("requester_id").notNull().references(() => users.id),
   hiringManagerId: uuid("hiring_manager_id").references(() => users.id),
   recruiterId: uuid("recruiter_id").references(() => users.id),
@@ -138,6 +140,11 @@ export type SearchBrief = {
   excludeCompanies: string[];
   targetCompanies: string[];
   summary: string;
+  /**
+   * Set per search from the request (never saved in the brief): only people who studied or study at one of these
+   * (full names and short names). Empty or missing = everyone.
+   */
+  education?: string[];
 };
 
 export const sourcingRuns = pgTable("sourcing_runs", {
@@ -284,10 +291,23 @@ export const locations = pgTable("locations", {
   city: text("city"),
   workArrangement: text("work_arrangement").notNull().default("On-site"),
   workingHours: text("working_hours").notNull().default(""),
+  /** Universities a new request at this location starts with (it can change them). Empty = everyone. */
+  universities: text("universities").array().notNull().default(sql`'{}'::text[]`),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 }, (t) => [uniqueIndex("locations_name_idx").on(sql`lower(${t.name})`)]);
+
+/** Accredited universities per country, for the university pickers. People can add missing ones. */
+export const universities = pgTable("universities", {
+  id: id(),
+  country: text("country").notNull(),
+  name: text("name").notNull(),
+  city: text("city"),
+  /** Short names people write on profiles (AUB, LAU, AUC), searched alongside the full name. */
+  aka: text("aka").array().notNull().default(sql`'{}'::text[]`),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("universities_country_name_idx").on(t.country, sql`lower(${t.name})`)]);
 
 export const outreachMessages = pgTable("outreach_messages", {
   id: id(),
