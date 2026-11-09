@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atExcludedCompany, mergeProfiles, nameKey, prescore } from "../../server/services/merge.js";
+import { atExcludedCompany, mergeProfiles, nameKey, prescore, showsContractWork } from "../../server/services/merge.js";
 import type { NormalizedProfile } from "../../server/services/providers/types.js";
 
 const profile = (over: Partial<NormalizedProfile>): NormalizedProfile => ({
@@ -96,5 +96,16 @@ describe("prescore", () => {
   it("uses neutral defaults when the brief has no skills or minimum years", () => {
     const p = profile({ currentTitle: "Accountant" });
     expect(prescore(p, ["Senior Editor"], [], null)).toBe(29);
+  });
+
+  it("favours freelance and contract profiles only for contract work, and never filters anyone", () => {
+    const freelancer = profile({ currentTitle: "Freelance Illustrator", headline: "Self-employed illustrator" });
+    const employee = profile({ currentTitle: "Illustrator", currentCompany: "Acme Press" });
+    const base = prescore(employee, ["Illustrator"], [], null);
+    expect(prescore(freelancer, ["Illustrator"], [], null)).toBe(base);
+    expect(prescore(freelancer, ["Illustrator"], [], null, true)).toBe(base + 8);
+    expect(prescore(employee, ["Illustrator"], [], null, true)).toBe(base);
+    expect(showsContractWork(profile({ currentTitle: "Editor", headline: "Available on a contract basis" }))).toBe(true);
+    expect(showsContractWork(profile({ currentTitle: "Contracts Manager" }))).toBe(false);
   });
 });
