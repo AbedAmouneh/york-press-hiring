@@ -15,7 +15,7 @@ import { describeMisses, findLinkedinUrls, linkedinLookupAvailable } from "./lin
 import { toAI, toReq } from "./mappers.js";
 import { applyGuardrails, computeSignals, signalFacts } from "./signals.js";
 import { learnedWeightsFor } from "./learning.js";
-import { drainEmailQueue, isSuppressed, queueOutreach, RECONTACT_DAYS } from "./outreach.js";
+import { isSuppressed } from "./outreach.js";
 import { notifyRoles, notifyUsers } from "./notify.js";
 import { captureError } from "../monitoring.js";
 import { enqueueRun, queueEnabled } from "./queue.js";
@@ -849,24 +849,20 @@ async function stepOutreach({ run, request, state }: Ctx): Promise<StepResult> {
     log(state, `Waiting for ${pending.length} contact result(s) from SignalHire.`);
     return "waiting";
   }
+  // Nothing is drafted or sent here: a recruiter or the hiring manager presses Contact on each person.
   const all = await outreachTargets(run, request.id);
-  // Only good matches are contacted automatically; weaker Top-10 people stay on the list for a recruiter to decide.
   const { minOutreachScore } = await getSettings();
   const targets = all.filter(({ rc }) => (rc.score ?? 0) >= minOutreachScore);
-  const held = all.length - targets.length;
-  if (held) log(state, `${held} of the Top ${TOP_N} scored below ${minOutreachScore}, so they weren't contacted automatically.`);
   if (run.kind === "initial" && targets.length < 3) {
     await notifyRoles(["recruiter"], {
       type: "few_matches",
       title: `${request.title}: only ${targets.length} strong match${targets.length === 1 ? "" : "es"}`,
       link: `/roles/${request.id}`,
-      emailBody: `The search for ${request.title} found only ${targets.length} candidate(s) scoring ${minOutreachScore} or more. Check the requirements (a must-have that few people list, like office software, narrows the field), widen the location, or contact the others by hand from the role page.`,
+      emailBody: `The search for ${request.title} found only ${targets.length} candidate(s) scoring ${minOutreachScore} or more. Check the requirements (a must-have that few people list, like office software, narrows the field), widen the location, or look at the others on the role page.`,
     });
   }
-  const q = await queueOutreach(request.id, targets.map((t) => t.rc.id), run.id);
-  const drained = await drainEmailQueue();
-  log(state, `Outreach: ${q.email} email(s) queued, ${q.linkedin} LinkedIn message(s) awaiting approval; ${drained.paused ? "sending is paused" : `${drained.sent} sent now`}.`);
-  if (q.recentlyContacted) log(state, `${q.recentlyContacted} Top-${TOP_N} candidate(s) were contacted for another role in the last ${RECONTACT_DAYS} days, so they weren't contacted again automatically.`);
+  const reachable = all.filter(({ c }) => c.email || c.linkedinUrl || c.phone).length;
+  log(state, `${all.length} Top-${TOP_N} candidate(s) are ready to contact (${reachable} with an email, LinkedIn or phone). Nothing is sent until someone presses Contact.`);
 }
 
 /** SignalHire credits spent on contact reveals for a run, including results that came back through the webhook. */
@@ -893,7 +889,7 @@ async function finish(run: Run, request: Request, state: RunState, counters: Rec
       type: "run_done",
       title: `${request.title}: ${n} candidates screened, Top 10 ready`,
       link: `/roles/${request.id}`,
-      emailBody: `Sourcing for ${request.title} is finished. ${n} candidates were screened and scored, and the Top 10 are flagged. Top-10 candidates with an email were contacted automatically; the rest are in the LinkedIn queue for approval.`,
+      emailBody: `Sourcing for ${request.title} is finished. ${n} candidates were screened and scored, and the Top 10 are flagged. Nobody has been contacted: open the role and press Contact on the people you want to reach.`,
     }, [request.hiringManagerId, request.requesterId]);
   } else if (counters.newContenders > 0) {
     await notifyRoles(["recruiter"], {

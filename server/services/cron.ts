@@ -1,6 +1,5 @@
 import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
-import { drainEmailQueue } from "./outreach.js";
 import { resumeStaleRuns, resumeWaitingRuns, startRun } from "./pipeline.js";
 import { notifyRoles } from "./notify.js";
 import { getSettings, updateSettings } from "./settings.js";
@@ -86,7 +85,6 @@ export async function runDaily(now = new Date()) {
   out.staleRunsResumed = await resumeStaleRuns();
   await resumeWaitingRuns(true);
   out.reminders = await sendApprovalReminders();
-  out.emails = await drainEmailQueue();
   try {
     const credits = await signalhireCredits();
     if (credits != null) await updateSettings({ signalhireCreditsLeft: credits });
