@@ -1,115 +1,73 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Send } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { call, rpc } from "@/lib/rpc";
 import { LoadMore, usePaged } from "@/lib/paged";
 import { cn, fmtDate } from "@/lib/utils";
 import { PageHeader } from "@/components/AppShell";
-import { Button } from "@/components/ui/button";
 import type { OutreachMessage } from "@/lib/types";
-import { Avatar, Badge, DataTable, EmptyState, Field, FilterChips, Modal, Spinner, Td, Th, useToast } from "@/components/kit";
+import { Avatar, Badge, DataTable, EmptyState, FilterChips, Modal, Spinner, Td, Th } from "@/components/kit";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 
-const TONE: Record<string, "warn" | "good" | "bad" | "neutral" | "info"> = { queued: "warn", sent: "good", failed: "bad", cancelled: "neutral", approved: "info", awaiting_approval: "warn" };
-const FILTERS = [["queued", "Queued"], ["sent", "Sent"], ["failed", "Failed"], ["all", "All"]] as const;
+const TONE: Record<string, "warn" | "good" | "bad" | "neutral" | "info"> = { queued: "warn", sending: "warn", sent: "good", failed: "bad", cancelled: "neutral", approved: "info", awaiting_approval: "warn" };
+const FILTERS = [["all", "All"], ["sent", "Sent"], ["approved", "Waiting for Cowork"], ["failed", "Failed"], ["cancelled", "Cancelled"]] as const;
+const CHANNEL: Record<string, string> = { email: "Email", linkedin: "LinkedIn", whatsapp: "WhatsApp" };
 
-/** The email as the candidate gets it. While it is still queued, the subject and text can be changed. */
-function EmailPreview({ m, onClose, onSaved }: { m: OutreachMessage; onClose: () => void; onSaved: () => void }) {
-  const toast = useToast();
-  const [subject, setSubject] = useState(m.subject ?? "");
-  const [body, setBody] = useState(m.body);
-  const editable = m.status === "queued";
-  const dirty = subject !== (m.subject ?? "") || body !== m.body;
-  async function save() {
-    try {
-      await call(rpc.outreach[":id"].$patch({ param: { id: m.id }, json: { subject, body } }));
-      toast("Email updated.");
-      onSaved();
-    } catch (e) { toast((e as Error).message, "error"); }
-  }
+/** One message as the candidate got it (or will get it, for LinkedIn notes waiting for Cowork). */
+function MessagePreview({ m, onClose }: { m: OutreachMessage; onClose: () => void }) {
   return (
-    <Modal open onOpenChange={(o) => !o && onClose()} title={`Email to ${m.candidateName}`} description={m.toAddress}>
-      {editable ? (
-        <div className="grid gap-3">
-          <Field label="Subject" htmlFor="em-subject"><Input id="em-subject" value={subject} onChange={(e) => setSubject(e.target.value)} /></Field>
-          <Field label="Message" htmlFor="em-body"><Textarea id="em-body" rows={12} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>Close</Button>
-            <Button disabled={!dirty} onClick={save}>Save changes</Button>
-          </div>
-        </div>
-      ) : (
-        <div className="grid gap-2">
-          {m.subject && <p className="text-sm font-medium">{m.subject}</p>}
-          <p className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap rounded-lg bg-secondary/60 p-3 text-sm">{m.body}</p>
-        </div>
-      )}
+    <Modal open onOpenChange={(o) => !o && onClose()} title={`${CHANNEL[m.channel] ?? m.channel}${m.kind === "follow_up" ? " follow-up" : ""} to ${m.candidateName}`} description={m.toAddress}>
+      <div className="grid gap-2">
+        {m.subject && <p className="text-sm font-medium">{m.subject}</p>}
+        <p className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap rounded-lg bg-secondary/60 p-3 text-sm">{m.body}</p>
+        {m.error && <p className="text-sm text-destructive">{m.error}</p>}
+      </div>
     </Modal>
   );
 }
 
+/** Every message someone sent from a role page: email, WhatsApp and LinkedIn notes. Nothing here is sent automatically. */
 export default function Outreach() {
-  const qc = useQueryClient();
-  const toast = useToast();
-  const [picked, setFilter] = useState<(typeof FILTERS)[number][0] | null>(null);
+  const [filter, setFilter] = useState<(typeof FILTERS)[number][0]>("all");
   const [open, setOpen] = useState<OutreachMessage | null>(null);
-  // Counts per status and the sending settings come from a one-row request; the list itself is paged.
-  const summary = useQuery({ queryKey: ["outreach", "email", "summary"], queryFn: () => call(rpc.outreach.$get({ query: { channel: "email", limit: "1" } })) });
+  // Counts per status and the pause switch come from a one-row request; the list itself is paged.
+  const summary = useQuery({ queryKey: ["outreach", "all", "summary"], queryFn: () => call(rpc.outreach.$get({ query: { limit: "1" } })) });
   const counts: Partial<Record<string, number>> = summary.data?.counts ?? {};
   const count = (f: string) => (f === "all" ? Object.values(counts).reduce((a, b) => (a ?? 0) + (b ?? 0), 0) ?? 0 : counts[f] ?? 0);
-  const queued = count("queued");
-  // Open on the queue when something is waiting, otherwise on everything.
-  const filter = picked ?? (queued ? "queued" : "all");
   const q = usePaged(
-    ["outreach", "email", filter],
-    (before) => call(rpc.outreach.$get({ query: { channel: "email", ...(filter === "all" ? {} : { status: filter }), ...(before ? { before } : {}) } })),
+    ["outreach", "all", filter],
+    (before) => call(rpc.outreach.$get({ query: { ...(filter === "all" ? {} : { status: filter }), ...(before ? { before } : {}) } })),
     (p) => p.messages,
     { enabled: !!summary.data },
   );
   const rows = q.rows;
   const sentToday = summary.data?.sentToday ?? 0;
-  const cap = summary.data?.dailyCap ?? 0;
   const on = !!summary.data?.autoSendEnabled;
-
-  async function sendNow() {
-    const r = await call(rpc.outreach["send-now"].$post());
-    toast(r.paused ? "Sending is paused in Settings." : `${r.sent} email(s) sent${r.remaining ? `; ${r.remaining} wait for tomorrow's cap` : ""}.`);
-    qc.invalidateQueries({ queryKey: ["outreach"] });
-  }
-  async function cancel(id: string) {
-    await call(rpc.outreach[":id"].cancel.$post({ param: { id } }));
-    qc.invalidateQueries({ queryKey: ["outreach"] });
-  }
 
   return (
     <>
-      <PageHeader title="Email outreach">
-        <Button onClick={sendNow} disabled={!queued || !on}><Send /> Send queued now</Button>
-      </PageHeader>
+      <PageHeader title="Outreach" />
 
       {summary.data && (
         <Card className="mb-6 flex-row flex-wrap items-center gap-x-8 gap-y-3 px-5 py-4">
           <div className="min-w-56 flex-1">
-            <div className="mb-1.5 flex items-baseline gap-1.5"><span className="num text-2xl font-semibold">{sentToday}</span><span className="text-sm text-muted-foreground">of {cap} sent today</span></div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary" style={{ width: `${cap ? Math.min(100, (sentToday / cap) * 100) : 0}%` }} /></div>
+            <div className="flex items-baseline gap-1.5"><span className="num text-2xl font-semibold">{sentToday}</span><span className="text-sm text-muted-foreground">email{sentToday === 1 ? "" : "s"} sent today</span></div>
+            <p className="text-xs text-muted-foreground">Messages go out only when someone presses Contact on a role page.</p>
           </div>
           <Link to="/settings" className={cn("inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm", on ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
             <span className={cn("size-2 rounded-full", on ? "bg-success" : "bg-destructive")} />
-            {on ? "Sending on" : "Sending paused"}
+            {on ? "Email sending on" : "Email sending paused"}
           </Link>
         </Card>
       )}
 
-      <FilterChips label="Filter emails" options={FILTERS.map(([k, l]) => ({ key: k, label: l, count: count(k) }))} value={filter} onChange={(k) => setFilter(k as typeof filter)} />
+      <FilterChips label="Filter messages" options={FILTERS.map(([k, l]) => ({ key: k, label: l, count: count(k) }))} value={filter} onChange={(k) => setFilter(k as typeof filter)} />
 
       {summary.isLoading || q.isLoading ? <Spinner /> : rows.length ? (
         <>
         <DataTable>
-          <TableHeader><TableRow><Th>Candidate</Th><Th>Role</Th><Th>To</Th><Th>Status</Th><Th>Sent</Th><Th>Follow up</Th><Th /></TableRow></TableHeader>
+          <TableHeader><TableRow><Th>Candidate</Th><Th>Role</Th><Th>Channel</Th><Th>Status</Th><Th>Sent</Th><Th>Follow up</Th></TableRow></TableHeader>
           <TableBody>
             {rows.map((m) => (
               <TableRow key={m.id} className="cursor-pointer hover:bg-secondary/50" onClick={() => setOpen(m)}>
@@ -120,19 +78,18 @@ export default function Outreach() {
                   </div>
                 </Td>
                 <Td><Link className="hover:underline" to={`/roles/${m.requestId}`} onClick={(e) => e.stopPropagation()}>{m.roleTitle}</Link></Td>
-                <Td className="text-xs text-muted-foreground">{m.toAddress}</Td>
-                <Td><Badge tone={TONE[m.status] ?? "neutral"} className="capitalize">{m.status}</Badge></Td>
+                <Td className="text-xs">{CHANNEL[m.channel] ?? m.channel}{m.kind === "follow_up" ? " · follow-up" : ""}</Td>
+                <Td><Badge tone={TONE[m.status] ?? "neutral"} className="capitalize">{m.status === "approved" ? "waiting for Cowork" : m.status.replace("_", " ")}</Badge></Td>
                 <Td className="num text-xs">{fmtDate(m.sentAt)}</Td>
                 <Td className="num text-xs">{fmtDate(m.followUpDate)}</Td>
-                <Td onClick={(e) => e.stopPropagation()}>{m.status === "queued" && <Button size="sm" variant="ghost" onClick={() => cancel(m.id)}>Cancel</Button>}</Td>
               </TableRow>
             ))}
           </TableBody>
         </DataTable>
         <LoadMore shown={rows.length} total={q.total} hasMore={q.hasNextPage} loading={q.isFetchingNextPage} onMore={() => q.fetchNextPage()} />
         </>
-      ) : <EmptyState title={count("all") ? "Nothing here" : "No emails yet"}>{count("all") ? null : "Top 10 candidates with an email are contacted after each run."}</EmptyState>}
-      {open && <EmailPreview key={open.id} m={open} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); qc.invalidateQueries({ queryKey: ["outreach"] }); }} />}
+      ) : <EmptyState title={count("all") ? "Nothing here" : "No messages yet"}>{count("all") ? null : "Open a role and press Contact on a candidate to send the first one."}</EmptyState>}
+      {open && <MessagePreview key={open.id} m={open} onClose={() => setOpen(null)} />}
     </>
   );
 }
