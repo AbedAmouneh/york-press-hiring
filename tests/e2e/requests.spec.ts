@@ -28,6 +28,8 @@ test("the timeline reads oldest first and ends with the step it is waiting on", 
   await page.getByLabel("Business justification for Khalil").fill("The ELT list is growing.");
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page).toHaveURL(/\/requests\/[0-9a-f-]{36}$/);
+  // The request page, not the form still on screen while it loads.
+  await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible();
 
   await page.getByRole("button", { name: "Submit to Khalil" }).click();
   const steps = page.getByRole("listitem").filter({ hasText: /Created draft|Submitted|Waiting for Khalil/ });
