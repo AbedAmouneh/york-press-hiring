@@ -62,18 +62,26 @@ const TYPE_WORD: Record<EmploymentType, string> = { full_time: "", part_time: "p
 /**
  * Says what kind of work it is where the template names the role ("hiring a Editor" →
  * "hiring a part-time Editor (about 20 hours a week)" / "a freelance Illustrator for 3 months"). Pay is never added.
- * Exported for tests.
+ * `detail: false` leaves out the hours and length, for notes that would run too long. Exported for tests.
  */
-export function describeRole(text: string, r: { title: string; employmentType: EmploymentType; hoursPerWeek?: number | null; contractLength?: string | null }) {
+export function describeRole(text: string, r: { title: string; employmentType: EmploymentType; hoursPerWeek?: number | null; contractLength?: string | null }, detail = true) {
   const word = TYPE_WORD[r.employmentType];
   if (!word) return withArticle(text, r.title);
   const length = r.contractLength?.trim();
-  const extra = r.employmentType === "part_time"
-    ? (r.hoursPerWeek ? ` (about ${r.hoursPerWeek} hours a week)` : "")
+  const extra = !detail ? ""
+    : r.employmentType === "part_time" ? (r.hoursPerWeek ? ` (about ${r.hoursPerWeek} hours a week)` : "")
     : length ? (/^(\d|a |an |one |two |three |six |twelve )/i.test(length) ? ` for ${length}` : ` (${length})`) : "";
   const described = `a ${word} ${r.title}${extra}`;
   for (const lead of [` a ${r.title}`, ` an ${r.title}`]) if (text.includes(lead)) return text.replace(lead, ` ${described}`);
   return text;
+}
+
+/** Keep a LinkedIn note within the limit, cutting at a word rather than in the middle of one. Exported for tests. */
+export function fitNote(text: string) {
+  if (text.length <= LINKEDIN_NOTE_MAX) return text;
+  const cut = text.slice(0, LINKEDIN_NOTE_MAX);
+  const space = cut.lastIndexOf(" ");
+  return (space > LINKEDIN_NOTE_MAX * 0.6 ? cut.slice(0, space) : cut).trimEnd();
 }
 
 /** wa.me link that opens WhatsApp with the message filled in. */
@@ -133,8 +141,13 @@ export async function draftContact(row: Row, channel: ContactChannel, kind: Cont
     subject = channel === "email" ? fillTemplate(template?.subject ?? "{{role_title}} at York Press", vars) : null;
     body = fillTemplate(channel === "whatsapp" ? text + WHATSAPP_EXTRA : text, vars);
   }
-  body = describeRole(body, request);
-  if (channel === "linkedin") body = body.slice(0, LINKEDIN_NOTE_MAX);
+  const filled = body;
+  body = describeRole(filled, request);
+  if (channel === "linkedin") {
+    // A long contract length can push the note past LinkedIn's limit: say the type without it, then cut at a word.
+    if (body.length > LINKEDIN_NOTE_MAX) body = describeRole(filled, request, false);
+    body = fitNote(body);
+  }
   return {
     channel, kind, to, subject, body,
     recentContact: await recentContactElsewhere(c.id, rc.id),
