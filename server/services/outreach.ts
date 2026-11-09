@@ -1,112 +1,207 @@
-import { and, arrayOverlaps, asc, eq, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
+// Outreach is manual: a run finds, scores and ranks people (and looks up the Top 10's contact details), but nothing is
+// drafted or sent until a recruiter or the role's hiring manager presses Contact, edits the message and presses Send.
+import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
+import { env } from "../env.js";
 import { getSettings } from "./settings.js";
-import { sendEmail, senderFor } from "./email.js";
-import { applyLink, dataSourcePhrase, fillTemplate, templateFor } from "./templates.js";
+import { fromAddress, sendEmail, senderFor } from "./email.js";
+import { applyLink, dataSourcePhrase, fillTemplate, templateFor, type FillVars } from "./templates.js";
 import { personalLine } from "./claude.js";
 import { addBusinessDays, localDate, startOfLocalDay } from "./dates.js";
 import { toAI, toReq } from "./mappers.js";
 import { midSentence } from "./wording.js";
 import { isSuppressed, unsubscribeLink } from "./suppression.js";
+import { LINKEDIN_NOTE_MAX, type ContactChannel, type ContactKind } from "../../shared/schemas.js";
 
 export { isSuppressed };
 
 /** Every outreach email ends with a one-click way to stop contact and delete the person's details. */
 export const unsubscribeFooter = (candidateId: string) => `\n\nTo stop hearing from us and have your details deleted: ${unsubscribeLink(candidateId)}`;
 
-async function senderForRequest(request: typeof schema.roleRequests.$inferSelect) {
-  const db = await getDb();
-  if (request.recruiterId) {
-    const [u] = await db.select().from(schema.users).where(eq(schema.users.id, request.recruiterId));
-    if (u?.active) return u;
-  }
-  const [u] = await db
-    .select()
-    .from(schema.users)
-    .where(and(eq(schema.users.active, true), eq(schema.users.isDemo, false), arrayOverlaps(schema.users.roles, ["recruiter"])))
-    .orderBy(asc(schema.users.createdAt))
-    .limit(1);
-  return u ?? null;
-}
+/** A reminder to follow up appears this many working days after the first message. */
+export const FOLLOW_UP_DAYS = 5;
 
-/** How long after one role's message the same person isn't contacted automatically for another role. */
+/** The draft warns when the person was contacted for another role this recently. */
 export const RECONTACT_DAYS = 30;
 
-/** True when the person has a message (queued, waiting or sent) for another role in the last RECONTACT_DAYS days. */
-async function contactedRecently(candidateId: string, roleCandidateId: string) {
+const FOLLOW_UP_EMAIL = `Hi {{first_name}},
+
+I wanted to follow up on my message about the {{role_title}} role at York Press. If you're interested, I'd be glad to tell you more: you can reply with your CV or upload it here: {{apply_link}}
+
+If the timing isn't right, no problem at all.
+
+Best regards,
+{{recruiter_name}}
+Talent team, York Press`;
+
+const FOLLOW_UP_SHORT = "Hi {{first_name}}, just following up on the {{role_title}} role at York Press. If you're interested I'd love to chat, or you can send your CV here: {{apply_link}} Thanks, {{recruiter_name}}";
+
+/** WhatsApp has no saved template of its own: it starts from the LinkedIn note, plus the apply link and where the number came from. */
+const WHATSAPP_EXTRA = "\n\nYou can also send your CV here: {{apply_link}}\n\nI found your number through {{data_source}}. If you'd rather not hear from us, just say so and we'll delete it.";
+
+type Row = { rc: typeof schema.roleCandidates.$inferSelect; c: typeof schema.candidates.$inferSelect; request: typeof schema.roleRequests.$inferSelect };
+type Sender = { id: string; name: string; email: string };
+
+/** Where a message to this person goes on each channel, or null when we don't have the address. */
+export function contactAddress(c: Row["c"], channel: ContactChannel) {
+  if (channel === "email") return c.email ?? null;
+  if (channel === "linkedin") return c.linkedinUrl ?? null;
+  const digits = (c.phone ?? "").replace(/[^\d]/g, "");
+  return digits.length >= 8 ? digits : null;
+}
+
+/** wa.me link that opens WhatsApp with the message filled in. */
+export const whatsappLink = (phoneDigits: string, text: string) => `https://wa.me/${phoneDigits}?text=${encodeURIComponent(text)}`;
+
+async function cachedPersonalLine({ rc, c, request }: Row) {
+  if (rc.personalLine) return rc.personalLine;
+  const line = await personalLine(toReq(request), toAI(c, rc)).catch(() => `Your experience as ${c.currentTitle ?? "a professional in your field"} stood out to me.`);
+  const db = await getDb();
+  await db.update(schema.roleCandidates).set({ personalLine: line }).where(eq(schema.roleCandidates.id, rc.id));
+  return line;
+}
+
+/** The person's most recent message for another role in the last RECONTACT_DAYS days, if any. */
+async function recentContactElsewhere(candidateId: string, roleCandidateId: string) {
   const db = await getDb();
   const m = schema.outreachMessages;
-  const rows = await db
-    .select({ id: m.id })
+  const [row] = await db
+    .select({ roleTitle: schema.roleRequests.title, at: sql<Date>`coalesce(${m.sentAt}, ${m.queuedAt})` })
     .from(m)
     .innerJoin(schema.roleCandidates, eq(schema.roleCandidates.id, m.roleCandidateId))
+    .innerJoin(schema.roleRequests, eq(schema.roleRequests.id, schema.roleCandidates.requestId))
     .where(and(
       eq(schema.roleCandidates.candidateId, candidateId),
       ne(m.roleCandidateId, roleCandidateId),
-      inArray(m.status, ["queued", "awaiting_approval", "approved", "sent"]),
+      inArray(m.status, ["approved", "sending", "sent"]),
       gte(m.queuedAt, new Date(Date.now() - RECONTACT_DAYS * 864e5)),
     ))
+    .orderBy(desc(m.queuedAt))
     .limit(1);
-  return rows.length > 0;
+  return row ? { roleTitle: row.roleTitle, at: new Date(row.at).toISOString() } : null;
 }
 
-/** Create outreach messages (email if we have an address, otherwise LinkedIn) for the given role candidates. */
-export async function queueOutreach(requestId: string, roleCandidateIds: string[], runId?: string | null) {
-  if (!roleCandidateIds.length) return { email: 0, linkedin: 0, skipped: 0, recentlyContacted: 0 };
-  const db = await getDb();
-  const [request] = await db.select().from(schema.roleRequests).where(eq(schema.roleRequests.id, requestId));
-  // A closed role never contacts anyone, even if a run that started earlier gets here.
-  if (!request || !["sourcing", "open"].includes(request.status)) return { email: 0, linkedin: 0, skipped: roleCandidateIds.length, recentlyContacted: 0 };
-  const sender = await senderForRequest(request);
-  const rows = await db
-    .select({ rc: schema.roleCandidates, c: schema.candidates })
-    .from(schema.roleCandidates)
-    .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
-    .where(inArray(schema.roleCandidates.id, roleCandidateIds));
-  const existing = await db
-    .select({ rcId: schema.outreachMessages.roleCandidateId })
-    .from(schema.outreachMessages)
-    .where(and(inArray(schema.outreachMessages.roleCandidateId, roleCandidateIds), ne(schema.outreachMessages.status, "cancelled")));
-  const already = new Set(existing.map((e) => e.rcId));
-  const emailT = await templateFor("email", request.department);
-  const liT = await templateFor("linkedin", request.department);
-  let email = 0, linkedin = 0, skipped = 0, recentlyContacted = 0;
-  for (const { rc, c } of rows) {
-    if (already.has(rc.id) || (await isSuppressed(c))) { skipped++; continue; }
-    // Someone we contacted for another role recently isn't contacted again automatically; a recruiter can still do it.
-    if (await contactedRecently(c.id, rc.id)) { skipped++; recentlyContacted++; continue; }
-    const channel = c.email ? "email" : c.linkedinUrl ? "linkedin" : null;
-    const template = channel === "email" ? emailT : liT;
-    if (!channel || !template) { skipped++; continue; }
-    let line = rc.personalLine;
-    if (!line) {
-      line = await personalLine(toReq(request), toAI(c, rc), runId).catch(() => `Your experience as ${c.currentTitle ?? "a professional in your field"} stood out to me.`);
-      await db.update(schema.roleCandidates).set({ personalLine: line }).where(eq(schema.roleCandidates.id, rc.id));
-    }
-    const vars = {
-      first_name: c.fullName.split(" ")[0],
-      role_title: request.title,
-      personal_line: line,
-      location_policy: midSentence(request.locationPolicy),
-      apply_link: applyLink(request.applyToken),
-      data_source: dataSourcePhrase(c.contactSource),
-      recruiter_name: sender?.name ?? "The York Press talent team",
-      company: c.currentCompany ?? "your company",
-    };
-    await db.insert(schema.outreachMessages).values({
-      roleCandidateId: rc.id,
-      templateId: template.id,
-      channel,
-      senderId: sender?.id ?? null,
-      toAddress: channel === "email" ? c.email! : c.linkedinUrl!,
-      subject: template.subject ? fillTemplate(template.subject, vars) : null,
-      body: channel === "linkedin" ? fillTemplate(template.body, vars).slice(0, 300) : fillTemplate(template.body, vars).slice(0, 4800) + unsubscribeFooter(c.id),
-      status: channel === "email" ? "queued" : "awaiting_approval",
-    });
-    if (channel === "email") email++;
-    else linkedin++;
+/** The message the Contact window starts with: the saved template plus Claude's one personal line. */
+export async function draftContact(row: Row, channel: ContactChannel, kind: ContactKind, sender: Sender) {
+  const { c, rc, request } = row;
+  const to = contactAddress(c, channel);
+  const vars: FillVars = {
+    first_name: c.fullName.split(" ")[0],
+    role_title: request.title,
+    location_policy: midSentence(request.locationPolicy),
+    apply_link: applyLink(request.applyToken),
+    data_source: dataSourcePhrase(c.contactSource),
+    recruiter_name: sender.name,
+    company: c.currentCompany ?? "your company",
+  };
+  let subject: string | null = null;
+  let body: string;
+  if (kind === "follow_up") {
+    subject = channel === "email" ? `Re: ${request.title} at York Press` : null;
+    body = fillTemplate(channel === "email" ? FOLLOW_UP_EMAIL : FOLLOW_UP_SHORT, vars);
+  } else {
+    vars.personal_line = await cachedPersonalLine(row);
+    const template = await templateFor(channel === "email" ? "email" : "linkedin", request.department);
+    const text = template?.body ?? "Hi {{first_name}}, I'm hiring a {{role_title}} at York Press and your background stood out. Open to a quick chat? Thanks, {{recruiter_name}}";
+    subject = channel === "email" ? fillTemplate(template?.subject ?? "{{role_title}} at York Press", vars) : null;
+    body = fillTemplate(channel === "whatsapp" ? text + WHATSAPP_EXTRA : text, vars);
   }
-  return { email, linkedin, skipped, recentlyContacted };
+  if (channel === "linkedin") body = body.slice(0, LINKEDIN_NOTE_MAX);
+  return {
+    channel, kind, to, subject, body,
+    recentContact: await recentContactElsewhere(c.id, rc.id),
+    // Shown in the window so the sender knows exactly who gets the email and its replies.
+    email: channel === "email" ? { from: senderFor(sender), replyTo: [fromAddress(), sender.email], cc: env.outreachCc } : null,
+  };
+}
+
+/** After a message goes out: Contacted with today's date, and a follow-up reminder (none after the follow-up itself). */
+export async function markContacted(roleCandidateId: string, kind: ContactKind = "first") {
+  const db = await getDb();
+  const today = localDate();
+  const rc = schema.roleCandidates;
+  if (kind === "follow_up") {
+    await db.update(rc).set({ followUpDate: null }).where(eq(rc.id, roleCandidateId));
+    return;
+  }
+  // A later status (replied, interview, hired, rejected) is never pulled back to "contacted".
+  await db.update(rc).set({ status: "contacted" }).where(and(eq(rc.id, roleCandidateId), eq(rc.status, "new")));
+  await db.update(rc).set({ dateContacted: today, followUpDate: addBusinessDays(today, FOLLOW_UP_DAYS) }).where(eq(rc.id, roleCandidateId));
+}
+
+export class ContactError extends Error {}
+
+/**
+ * Send (email), queue for Cowork (LinkedIn) or record (WhatsApp, which the person sends from their own phone) one
+ * message a person wrote or approved. The pause switch in Settings stops email; there is no daily cap on these.
+ */
+export async function sendContact(row: Row, input: { channel: ContactChannel; kind: ContactKind; subject?: string | null; body: string }, sender: Sender) {
+  const { c, rc, request } = row;
+  const db = await getDb();
+  if (!["sourcing", "open"].includes(request.status)) throw new ContactError("This role isn't open, so nobody can be contacted for it.");
+  if (await isSuppressed(c)) throw new ContactError("This person asked not to be contacted.");
+  const to = contactAddress(c, input.channel);
+  if (!to) throw new ContactError(input.channel === "email" ? "No email address for this person." : input.channel === "linkedin" ? "No LinkedIn profile for this person." : "No phone number for this person.");
+  const body = input.body.trim();
+  if (!body) throw new ContactError("The message is empty.");
+  if (input.channel === "linkedin" && body.length > LINKEDIN_NOTE_MAX) throw new ContactError(`LinkedIn notes are limited to ${LINKEDIN_NOTE_MAX} characters.`);
+  if (input.kind === "follow_up" && !(await db.select({ id: schema.outreachMessages.id }).from(schema.outreachMessages).where(and(eq(schema.outreachMessages.roleCandidateId, rc.id), eq(schema.outreachMessages.status, "sent"))).limit(1)).length) {
+    throw new ContactError("Send a first message before a follow-up.");
+  }
+  const base = { roleCandidateId: rc.id, channel: input.channel, kind: input.kind, senderId: sender.id, toAddress: to, body };
+
+  if (input.channel === "linkedin") {
+    // Pressing Send is the approval: it goes straight to "Approved — ready to send" for Cowork.
+    const [msg] = await db.insert(schema.outreachMessages).values({ ...base, status: "approved", approvedById: sender.id }).returning();
+    return { message: msg, link: null };
+  }
+
+  if (input.channel === "whatsapp") {
+    const [msg] = await db.insert(schema.outreachMessages).values({ ...base, status: "sent", sentAt: new Date() }).returning();
+    await markContacted(rc.id, input.kind);
+    return { message: msg, link: whatsappLink(to, body) };
+  }
+
+  const settings = await getSettings();
+  if (!settings.autoSendEnabled) throw new ContactError("Sending is paused in Settings. Turn it back on to send emails.");
+  const subject = input.subject?.trim() || `${request.title} at York Press`;
+  const [msg] = await db.insert(schema.outreachMessages).values({ ...base, subject, body: body + unsubscribeFooter(c.id), status: "sending", claimedAt: new Date() }).returning();
+  const res = await sendEmail({
+    idempotencyKey: `outreach-${msg.id}`,
+    listUnsubscribe: unsubscribeLink(c.id),
+    kind: "outreach",
+    outboxOnly: c.isSample,
+    to,
+    subject,
+    text: msg.body,
+    from: senderFor(sender),
+    replyTo: [fromAddress(), sender.email],
+    cc: env.outreachCc,
+  });
+  if (!res.ok) {
+    await db.update(schema.outreachMessages).set({ status: "failed", error: res.error }).where(eq(schema.outreachMessages.id, msg.id));
+    throw new ContactError(`The email couldn't be sent: ${res.error ?? "unknown error"}`);
+  }
+  const [sent] = await db.update(schema.outreachMessages).set({ status: "sent", sentAt: new Date(), providerMessageId: res.id }).where(eq(schema.outreachMessages.id, msg.id)).returning();
+  await markContacted(rc.id, input.kind);
+  return { message: sent, link: null };
+}
+
+/**
+ * Undo a WhatsApp "sent" record when it wasn't actually sent: the message is cancelled and, if it was the only
+ * message that made the person Contacted, they go back to New with no contact date or follow-up.
+ */
+export async function undoWhatsapp(messageId: string) {
+  const db = await getDb();
+  const m = schema.outreachMessages;
+  const [msg] = await db.update(m).set({ status: "cancelled", error: "Undone: not sent." }).where(and(eq(m.id, messageId), eq(m.channel, "whatsapp"), eq(m.status, "sent"))).returning();
+  if (!msg) throw new ContactError("Only a WhatsApp message marked as sent can be undone.");
+  const [other] = await db.select({ id: m.id }).from(m).where(and(eq(m.roleCandidateId, msg.roleCandidateId), eq(m.status, "sent"))).limit(1);
+  if (!other) {
+    const rc = schema.roleCandidates;
+    await db.update(rc).set({ status: "new", dateContacted: null, followUpDate: null }).where(and(eq(rc.id, msg.roleCandidateId), eq(rc.status, "contacted")));
+  }
+  return msg;
 }
 
 export async function sentTodayCount() {
@@ -116,84 +211,4 @@ export async function sentTodayCount() {
     .from(schema.outreachMessages)
     .where(and(eq(schema.outreachMessages.channel, "email"), eq(schema.outreachMessages.status, "sent"), gte(schema.outreachMessages.sentAt, startOfLocalDay())));
   return n;
-}
-
-export async function markContacted(roleCandidateId: string) {
-  const db = await getDb();
-  const today = localDate();
-  await db
-    .update(schema.roleCandidates)
-    .set({ status: "contacted", dateContacted: today, followUpDate: addBusinessDays(today, 5) })
-    .where(and(eq(schema.roleCandidates.id, roleCandidateId), eq(schema.roleCandidates.status, "new")));
-}
-
-/** A worker that crashed after claiming leaves a message "sending"; after this long it goes back to the queue. */
-const STUCK_SENDING_MS = 10 * 60_000;
-
-/**
- * Takes the next queued email for this worker, or null when the queue is empty or today's cap is reached.
- * Claims are made one at a time under a lock on the settings row, so two workers (cron, a run, "Send queued
- * now") can never take the same message or both take the last slot under the cap. Messages being sent count
- * against the cap.
- */
-async function claimNext(cap: number) {
-  const db = await getDb();
-  const m = schema.outreachMessages;
-  return db.transaction(async (tx) => {
-    await tx.execute(sql`select id from settings where id = 1 for update`);
-    const [{ n }] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(m)
-      .where(and(eq(m.channel, "email"), or(and(eq(m.status, "sent"), gte(m.sentAt, startOfLocalDay())), eq(m.status, "sending"))));
-    if (n >= cap) return null;
-    const [next] = await tx.select({ id: m.id }).from(m).where(and(eq(m.channel, "email"), eq(m.status, "queued"))).orderBy(asc(m.queuedAt)).limit(1);
-    if (!next) return null;
-    const [claimed] = await tx.update(m).set({ status: "sending", claimedAt: new Date() }).where(and(eq(m.id, next.id), eq(m.status, "queued"))).returning();
-    return claimed ?? null;
-  });
-}
-
-/** Send queued emails, respecting the kill switch and the daily cap. Safe to run from several places at once. */
-export async function drainEmailQueue() {
-  const settings = await getSettings();
-  if (!settings.autoSendEnabled) return { sent: 0, failed: 0, remaining: -1, paused: true };
-  const db = await getDb();
-  const om = schema.outreachMessages;
-  // Messages a crashed worker left behind are retried with the same idempotency key, so the provider sends once.
-  await db.update(om).set({ status: "queued", claimedAt: null }).where(and(eq(om.status, "sending"), lt(om.claimedAt, new Date(Date.now() - STUCK_SENDING_MS))));
-  let sent = 0, failed = 0;
-  for (let m = await claimNext(settings.dailySendCap); m; m = await claimNext(settings.dailySendCap)) {
-    const [sender] = m.senderId ? await db.select().from(schema.users).where(eq(schema.users.id, m.senderId)) : [];
-    const [person] = await db
-      .select({ id: schema.candidates.id, isSample: schema.candidates.isSample, email: schema.candidates.email, linkedinUrl: schema.candidates.linkedinUrl })
-      .from(schema.roleCandidates)
-      .innerJoin(schema.candidates, eq(schema.candidates.id, schema.roleCandidates.candidateId))
-      .where(eq(schema.roleCandidates.id, m.roleCandidateId));
-    // Someone may have opted out after the email was queued: check again right before sending.
-    if (!person || (await isSuppressed({ ...person, email: person.email ?? m.toAddress }))) {
-      await db.update(om).set({ status: "cancelled", claimedAt: null }).where(eq(om.id, m.id));
-      continue;
-    }
-    const res = await sendEmail({
-      idempotencyKey: `outreach-${m.id}`,
-      listUnsubscribe: unsubscribeLink(person.id),
-      kind: "outreach",
-      outboxOnly: person.isSample,
-      to: m.toAddress,
-      subject: m.subject ?? "York Press",
-      text: m.body,
-      from: sender ? senderFor(sender) : undefined,
-      replyTo: sender?.email,
-    });
-    if (res.ok) {
-      await db.update(om).set({ status: "sent", sentAt: new Date(), providerMessageId: res.id }).where(eq(om.id, m.id));
-      await markContacted(m.roleCandidateId);
-      sent++;
-    } else {
-      await db.update(om).set({ status: "failed", error: res.error }).where(eq(om.id, m.id));
-      failed++;
-    }
-  }
-  const [{ remaining }] = await db.select({ remaining: sql<number>`count(*)::int` }).from(om).where(and(eq(om.channel, "email"), eq(om.status, "queued")));
-  return { sent, failed, remaining, paused: false };
 }
