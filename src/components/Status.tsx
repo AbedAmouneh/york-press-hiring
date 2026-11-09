@@ -30,5 +30,6 @@ const O_LABEL: Record<string, [string, Tone]> = {
 export function OutreachBadge({ outreach }: { outreach: { channel: string; status: string } | null }) {
   if (!outreach) return <span className="text-xs text-muted-foreground">—</span>;
   const [label, tone] = O_LABEL[outreach.status] ?? [outreach.status, "neutral"];
-  return <Badge tone={tone}>{outreach.status === "sent" ? `${outreach.channel === "email" ? "Email" : "LinkedIn"} sent` : label}</Badge>;
+  const channel = outreach.channel === "email" ? "Email" : outreach.channel === "whatsapp" ? "WhatsApp" : "LinkedIn";
+  return <Badge tone={tone}>{outreach.status === "sent" ? `${channel} sent` : label}</Badge>;
 }

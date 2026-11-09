@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Mail, Phone } from "lucide-react";
+import { ExternalLink, Mail, Phone, Send } from "lucide-react";
+import { ContactDialog, type ContactTarget } from "./ContactDialog";
+import { todayLocal } from "@/lib/dates";
 import { call, rpc } from "@/lib/rpc";
 import type { CandidateDetail } from "@/lib/types";
 import { cn, fmtDate } from "@/lib/utils";
@@ -17,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 const href = (u: string) => (u.startsWith("http") ? u : `https://${u}`);
+const CHANNEL_NAME: Record<string, string> = { email: "Email", linkedin: "LinkedIn note", whatsapp: "WhatsApp" };
 
 const LEVEL_TEXT = { below: "Below the level", match: "Right level", above: "Above the level" } as const;
 const EVIDENCE_STYLE = { proven: "border-success/40 bg-success/10", claimed: "border-chip-amber/50 bg-chip-amber/10", missing: "border-destructive/30 bg-destructive/5" } as const;
@@ -115,8 +118,9 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
   const toast = useToast();
   const q = useQuery({ queryKey: ["rc", id], queryFn: () => call(rpc["role-candidates"][":id"].$get({ param: { id: id! } })), enabled: !!id });
   const [busy, setBusy] = useState(false);
+  const [contact, setContact] = useState<ContactTarget | null>(null);
 
-  const refresh = () => { qc.invalidateQueries({ queryKey: ["rc", id] }); onChanged(); };
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["rc", id] }); qc.invalidateQueries({ queryKey: ["outreach"] }); onChanged(); };
 
   async function reveal() {
     setBusy(true);
@@ -128,10 +132,10 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
       refresh();
     } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(false); }
   }
-  async function messageAction(mid: string, action: "approve" | "cancel" | "sent") {
+  async function messageAction(mid: string, action: "approve" | "cancel" | "sent" | "undo") {
     try {
       await call(rpc.outreach[":id"][action].$post({ param: { id: mid } }));
-      toast(action === "approve" ? "Approved. It goes out from your LinkedIn in the next Cowork session." : action === "sent" ? "Marked as sent." : "Cancelled.");
+      toast(action === "approve" ? "Approved. It goes out from your LinkedIn in the next Cowork session." : action === "sent" ? "Marked as sent." : action === "undo" ? "Undone: not counted as contacted." : "Cancelled.");
       refresh();
     } catch (e) { toast((e as Error).message, "error"); }
   }
@@ -240,6 +244,21 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
             </TabsContent>
 
             <TabsContent value="outreach" className="grid gap-5">
+              {d.canEdit && (() => {
+                const followUpDue = d.roleCandidate.status === "contacted" && !!d.roleCandidate.followUpDate && d.roleCandidate.followUpDate <= todayLocal();
+                const hasSent = d.messages.some((m) => m.status === "sent");
+                const kind = followUpDue && hasSent ? "follow_up" as const : "first" as const;
+                return (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button size="sm" onClick={() => setContact({ id: d.roleCandidate.id, name: d.candidate.fullName, email: d.candidate.email, phone: d.candidate.phone, linkedinUrl: d.candidate.linkedinUrl, kind })}>
+                      <Send /> {kind === "follow_up" ? "Contact again" : "Contact"}
+                    </Button>
+                    {d.roleCandidate.followUpDate && d.roleCandidate.status === "contacted" && (
+                      <span className="text-xs text-muted-foreground">{followUpDue ? "Follow-up due" : `Follow up on ${fmtDate(d.roleCandidate.followUpDate)}`}</span>
+                    )}
+                  </div>
+                );
+              })()}
               <section className="grid gap-2 text-sm">
                 <h3 className={label}>Contact</h3>
                 {d.candidate.email || d.candidate.phone ? (
@@ -260,23 +279,24 @@ export function CandidateSheet({ id, onClose, onChanged }: { id: string | null; 
               {d.messages.map((m) => (
                 <section key={m.id} className="grid gap-2 rounded-lg border p-3">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{m.channel === "email" ? "Email" : "LinkedIn note"} <span className="font-normal text-muted-foreground">· {m.status.replace("_", " ")}</span></span>
-                    <span className="text-xs text-muted-foreground">{m.sentAt ? `Sent ${fmtDate(m.sentAt)}` : `Queued ${fmtDate(m.queuedAt)}`}</span>
+                    <span className="font-medium">{CHANNEL_NAME[m.channel]}{m.kind === "follow_up" ? " follow-up" : ""} <span className="font-normal text-muted-foreground">· {m.status.replace("_", " ")}</span></span>
+                    <span className="text-xs text-muted-foreground">{m.sentAt ? `Sent ${fmtDate(m.sentAt)}` : `Created ${fmtDate(m.queuedAt)}`}{m.senderId && d.senders[m.senderId] ? ` by ${d.senders[m.senderId]}` : ""}</span>
                   </div>
                   {m.subject && <p className="text-sm font-medium">{m.subject}</p>}
                   <p className="whitespace-pre-wrap text-sm text-muted-foreground">{m.body}</p>
-                  {d.isRecruiter && (
-                    <div className="flex flex-wrap gap-2">
-                      {m.status === "awaiting_approval" && <Button size="sm" onClick={() => messageAction(m.id, "approve")}>Approve LinkedIn message</Button>}
-                      {m.status === "approved" && <Button size="sm" variant="outline" onClick={() => messageAction(m.id, "sent")}>Mark as sent</Button>}
-                      {["queued", "awaiting_approval", "approved"].includes(m.status) && <Button size="sm" variant="ghost" onClick={() => messageAction(m.id, "cancel")}>Cancel</Button>}
-                    </div>
-                  )}
+                  {m.error && m.status !== "sent" && <p className="text-xs text-destructive">{m.error}</p>}
+                  <div className="flex flex-wrap gap-2">
+                    {d.isRecruiter && m.status === "awaiting_approval" && <Button size="sm" onClick={() => messageAction(m.id, "approve")}>Approve LinkedIn message</Button>}
+                    {d.isRecruiter && m.status === "approved" && <Button size="sm" variant="outline" onClick={() => messageAction(m.id, "sent")}>Mark as sent</Button>}
+                    {d.isRecruiter && ["queued", "awaiting_approval", "approved"].includes(m.status) && <Button size="sm" variant="ghost" onClick={() => messageAction(m.id, "cancel")}>Cancel</Button>}
+                    {d.canEdit && m.channel === "whatsapp" && m.status === "sent" && <Button size="sm" variant="ghost" onClick={() => messageAction(m.id, "undo")}>Undo: not sent</Button>}
+                  </div>
                 </section>
               ))}
               {!d.messages.length && <p className="text-sm text-muted-foreground">No messages yet.</p>}
             </TabsContent>
           </Tabs>
+          <ContactDialog target={contact} onClose={() => setContact(null)} onSent={refresh} />
         </div>
       )}
     </SidePanel>
