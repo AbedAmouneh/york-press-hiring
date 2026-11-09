@@ -49,7 +49,14 @@ export function PositionsSettings() {
             <TableRow key={p.id}>
               <Td className="font-medium">{p.title}{!p.jdText && <span className="ml-2 text-xs font-normal text-muted-foreground">no JD</span>}</Td>
               <Td><DeptDot name={p.department} /></Td>
-              <Td>{p.seniority}</Td>
+              <Td>
+                {p.seniority}
+                {p.employmentType && (
+                  <span className="block text-xs text-muted-foreground">
+                    {EMPLOYMENT_LABELS[p.employmentType]}{p.salaryPeriod ? ` · ${PAY_LABELS[p.salaryPeriod].toLowerCase()}` : ""}
+                  </span>
+                )}
+              </Td>
               <Td className="max-w-xs truncate text-muted-foreground" title={p.mustHaves.join(", ")}>{p.mustHaves.join(", ") || "—"}</Td>
               <Td className="num">{years(p)}</Td>
               <Td><Badge tone={p.active ? "good" : "neutral"} dot>{p.active ? "Shown" : "Hidden"}</Badge></Td>
