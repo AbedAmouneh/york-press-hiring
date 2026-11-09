@@ -11,6 +11,10 @@ export function mustHaveTerms(mustHave: string): string[] {
   return mustHave
     .toLowerCase()
     .replace(/\(.*?\)/g, " ")
+    // "children's" → "children", so it matches "Children's Book Illustrator" (a lone "s" is never a word).
+    .replace(/['’]s\b/g, "")
+    // "Portfolio of children's illustration": the skill is the illustration; profiles never say "portfolio of".
+    .replace(/\b(?:(?:a|an|strong|solid|good|great|proven)\s+)*portfolio\s+(?:of|showing|with|in|demonstrating)\b/g, " ")
     // A leading "3+ years of" would otherwise make the whole term look like a number and drop it.
     .replace(/\b\d+\s*\+?\s*(?:years?|yrs?)\b(?:\s+(?:of\s+)?(?:professional\s+|hands-on\s+)?experience\b)?(?:\s+(?:of|in|with|using)\b)?/g, " ")
     .split(/,|;|\/|\band\b|\bor\b/)
