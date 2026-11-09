@@ -176,6 +176,13 @@
       "when": 1794222641259,
       "tag": "0024_employment-type",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794232488184,
+      "tag": "0025_salary-decimals",
+      "breakpoints": true
     }
   ]
 }
