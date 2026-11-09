@@ -50,6 +50,12 @@ export function contactAddress(c: Row["c"], channel: ContactChannel) {
   return digits.length >= 8 ? digits : null;
 }
 
+/** "hiring a Accountant" → "hiring an Accountant": templates say "a {{role_title}}". Exported for tests. */
+export function withArticle(text: string, title: string) {
+  if (!/^[aeiou]/i.test(title.trim()) || /^(uni|use|eu|one)/i.test(title.trim())) return text;
+  return text.split(` a ${title}`).join(` an ${title}`);
+}
+
 /** wa.me link that opens WhatsApp with the message filled in. */
 export const whatsappLink = (phoneDigits: string, text: string) => `https://wa.me/${phoneDigits}?text=${encodeURIComponent(text)}`;
 
@@ -106,6 +112,7 @@ export async function draftContact(row: Row, channel: ContactChannel, kind: Cont
     subject = channel === "email" ? fillTemplate(template?.subject ?? "{{role_title}} at York Press", vars) : null;
     body = fillTemplate(channel === "whatsapp" ? text + WHATSAPP_EXTRA : text, vars);
   }
+  body = withArticle(body, request.title);
   if (channel === "linkedin") body = body.slice(0, LINKEDIN_NOTE_MAX);
   return {
     channel, kind, to, subject, body,
