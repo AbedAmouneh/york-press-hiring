@@ -10,7 +10,7 @@ import { lines, RequestDraftForm, RequestForm as RequestFormSchema, type Request
 import { UniversityPicker } from "@/components/UniversityPicker";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { CURRENCIES, DEPARTMENTS, SENIORITIES } from "../../shared/types";
+import { CURRENCIES, DEPARTMENTS, EMPLOYMENT_LABELS, EMPLOYMENT_TYPES, isContractWork, PAY_DEFAULT, PAY_LABELS, PAY_PERIODS, SENIORITIES, type EmploymentType } from "../../shared/types";
 import type { RequestInputT } from "../../shared/schemas";
 import { Field, FormError, Select, Spinner, useToast } from "@/components/kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +32,7 @@ const EMPTY: RequestFormValues = {
   title: "", department: DEPARTMENTS[0], seniority: "Mid", headcount: "1", startDate: "", kind: "new", jdText: "",
   mustHaves: "", niceToHaves: "", dealBreakers: "", minYears: "", idealYears: "", languages: "English",
   locationPolicy: "", searchLocations: "", timeZone: "", locationId: "", workingHours: "", salaryMin: "", salaryMax: "", currency: "", salaryPeriod: "month",
+  employmentType: "full_time", hoursPerWeek: "", contractLength: "", workload: "", projectDescription: "",
   justification: "", targetCompanies: "", avoidCompanies: "", hiringManagerId: "", universities: "",
 };
 
@@ -41,14 +42,16 @@ const toForm = (r: RequestRow): RequestFormValues => ({
   minYears: r.minYears?.toString() ?? "", idealYears: r.idealYears?.toString() ?? "", languages: r.languages.join(", "),
   locationPolicy: r.locationPolicy, searchLocations: r.searchLocations.join(", "), timeZone: r.timeZone ?? "",
   salaryMin: r.salaryMin?.toString() ?? "", salaryMax: r.salaryMax?.toString() ?? "", currency: r.currency ?? "", salaryPeriod: r.salaryPeriod,
+  employmentType: r.employmentType, hoursPerWeek: r.hoursPerWeek?.toString() ?? "", contractLength: r.contractLength ?? "", workload: r.workload ?? "",
+  projectDescription: r.projectDescription ?? "",
   justification: r.justification, targetCompanies: r.targetCompanies.join(", "), avoidCompanies: r.avoidCompanies.join(", "), hiringManagerId: r.hiringManagerId ?? "",
   locationId: r.locationId ?? "", workingHours: r.workingHours ?? "", universities: r.universities.join("\n"),
 });
 
-type Suggestable = "department" | "seniority" | "jdText" | "mustHaves" | "niceToHaves" | "minYears" | "idealYears" | "languages";
+type Suggestable = "department" | "seniority" | "jdText" | "mustHaves" | "niceToHaves" | "minYears" | "idealYears" | "languages" | "employmentType" | "salaryPeriod";
 const SUGGESTION_LABELS: Record<Suggestable, string> = {
   department: "department", seniority: "level", jdText: "job description", mustHaves: "must-haves", niceToHaves: "nice-to-haves",
-  minYears: "minimum years", idealYears: "ideal years", languages: "languages",
+  minYears: "minimum years", idealYears: "ideal years", languages: "languages", employmentType: "employment type", salaryPeriod: "pay basis",
 };
 type LocationField = "locationPolicy" | "searchLocations" | "workingHours" | "universities";
 type AutoField = Suggestable | LocationField;
@@ -63,6 +66,8 @@ function suggestionsFrom(p: Position): Partial<Record<Suggestable, string>> {
   const out: Partial<Record<Suggestable, string>> = {
     department: p.department, seniority: p.seniority, jdText: p.jdText, mustHaves: p.mustHaves.join("\n"), niceToHaves: p.niceToHaves.join("\n"),
     minYears: p.minYears?.toString() ?? "", idealYears: p.idealYears?.toString() ?? "", languages: p.languages.join(", "),
+    // Type before pay basis: setting the type moves an untouched pay basis to its default, then the position's own basis wins.
+    employmentType: p.employmentType ?? "", salaryPeriod: p.salaryPeriod ?? "",
   };
   return Object.fromEntries(Object.entries(out).filter(([, v]) => v)) as Partial<Record<Suggestable, string>>;
 }
@@ -87,10 +92,14 @@ export default function RequestForm() {
   const form = useForm({ resolver: zodResolver(RequestFormSchema), defaultValues: EMPTY });
   const { errors, isSubmitting } = form.formState;
   const saving = useRef(false);
+  /** The employment type before the select changed, so a pay basis that still follows the old type follows the new one. */
+  const typeBefore = useRef<EmploymentType>("full_time");
   const [busy, setBusy] = useState(false);
   const reg = (name: keyof RequestFormValues) => ({ ...form.register(name), "aria-invalid": !!errors[name] });
 
   useEffect(() => { if (existing.data) form.reset(toForm(existing.data.request)); }, [existing.data, form]);
+  const employmentType = form.watch("employmentType");
+  useEffect(() => { typeBefore.current = employmentType; }, [employmentType]);
   // A native select can't show a value whose option isn't there yet. When the lists arrive after the saved
   // request, set the values again so the location and hiring manager show what was saved.
   useEffect(() => {
@@ -117,12 +126,30 @@ export default function RequestForm() {
     return true;
   }
 
+  /** A new type moves the pay basis to that type's usual one, unless someone picked a basis of their own. */
+  function setType(next: EmploymentType, previous: EmploymentType) {
+    const pay = form.getValues("salaryPeriod");
+    if (pay !== PAY_DEFAULT[previous] && pay !== autoFilled.current.salaryPeriod) return;
+    form.setValue("salaryPeriod", PAY_DEFAULT[next]);
+    autoFilled.current.salaryPeriod = PAY_DEFAULT[next];
+  }
+
   function suggest(p: Position) {
     const filled: string[] = [];
     const before: Partial<Record<Suggestable, string>> = {};
+    const payBefore = form.getValues("salaryPeriod");
     for (const [name, value] of Object.entries(suggestionsFrom(p)) as [Suggestable, string][]) {
       const previous = form.getValues(name);
-      if (fillIfUntouched(name, value)) { filled.push(SUGGESTION_LABELS[name]); before[name] = previous; }
+      if (fillIfUntouched(name, value)) {
+        filled.push(SUGGESTION_LABELS[name]);
+        before[name] = previous;
+        if (name === "employmentType") setType(value as EmploymentType, previous as EmploymentType);
+      }
+    }
+    // The type can move the pay basis too; Undo puts back what it was before the pick.
+    if (form.getValues("salaryPeriod") !== payBefore) {
+      before.salaryPeriod = payBefore;
+      if (!filled.includes(SUGGESTION_LABELS.salaryPeriod)) filled.push(SUGGESTION_LABELS.salaryPeriod);
     }
     setSuggested({ position: p, fields: filled, before });
   }
@@ -259,6 +286,21 @@ export default function RequestForm() {
                 <Field required label="Headcount" htmlFor="hc" error={errors.headcount?.message}><Input id="hc" type="number" min={1} {...reg("headcount")} /></Field>
                 <Field label="Type" htmlFor="kind"><Select id="kind" {...reg("kind")}><option value="new">New role</option><option value="backfill">Backfill</option></Select></Field>
               </div>
+              <Field required label="Employment type" htmlFor="etype" error={errors.employmentType?.message}>
+                <Select id="etype" {...form.register("employmentType", { onChange: (e) => setType(e.target.value as EmploymentType, typeBefore.current) })}>
+                  {EMPLOYMENT_TYPES.map((t) => <option key={t} value={t}>{EMPLOYMENT_LABELS[t]}</option>)}
+                </Select>
+              </Field>
+              {v.employmentType === "part_time" && (
+                <Field label="Hours per week" htmlFor="hpw" error={errors.hoursPerWeek?.message}><Input id="hpw" inputMode="numeric" placeholder="20" {...reg("hoursPerWeek")} /></Field>
+              )}
+              {isContractWork(v.employmentType) && (<>
+                <Field label="Contract length" htmlFor="clen" error={errors.contractLength?.message}><Input id="clen" placeholder="3 months" {...reg("contractLength")} /></Field>
+                <Field label="Expected workload" htmlFor="wl" error={errors.workload?.message}><Input id="wl" placeholder="About 10 illustrations a month" {...reg("workload")} /></Field>
+                <Field label="Project description" hint="What they'll deliver and by when" htmlFor="proj" className="sm:col-span-2" error={errors.projectDescription?.message}>
+                  <Textarea id="proj" rows={3} {...reg("projectDescription")} />
+                </Field>
+              </>)}
               <Field label="Target start date" htmlFor="sd" error={errors.startDate?.message}><Input id="sd" type="date" {...reg("startDate")} /></Field>
               <Field label="Hiring manager" htmlFor="hm" error={errors.hiringManagerId?.message}>
                 <Select id="hm" {...reg("hiringManagerId")}>
@@ -311,7 +353,7 @@ export default function RequestForm() {
               <Field required label="Currency" htmlFor="cur" error={errors.currency?.message}><Select id="cur" {...reg("currency")}><option value="">Choose…</option>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
               <Field label="Salary from" htmlFor="smin" error={errors.salaryMin?.message}><Input id="smin" inputMode="numeric" {...reg("salaryMin")} /></Field>
               <Field label="Salary to" htmlFor="smax" error={errors.salaryMax?.message}><Input id="smax" inputMode="numeric" {...reg("salaryMax")} /></Field>
-              <Field label="Per" htmlFor="per"><Select id="per" {...reg("salaryPeriod")}><option value="month">Month</option><option value="year">Year</option></Select></Field>
+              <Field label="Per" htmlFor="per" hint="Internal only"><Select id="per" {...reg("salaryPeriod")}>{PAY_PERIODS.map((p) => <option key={p} value={p}>{PAY_LABELS[p].replace("Per ", "")}</option>)}</Select></Field>
               <Field required label="Business justification for Khalil" htmlFor="just" className="sm:col-span-4" error={errors.justification?.message}><Textarea id="just" {...reg("justification")} /></Field>
             </CardContent>
           </Card>
@@ -321,7 +363,7 @@ export default function RequestForm() {
           <div>
             <div className="text-xs text-muted-foreground">Summary</div>
             <div className="font-semibold">{v.title || "Untitled position"}</div>
-            <div className="text-sm text-muted-foreground">{[v.department, v.seniority, location?.name].filter(Boolean).join(" · ")}</div>
+            <div className="text-sm text-muted-foreground">{[v.department, v.seniority, EMPLOYMENT_LABELS[v.employmentType], location?.name].filter(Boolean).join(" · ")}</div>
           </div>
           <div>
             <div className="mb-1.5 flex justify-between text-xs text-muted-foreground"><span>Required to submit</span><span className="num">{ready}/{checks.length}</span></div>
