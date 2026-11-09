@@ -51,7 +51,7 @@ test("editing a draft shows the saved location", async ({ page }) => {
 test("salaries are per month unless the manager picks per year", async ({ page }) => {
   await signInAs(page, "Manager");
   await page.goto("/requests/new");
-  await expect(page.getByLabel("Per")).toHaveValue("month");
+  await expect(page.getByLabel("Per", { exact: true })).toHaveValue("month");
   await page.getByLabel("Job title").fill("Salary Period Check");
   await page.keyboard.press("Escape");
   await page.getByLabel("Currency").selectOption("USD");
@@ -60,6 +60,45 @@ test("salaries are per month unless the manager picks per year", async ({ page }
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page).toHaveURL(/\/requests\/[0-9a-f-]{36}$/);
   await expect(page.getByText("/ month")).toBeVisible();
+  await expect(page.getByText("Full time", { exact: true })).toBeVisible();
+});
+
+test("the employment type sets the pay basis and asks for its own details", async ({ page }) => {
+  await signInAs(page, "Manager");
+  await page.goto("/requests/new");
+  await page.getByLabel("Job title").fill("Freelance Cover Illustrator");
+  await page.keyboard.press("Escape");
+  const type = page.getByLabel("Employment type");
+  const per = page.getByLabel("Per", { exact: true });
+  await expect(type).toHaveValue("full_time");
+  await expect(page.getByLabel("Contract length")).toHaveCount(0);
+
+  await type.selectOption("part_time");
+  await expect(per).toHaveValue("month");
+  await expect(page.getByLabel("Hours per week")).toBeVisible();
+  await type.selectOption("contractor");
+  await expect(per).toHaveValue("day");
+  await type.selectOption("freelance");
+  await expect(per).toHaveValue("hour");
+  // A basis picked by hand stays when the type changes.
+  await per.selectOption("project");
+  await type.selectOption("contractor");
+  await expect(per).toHaveValue("project");
+  await type.selectOption("freelance");
+
+  await page.getByLabel("Contract length").fill("3 months");
+  await page.getByLabel("Expected workload").fill("About 10 covers");
+  await page.getByLabel("Project description").fill("Covers for the spring list, due by March.");
+  await page.getByLabel("Currency").selectOption("USD");
+  await page.getByLabel("Salary from").fill("400");
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible();
+  await expect(page.getByText("Freelance · 3 months")).toBeVisible();
+  await expect(page.getByText("USD 400 / project")).toBeVisible();
+
+  await page.getByRole("link", { name: "Edit" }).click();
+  await expect(page.getByLabel("Employment type")).toHaveValue("freelance");
+  await expect(page.getByLabel("Expected workload")).toHaveValue("About 10 covers");
 });
 
 test("a submitted request shows its timeline with the next step", async ({ page }) => {
