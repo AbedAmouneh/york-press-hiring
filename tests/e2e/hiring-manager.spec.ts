@@ -1,12 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signInAs } from "./helpers";
+import { designerLink, signInAs } from "./helpers";
 
 // The seeded "Senior Product Designer" role is managed by the demo hiring manager; "Finance Manager" is not.
 
 async function openDesignerRole(page: Page) {
   await signInAs(page, "Hiring manager");
   await page.goto("/roles");
-  await page.getByRole("link", { name: /Senior Product Designer/ }).click();
+  await designerLink(page).click();
   await expect(page.getByRole("tab", { name: "Top 10" })).toHaveAttribute("aria-selected", "true");
 }
 
@@ -47,9 +47,14 @@ test("the hiring manager can't change a candidate's status", async ({ page }) =>
 
 test("the hiring manager sees contact details on their own role only", async ({ page }) => {
   await openDesignerRole(page);
-  await page.getByRole("tabpanel").getByRole("row").nth(1).click();
+  // Sample data varies per run: open someone in the Top 10 who has an email.
+  const roleId = new URL(page.url()).pathname.split("/").pop();
+  const { candidates } = await (await page.request.get(`/api/requests/${roleId}/candidates`)).json();
+  const person = candidates.find((c: { isTop10: boolean; email: string | null }) => c.isTop10 && c.email);
+  await page.getByRole("tabpanel").getByRole("row").filter({ hasText: person.fullName }).click();
   const panel = page.getByRole("dialog");
   await panel.getByRole("tab", { name: "Contact & outreach" }).click();
+  await expect(panel.getByText(person.email)).toBeVisible();
   await expect(panel.getByText(/^From /)).toBeVisible();
 
   // A role they don't manage can't be opened at all, so its contacts stay hidden.

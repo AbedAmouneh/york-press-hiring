@@ -8,3 +8,6 @@ export async function signInAs(page: Page, who: DemoUser) {
   await page.getByRole("button", { name: who, exact: true }).click();
   await expect(page).not.toHaveURL(/\/login/);
 }
+
+/** The seeded designer role's link, not the "Contact the Top 10 for …" task on Home that mentions it too. */
+export const designerLink = (page: Page) => page.getByRole("link", { name: /Senior Product Designer/ }).filter({ hasNotText: /Contact the Top 10|Follow up with/ });

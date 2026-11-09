@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { signInAs } from "./helpers";
+import { designerLink, signInAs } from "./helpers";
 
 test("a recruiter's Home shows metrics and roles in progress", async ({ page }) => {
   await signInAs(page, "Recruiter");
   await expect(page.getByText("Open roles", { exact: true })).toBeVisible();
   await expect(page.getByText("Emails today")).toBeVisible();
-  const role = page.getByRole("link", { name: /Senior Product Designer/ });
+  const role = designerLink(page);
   await expect(role).toBeVisible();
   await expect(role.getByRole("img", { name: /^Stage:/ })).toBeVisible();
   await role.click();
