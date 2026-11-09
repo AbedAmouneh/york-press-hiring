@@ -8,7 +8,7 @@ export type HomeRequest = {
   status: RequestStatus;
   requesterId: string;
   hiringManagerId: string | null;
-  stats: { screened: number; contacted: number; hmYes: number; hmPending: number };
+  stats: { screened: number; contacted: number; hmYes: number; hmPending: number; followUpsDue?: number };
 };
 
 export type HomeMessage = { channel: string; status: string };
@@ -41,6 +41,16 @@ export function tasksFor(user: { id: string; roles: readonly Role[] }, requests:
   for (const r of requests.filter((x) => x.hiringManagerId === user.id && x.status === "open" && x.stats.hmPending > 0)) {
     const n = r.stats.hmPending;
     tasks.push({ key: `decide-${r.id}`, text: `Decide on ${n} candidate${n === 1 ? "" : "s"} for ${r.code}`, to: `/roles/${r.id}` });
+  }
+  // Contacting is manual: roles whose Top 10 is ready but nobody was contacted, and follow-ups that are due, for the
+  // people who can press Contact (recruiters and the role's hiring manager).
+  const canContact = (r: HomeRequest) => r.status === "open" && (has("recruiter", "admin") || r.hiringManagerId === user.id);
+  for (const r of requests.filter((x) => canContact(x) && x.stats.screened > 0 && x.stats.contacted === 0)) {
+    tasks.push({ key: `contact-${r.id}`, text: `Contact the Top 10 for ${r.code} ${r.title}`, to: `/roles/${r.id}` });
+  }
+  for (const r of requests.filter((x) => canContact(x) && (x.stats.followUpsDue ?? 0) > 0)) {
+    const n = r.stats.followUpsDue!;
+    tasks.push({ key: `follow-${r.id}`, text: `Follow up with ${n} candidate${n === 1 ? "" : "s"} for ${r.code}`, to: `/roles/${r.id}` });
   }
   if (has("recruiter", "admin")) {
     const count = (channel: string, status: string) => messages.filter((m) => m.channel === channel && m.status === status).length;
