@@ -9,7 +9,16 @@ const messages = (r: { success: boolean; error?: { issues: { path: PropertyKey[]
 describe("request rules", () => {
   it("fills defaults for a minimal request", () => {
     const r = RequestInput.parse({ title: "Editor", department: "Editorial", seniority: "Senior" });
-    expect(r).toMatchObject({ headcount: 1, kind: "new", mustHaves: [], locationPolicy: "Remote, global", salaryPeriod: "month" });
+    expect(r).toMatchObject({ headcount: 1, kind: "new", mustHaves: [], locationPolicy: "Remote, global", salaryPeriod: "month", employmentType: "full_time" });
+  });
+
+  it("accepts the employment types and pay bases and rejects others", () => {
+    const base = { title: "Illustrator", department: "Design & Multimedia", seniority: "Mid" };
+    expect(RequestInput.parse({ ...base, employmentType: "freelance", salaryPeriod: "hour", contractLength: "3 months" })).toMatchObject({ employmentType: "freelance", salaryPeriod: "hour" });
+    expect(messages(RequestInput.safeParse({ ...base, employmentType: "intern", salaryPeriod: "week" }))).toEqual({
+      employmentType: "Choose the type of employment.", salaryPeriod: "Choose how pay is quoted.",
+    });
+    expect(messages(RequestInput.safeParse({ ...base, employmentType: "part_time", hoursPerWeek: 80 }))).toHaveProperty("hoursPerWeek");
   });
 
   it("rejects a salary band and years range that run backwards", () => {
@@ -55,6 +64,7 @@ const emptyRequest: RequestFormValues = {
   mustHaves: "", niceToHaves: "", dealBreakers: "", minYears: "", idealYears: "", languages: "", locationPolicy: "Remote, global",
   searchLocations: "", timeZone: "", salaryMin: "", salaryMax: "", currency: "", salaryPeriod: "year", justification: "",
   targetCompanies: "", avoidCompanies: "", hiringManagerId: "", locationId: "", workingHours: "", universities: "",
+  employmentType: "full_time", hoursPerWeek: "", contractLength: "", workload: "", projectDescription: "",
 };
 const LOCATION_ID = "5b1f0e8a-4c1e-4b8e-9a51-2f6d2d1c9a10";
 
@@ -91,9 +101,22 @@ describe("browser forms reuse the API rules", () => {
   });
 
   it("checks a saved position the same way as the API", () => {
-    const base = { title: "Accountant", department: "Finance", seniority: "Entry", mustHaves: "Accounting\n Excel ", niceToHaves: "", languages: "English", minYears: "3", idealYears: "1", jdText: "", active: true };
+    const base = { title: "Accountant", department: "Finance", seniority: "Entry", mustHaves: "Accounting\n Excel ", niceToHaves: "", languages: "English", minYears: "3", idealYears: "1", jdText: "", employmentType: "", salaryPeriod: "", active: true };
     expect(messages(PositionForm.safeParse(base))).toEqual({ idealYears: "Ideal years should be at least the minimum." });
     expect(PositionForm.parse({ ...base, idealYears: "5" })).toMatchObject({ mustHaves: ["Accounting", "Excel"], languages: ["English"], minYears: 3, idealYears: 5 });
+  });
+
+  it("saves a position's usual type and pay basis, or none", () => {
+    const base = { title: "Illustrator", department: "Design & Multimedia", seniority: "Mid", mustHaves: "", niceToHaves: "", languages: "", minYears: "", idealYears: "", jdText: "", active: true };
+    expect(PositionForm.parse({ ...base, employmentType: "freelance", salaryPeriod: "project" })).toMatchObject({ employmentType: "freelance", salaryPeriod: "project" });
+    expect(PositionForm.parse({ ...base, employmentType: "", salaryPeriod: "" })).toMatchObject({ employmentType: null, salaryPeriod: null });
+  });
+
+  it("only keeps the details that belong to the employment type", () => {
+    const filled = { ...emptyRequest, title: "Illustrator", hoursPerWeek: "20", contractLength: "3 months", workload: "10 drawings a month", projectDescription: "Book covers" };
+    expect(RequestDraftForm.parse({ ...filled, employmentType: "part_time" })).toMatchObject({ hoursPerWeek: 20, contractLength: null, workload: null, projectDescription: null });
+    expect(RequestDraftForm.parse({ ...filled, employmentType: "freelance" })).toMatchObject({ hoursPerWeek: null, contractLength: "3 months", workload: "10 drawings a month", projectDescription: "Book covers" });
+    expect(RequestDraftForm.parse({ ...filled, employmentType: "full_time" })).toMatchObject({ hoursPerWeek: null, contractLength: null });
   });
 
   it("checks a hiring location and treats an empty city as none", () => {
