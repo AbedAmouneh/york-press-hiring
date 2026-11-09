@@ -6,10 +6,10 @@ Working memory for Claude in this repo. Read it fully before changing code.
 
 A web app for York Press: managers request a position, Khalil (CEO) approves it, and the app
 sources about 50 candidates from People Data Labs and SignalHire, scores them with Claude on a
-weighted 100-point scorecard, flags the Top 10, reveals their contacts through SignalHire and sends
-templated outreach. Email goes out automatically within a daily cap; LinkedIn notes are approved in
-the app and sent from Abed's account by Claude in Chrome (see §9 of
-`~/Documents/Linkedin Automation /CLAUDE.md`, the sourcing workflow's working memory).
+weighted 100-point scorecard, flags the Top 10 and reveals their contacts through SignalHire. Nothing is
+sent automatically: a recruiter or the role's hiring manager presses **Contact** on a candidate, picks email,
+LinkedIn or WhatsApp, edits the drafted message and sends it. LinkedIn notes are then sent from Abed's account
+by Claude in Chrome (see §9 of `~/Documents/Linkedin Automation /CLAUDE.md`, the sourcing workflow's working memory).
 
 - Local path: `~/Development/hiring-platform`.
 - Owner: Abed El-Fattah Amouneh. CEO approver: Khalil Sayegh (khalil.sayegh@york-press.com).
@@ -148,8 +148,17 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   and late SignalHire results all go through `suppress()`/`isSuppressed()`: unsent messages to the person are
   cancelled on every role, an opt-out deletes their email and phone, the email queue re-checks right before sending,
   and only an admin can take an opted-out person off the list.
-- **Outreach:** template only (Claude writes one personal line). Respect the kill switch and the
-  daily cap. Every email states where the contact details came from. LinkedIn is approval-gated.
+- **Outreach is manual** (`server/services/outreach.ts`, `src/components/ContactDialog.tsx`): runs never draft or
+  send anything. Only recruiters, admins and the role's hiring manager (`canEditCandidates`) can press Contact; the
+  CEO can't. The draft is the saved template plus Claude's one personal line (follow-ups use a fixed short text;
+  WhatsApp starts from the LinkedIn note plus the apply link and where the number came from). Email is sent the
+  moment someone presses Send: from "<sender> at York Press" on careers@, Reply-To careers@ and the sender, visible
+  CC `OUTREACH_CC` (default abdulrahman.mansour@york-press.com), unsubscribe link appended, idempotency key per
+  message. The pause switch in Settings blocks email; there is no daily cap on manual sends. LinkedIn: Send =
+  approved, Cowork sends it, then it counts as contacted. WhatsApp: opens wa.me with the text and marks the person
+  Contacted (undo on the candidate). After a first message: status Contacted, follow-up date in 5 working days
+  (Home lists due follow-ups, "Contact again" offers the follow-up); after the follow-up no further reminder.
+  Every email states where the contact details came from.
 - **Contacts:** SignalHire reveals only for the Top 10 (or a recruiter's manual click). Store the
   source and retrieval date. Opt-outs and closed roles can delete emails and phones. Every reveal
   path checks `signalhireBudget()` (`server/services/credit-budget.ts`) so the monthly limit in

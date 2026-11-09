@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AbedAmouneh/york-press-hiring/actions/workflows/ci.yml/badge.svg)](https://github.com/AbedAmouneh/york-press-hiring/actions/workflows/ci.yml)
 
-Managers request positions → Khalil (CEO) approves → the platform sources ~50 candidates from **People Data Labs + SignalHire**, scores them with **Claude** on a weighted 100-point scorecard, flags the **Top 10**, reveals their contacts through SignalHire, and sends templated outreach (email automatically within a daily cap; LinkedIn notes only after approval, sent from Abed's account via Claude in Chrome).
+Managers request positions → Khalil (CEO) approves → the platform sources ~50 candidates from **People Data Labs + SignalHire**, scores them with **Claude** on a weighted 100-point scorecard, flags the **Top 10**, and reveals their contacts through SignalHire. Nothing is sent automatically: a recruiter or the role's hiring manager presses **Contact**, picks email, LinkedIn or WhatsApp, edits the drafted message and sends it (LinkedIn notes go out from Abed's account via Claude in Chrome).
 
 Non-technical setup: see **[SETUP_GUIDE.md](SETUP_GUIDE.md)**. Click-through design prototype: `docs/prototype.html`.
 
@@ -71,7 +71,7 @@ npm run db:generate  # after editing server/db/schema.ts
 - **Fairness:** Claude never receives names, photos, gender, dates of birth or graduation years; prompts forbid protected characteristics. Score = sum of per-criterion points clamped to the role's weights; a missing deal-breaker caps it at 40.
 - **Prompt injection:** profile/CV text is wrapped in `<candidate_data>` / `<cv>` and treated as data; outputs must match a JSON schema.
 - **Exclusions:** current York Press employees, the do-not-contact list, and people already screened for the role.
-- **Outreach:** templates only (Claude writes one personal line); kill switch + daily cap; every email states where the contact details came from; LinkedIn is approval-gated.
+- **Outreach:** manual only: someone presses Contact and Send. Templates with one personal line from Claude; email from the sender's name on careers@, replies to careers@ and the sender, Abdulrahman in CC (`OUTREACH_CC`); a pause switch blocks email; every email states where the contact details came from and has an unsubscribe link; follow-up reminder after 5 working days.
 - **Data:** contacts store their source and retrieval date; closing a role can delete collected emails/phones; opting out deletes them.
 
 ## Environment
