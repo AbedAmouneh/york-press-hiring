@@ -3,12 +3,12 @@ import { waitUntil } from "@vercel/functions";
 import { getDb, schema } from "../db/client.js";
 import { aiFeatures, appIsPublic, env, mock, POOL_SIZE, redactSecrets, TOP_N } from "../env.js";
 import type { RunState } from "../db/schema.js";
-import type { Weights } from "../../shared/types.js";
+import { isContractWork, type Weights } from "../../shared/types.js";
 import { buildBrief, collectScoreBatch, scoreBatch, scoreFractions, submitScoreBatch, totalScore, webFindings, type ScoreResult } from "./claude.js";
 import { lastCreditsLeft, revealContacts, type RevealResult } from "./providers/signalhire.js";
 import { providerLabel, revealAvailable, searchProviders, skippedProviders } from "./providers/select.js";
 import type { NormalizedProfile } from "./providers/types.js";
-import { mergeProfiles, nameKey, prescore, type MergedProfile } from "./merge.js";
+import { CONTRACT_WORK_PATTERN, mergeProfiles, nameKey, prescore, type MergedProfile } from "./merge.js";
 import { getSettings, logUsage, updateSettings, weightsFor } from "./settings.js";
 import { reserveReveals, settleReveals } from "./credit-budget.js";
 import { describeMisses, findLinkedinUrls, linkedinLookupAvailable } from "./linkedin-finder.js";
@@ -333,7 +333,7 @@ async function stepSearch({ run, request, state, counters }: Ctx) {
     .filter((p) => {
       return ![p.linkedinUrl, p.pdlId, p.signalhireUid, nameKey(p)].some((k) => k && seenKeys.has(k));
     })
-    .map((p) => ({ p, pre: prescore(p, brief.titles, brief.skills, request.minYears) }))
+    .map((p) => ({ p, pre: prescore(p, brief.titles, brief.skills, request.minYears, isContractWork(request.employmentType)) }))
     .sort((a, b) => b.pre - a.pre)
     .slice(0, run.kind === "initial" ? POOL_SIZE : 25);
 
@@ -655,11 +655,18 @@ async function stepScore(ctx: Ctx): Promise<StepResult> {
 /** Rank everyone scored for the role and flag the Top 10. Returns how many people were ranked. */
 async function rerank({ run, request, state, counters }: Ctx) {
   const db = await getDb();
+  // Contractor and freelance roles: 2 extra points in the ranking for profiles that show freelance or contract work.
+  // Only the order changes; the score people see stays the same, and nobody is left out.
+  const c = schema.candidates;
+  const nudge = isContractWork(request.employmentType)
+    ? sql`case when concat_ws(' ', ${c.currentTitle}, ${c.headline}, ${c.currentCompany}) ~* ${CONTRACT_WORK_PATTERN} then 2 else 0 end`
+    : sql`0`;
   const all = await db
     .select({ id: schema.roleCandidates.id, wasTop: schema.roleCandidates.isTop10 })
     .from(schema.roleCandidates)
+    .innerJoin(c, eq(c.id, schema.roleCandidates.candidateId))
     .where(and(eq(schema.roleCandidates.requestId, request.id), isNotNull(schema.roleCandidates.score)))
-    .orderBy(desc(schema.roleCandidates.score), desc(schema.roleCandidates.prescore));
+    .orderBy(desc(sql`${schema.roleCandidates.score} + ${nudge}`), desc(schema.roleCandidates.score), desc(schema.roleCandidates.prescore));
   const newIds = new Set(state.newRoleCandidateIds ?? []);
   let contenders = 0;
   for (let i = 0; i < all.length; i++) {
