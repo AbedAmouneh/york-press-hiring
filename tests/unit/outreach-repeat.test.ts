@@ -6,7 +6,7 @@ import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../server/db/client.js";
-import { describeRole, draftContact, FOLLOW_UP_DAYS, sendContact, undoWhatsapp, whatsappLink, withArticle } from "../../server/services/outreach.js";
+import { describeRole, draftContact, fitNote, FOLLOW_UP_DAYS, sendContact, undoWhatsapp, whatsappLink, withArticle } from "../../server/services/outreach.js";
 import { seedTemplates } from "../../server/services/templates.js";
 import { addBusinessDays, localDate } from "../../server/services/dates.js";
 
@@ -37,6 +37,27 @@ describe("the Contact window's draft", () => {
     expect(d.body).toMatch(/^Hi Rana,/);
     expect(d.body).toContain("Rima Recruiter");
     expect(d.email?.cc).toEqual(["abdulrahman.mansour@york-press.com"]);
+  });
+
+  it("keeps a LinkedIn note within the limit when the contract length is long, without cutting a word", async () => {
+    const { db, user, c, second, rcB } = await twoRolesOnePerson({ linkedinUrl: "https://www.linkedin.com/in/rana-haddad" });
+    const [long] = await db.update(schema.roleRequests).set({
+      title: "Senior Curriculum Development Editor", employmentType: "contractor", contractLength: "until the end of the second phase of the national curriculum project in 2027",
+      locationPolicy: "Remote, Zouk Mosbeh, Lebanon",
+    }).where(eq(schema.roleRequests.id, second.id)).returning();
+    const d = await draftContact({ rc: rcB, c, request: long }, "linkedin", "first", user);
+    expect(d.body.length).toBeLessThanOrEqual(300);
+    expect(d.body).toContain("a contract Senior Curriculum Development Editor");
+    expect(d.body).not.toContain("national curriculum project");
+    const email = await draftContact({ rc: rcB, c, request: long }, "email", "first", user);
+    expect(email.body).toContain("national curriculum project");
+  });
+
+  it("cuts an overlong note at a word", () => {
+    const note = fitNote(`${"word ".repeat(70)}end`);
+    expect(note.length).toBeLessThanOrEqual(300);
+    expect(note.endsWith("word")).toBe(true);
+    expect(fitNote("short note")).toBe("short note");
   });
 
   it("mentions a part-time role's hours in every channel, and never the pay", async () => {
@@ -84,7 +105,8 @@ describe("wording", () => {
   it("says what kind of work it is, never the pay", () => {
     const text = "We're hiring a Illustrator at York Press";
     expect(describeRole(text, { title: "Illustrator", employmentType: "full_time" })).toBe("We're hiring an Illustrator at York Press");
-    expect(describeRole("We're hiring a Editor here", { title: "Editor", employmentType: "part_time", hoursPerWeek: 20 })).toBe("We're hiring a part-time Editor, about 20 hours a week here");
+    expect(describeRole("We're hiring a Editor here", { title: "Editor", employmentType: "part_time", hoursPerWeek: 20 })).toBe("We're hiring a part-time Editor (about 20 hours a week) here");
+    expect(describeRole(text, { title: "Illustrator", employmentType: "freelance", contractLength: "3 months" }, false)).toBe("We're hiring a freelance Illustrator at York Press");
     expect(describeRole(text, { title: "Illustrator", employmentType: "freelance", contractLength: "3 months" })).toBe("We're hiring a freelance Illustrator for 3 months at York Press");
     expect(describeRole(text, { title: "Illustrator", employmentType: "contractor", contractLength: "until June" })).toBe("We're hiring a contract Illustrator (until June) at York Press");
     expect(describeRole(text, { title: "Illustrator", employmentType: "contractor" })).toBe("We're hiring a contract Illustrator at York Press");
