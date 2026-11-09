@@ -391,6 +391,39 @@ ok((await app.fetch(new Request(`http://localhost/api/applications/${application
   ok(mine.hmDecision === "yes" && mine.status === "rejected", "the decision carries over to the new CV");
 }
 
+// ---------------------------------------------------------------- universities
+{
+  const countries = (await manager("GET", "/universities/countries")).countries;
+  ok(countries.length === 10 && countries.find((c: any) => c.country === "Lebanon")?.count >= 30, `universities are listed for ${countries.length} countries`);
+  const lebanese = (await manager("GET", "/universities?country=Lebanon")).universities;
+  const aub = lebanese.find((u: any) => u.name === "American University of Beirut");
+  ok(aub && aub.aka.includes("AUB"), "a country's universities come with their short names");
+  ok((await outsider.raw("POST", "/universities", { country: "Lebanon", name: "Smoke Test University" })).status === 403, "a hiring manager can't add a university");
+  const added = await manager("POST", "/universities", { country: "Lebanon", name: "Smoke Test University", city: "Beirut" });
+  ok(added.university.name === "Smoke Test University", "a manager adds a missing university");
+  ok((await manager.raw("POST", "/universities", { country: "Lebanon", name: "smoke test university" })).status === 409, "the same university can't be added twice");
+
+  // A location's universities are the starting point; patching something else keeps them.
+  await recruiter("PATCH", `/locations/${lebanon.id}`, { universities: ["American University of Beirut"] });
+  await recruiter("PATCH", `/locations/${lebanon.id}`, { workingHours: lebanon.workingHours });
+  ok((await manager("GET", "/locations")).locations.find((l: any) => l.id === lebanon.id).universities.join() === "American University of Beirut", "a location keeps its universities when other details change");
+  await recruiter("PATCH", `/locations/${lebanon.id}`, { universities: [] });
+
+  const uniRole = await manager("POST", "/requests?submit=true", {
+    title: "Junior Accountant", department: "Finance", seniority: "Junior", mustHaves: ["IFRS"], locationId: lebanon.id,
+    currency: "USD", justification: "Graduate hire.", universities: ["American University of Beirut", "Lebanese American University"],
+  });
+  ok((await manager("GET", `/requests/${uniRole.id}`)).request.universities.length === 2, "a request keeps its chosen universities");
+  await ceo("POST", `/requests/${uniRole.id}/decision`, { action: "approve" });
+  for (let i = 0; i < 100 && (await admin("GET", `/requests/${uniRole.id}`)).request.status !== "open"; i++) await new Promise((r) => setTimeout(r, 200));
+  const uniRun = (await admin("GET", `/requests/${uniRole.id}/runs`)).runs[0];
+  ok(uniRun.state.log.some((l: any) => /Only \d+ people found from the 2 chosen universities/.test(l.msg)), "a run with few graduates says so");
+  const people = (await admin("GET", `/requests/${uniRole.id}/candidates`)).candidates;
+  const schools = await Promise.all(people.slice(0, 5).map(async (p: any) => (await admin("GET", `/role-candidates/${p.id}`)).candidate.education.map((e: any) => e.school)));
+  ok(people.length > 0 && schools.every((s: string[]) => s.some((x) => ["American University of Beirut", "Lebanese American University", "AUB", "LAU"].includes(x))), "everyone found studied at a chosen university");
+  await admin("POST", `/requests/${uniRole.id}/close`, { deleteContacts: false });
+}
+
 // ---------------------------------------------------------------- daily job and data retention
 const retention = await admin("GET", "/retention");
 ok(retention.months === 24 && retention.nextRun.candidates === 0, "retention preview: nothing is old enough to delete yet");
