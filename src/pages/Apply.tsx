@@ -51,7 +51,7 @@ export default function Apply() {
           </Card>
         ) : (
           <>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{role.data!.department} · {role.data!.locationPolicy}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{role.data!.department} · {role.data!.employment} · {role.data!.locationPolicy}</p>
             <h1 className="mb-3 text-2xl font-bold">{role.data!.title}</h1>
             {role.data!.description && <p className="mb-6 whitespace-pre-line text-sm text-muted-foreground">{role.data!.description}</p>}
             <Card className="p-6">
