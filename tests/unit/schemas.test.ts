@@ -54,7 +54,7 @@ const emptyRequest: RequestFormValues = {
   title: "", department: "Editorial", seniority: "Senior", headcount: "1", startDate: "", kind: "new", jdText: "",
   mustHaves: "", niceToHaves: "", dealBreakers: "", minYears: "", idealYears: "", languages: "", locationPolicy: "Remote, global",
   searchLocations: "", timeZone: "", salaryMin: "", salaryMax: "", currency: "", salaryPeriod: "year", justification: "",
-  targetCompanies: "", avoidCompanies: "", hiringManagerId: "", locationId: "", workingHours: "",
+  targetCompanies: "", avoidCompanies: "", hiringManagerId: "", locationId: "", workingHours: "", universities: "",
 };
 const LOCATION_ID = "5b1f0e8a-4c1e-4b8e-9a51-2f6d2d1c9a10";
 
@@ -97,7 +97,7 @@ describe("browser forms reuse the API rules", () => {
   });
 
   it("checks a hiring location and treats an empty city as none", () => {
-    const base = { name: "Dubai, UAE", country: "", city: " ", workArrangement: "On-site", workingHours: "", active: true };
+    const base = { name: "Dubai, UAE", country: "", city: " ", workArrangement: "On-site", workingHours: "", universities: "", active: true };
     expect(messages(LocationForm.safeParse(base))).toEqual({ country: "Add the country." });
     expect(LocationForm.parse({ ...base, country: "United Arab Emirates" })).toMatchObject({ city: null, country: "United Arab Emirates" });
   });
