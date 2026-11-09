@@ -332,6 +332,8 @@ ok((await recruiter.raw("DELETE", `/suppression/${optOutEntry.id}`)).status === 
 
 // ---------------------------------------------------------------- CV upload and download
 const { applyToken } = (await admin("GET", `/requests/${id}`)).request;
+const applyPage = await (await app.fetch(new Request(`http://localhost/api/public/apply/${applyToken}`))).json() as Record<string, unknown>;
+ok(applyPage.employment === "Full time" && !JSON.stringify(applyPage).match(/salary|currency/i), "the apply page shows the type of work but never the pay");
 const cvText = "Rana Haddad\nSenior Product Designer, 9 years. Figma, design systems, user research.";
 const form = new FormData();
 form.set("name", "Rana Haddad");
