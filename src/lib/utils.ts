@@ -19,7 +19,8 @@ export function fmtDateTime(d?: string | Date | null) {
 
 export function money(min?: number | null, max?: number | null, currency?: string | null, period?: string) {
   if (!min && !max) return "—";
-  const f = (n: number) => n.toLocaleString("en-US");
+  // Whole amounts stay whole (2,500); a rate with cents shows both digits (12.50).
+  const f = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
   const range = min && max ? `${f(min)}–${f(max)}` : f((min ?? max)!);
   return `${currency ?? ""} ${range}${period ? ` / ${period}` : ""}`.trim();
 }
