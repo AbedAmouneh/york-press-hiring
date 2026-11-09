@@ -61,7 +61,7 @@ const TYPE_WORD: Record<EmploymentType, string> = { full_time: "", part_time: "p
 
 /**
  * Says what kind of work it is where the template names the role ("hiring a Editor" →
- * "hiring a part-time Editor, about 20 hours a week" / "a freelance Illustrator for 3 months"). Pay is never added.
+ * "hiring a part-time Editor (about 20 hours a week)" / "a freelance Illustrator for 3 months"). Pay is never added.
  * Exported for tests.
  */
 export function describeRole(text: string, r: { title: string; employmentType: EmploymentType; hoursPerWeek?: number | null; contractLength?: string | null }) {
@@ -69,7 +69,7 @@ export function describeRole(text: string, r: { title: string; employmentType: E
   if (!word) return withArticle(text, r.title);
   const length = r.contractLength?.trim();
   const extra = r.employmentType === "part_time"
-    ? (r.hoursPerWeek ? `, about ${r.hoursPerWeek} hours a week` : "")
+    ? (r.hoursPerWeek ? ` (about ${r.hoursPerWeek} hours a week)` : "")
     : length ? (/^(\d|a |an |one |two |three |six |twelve )/i.test(length) ? ` for ${length}` : ` (${length})`) : "";
   const described = `a ${word} ${r.title}${extra}`;
   for (const lead of [` a ${r.title}`, ` an ${r.title}`]) if (text.includes(lead)) return text.replace(lead, ` ${described}`);
