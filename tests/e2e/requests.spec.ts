@@ -90,11 +90,13 @@ test("the employment type sets the pay basis and asks for its own details", asyn
   await page.getByLabel("Expected workload").fill("About 10 covers");
   await page.getByLabel("Project description").fill("Covers for the spring list, due by March.");
   await page.getByLabel("Currency").selectOption("USD");
-  await page.getByLabel("Salary from").fill("400");
+  await page.getByLabel("Salary from").fill("12.50");
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible();
   await expect(page.getByText("Freelance · 3 months")).toBeVisible();
-  await expect(page.getByText("USD 400 / project")).toBeVisible();
+  await expect(page.getByText("USD 12.50 / project")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "The work" })).toBeVisible();
+  await expect(page.getByText("Covers for the spring list, due by March.")).toBeVisible();
 
   await page.getByRole("link", { name: "Edit" }).click();
   await expect(page.getByLabel("Employment type")).toHaveValue("freelance");
