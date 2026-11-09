@@ -8,7 +8,14 @@ import { ApplyFields, cvProblem, InvitePasswordInput, LocationInput, ManagerInvi
 export const lines = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 /** "a, b ,c" → ["a", "b", "c"] */
 export const csv = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
-const num = (s: string) => (s.trim() === "" ? null : Number(s.replace(/[^\d]/g, "")));
+/**
+ * "2,500" → 2500, "2.5" → 2.5, "" → null. Anything else becomes NaN so the schema reports it, instead of digits being
+ * pulled out of it ("2.5 years" used to become 25).
+ */
+const num = (s: string) => {
+  const t = s.trim().replace(/[\s,]/g, "");
+  return t === "" ? null : Number(t);
+};
 
 /** Validate a mapped value with an API schema, reporting its issues on the matching form fields. */
 function validateWith<S extends z.ZodType>(schema: S, value: unknown, ctx: z.RefinementCtx): z.output<S> {

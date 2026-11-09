@@ -9,7 +9,9 @@ const list = z.array(z.string().trim().min(1)).default([]);
 export const UNIVERSITIES_MAX = 40;
 /** Optional university names: only graduates and students of these are searched. Empty = everyone. */
 const universities = z.array(z.string().trim().min(2).max(200)).max(UNIVERSITIES_MAX, `Choose at most ${UNIVERSITIES_MAX} universities.`).default([]);
-const optionalInt = (max: number) => z.coerce.number<number | string>().int().min(0).max(max).nullable().optional();
+/** A whole number, with a plain message for text or decimals. */
+const whole = (message = "Enter a whole number.") => z.coerce.number<number | string>(message).int(message);
+const optionalInt = (max: number) => whole().min(0).max(max).nullable().optional();
 
 // ---------------------------------------------------------------- auth & setup
 
@@ -42,7 +44,7 @@ export const RequestFields = z.object({
   title: z.string().trim().min(2, "Add a job title.").max(120, "Keep the title under 120 characters."),
   department: z.enum(DEPARTMENTS, "Choose a department."),
   seniority: z.string().trim().min(1, "Choose a seniority."),
-  headcount: z.coerce.number<number | string>().int().min(1, "At least 1.").max(50, "At most 50.").default(1),
+  headcount: whole().min(1, "At least 1.").max(50, "At most 50.").default(1),
   startDate: z.string().nullable().optional(),
   kind: z.enum(["new", "backfill"]).default("new"),
   jdText: z.string().default(""),
@@ -61,7 +63,7 @@ export const RequestFields = z.object({
   employmentType: z.enum(EMPLOYMENT_TYPES, "Choose the type of employment.").default("full_time"),
   salaryPeriod: z.enum(PAY_PERIODS, "Choose how pay is quoted.").default("month"),
   /** Part time. */
-  hoursPerWeek: z.coerce.number<number | string>().int().min(1, "At least 1 hour.").max(60, "At most 60 hours.").nullable().optional(),
+  hoursPerWeek: whole("Enter the hours as a whole number.").min(1, "At least 1 hour.").max(60, "At most 60 hours.").nullable().optional(),
   /** Contractor and freelance. */
   contractLength: z.string().trim().max(80, "Keep it short, e.g. 6 months.").nullable().optional(),
   workload: z.string().trim().max(120, "Keep it short, e.g. 10 days a month.").nullable().optional(),
