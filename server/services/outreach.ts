@@ -12,6 +12,7 @@ import { toAI, toReq } from "./mappers.js";
 import { midSentence } from "./wording.js";
 import { isSuppressed, unsubscribeLink } from "./suppression.js";
 import { LINKEDIN_NOTE_MAX, type ContactChannel, type ContactKind } from "../../shared/schemas.js";
+import { EMPLOYMENT_LABELS, type EmploymentType } from "../../shared/types.js";
 
 export { isSuppressed };
 
@@ -54,6 +55,25 @@ export function contactAddress(c: Row["c"], channel: ContactChannel) {
 export function withArticle(text: string, title: string) {
   if (!/^[aeiou]/i.test(title.trim()) || /^(uni|use|eu|one)/i.test(title.trim())) return text;
   return text.split(` a ${title}`).join(` an ${title}`);
+}
+
+const TYPE_WORD: Record<EmploymentType, string> = { full_time: "", part_time: "part-time", contractor: "contract", freelance: "freelance" };
+
+/**
+ * Says what kind of work it is where the template names the role ("hiring a Editor" →
+ * "hiring a part-time Editor, about 20 hours a week" / "a freelance Illustrator for 3 months"). Pay is never added.
+ * Exported for tests.
+ */
+export function describeRole(text: string, r: { title: string; employmentType: EmploymentType; hoursPerWeek?: number | null; contractLength?: string | null }) {
+  const word = TYPE_WORD[r.employmentType];
+  if (!word) return withArticle(text, r.title);
+  const length = r.contractLength?.trim();
+  const extra = r.employmentType === "part_time"
+    ? (r.hoursPerWeek ? `, about ${r.hoursPerWeek} hours a week` : "")
+    : length ? (/^(\d|a |an |one |two |three |six |twelve )/i.test(length) ? ` for ${length}` : ` (${length})`) : "";
+  const described = `a ${word} ${r.title}${extra}`;
+  for (const lead of [` a ${r.title}`, ` an ${r.title}`]) if (text.includes(lead)) return text.replace(lead, ` ${described}`);
+  return text;
 }
 
 /** wa.me link that opens WhatsApp with the message filled in. */
@@ -99,6 +119,7 @@ export async function draftContact(row: Row, channel: ContactChannel, kind: Cont
     data_source: dataSourcePhrase(c.contactSource),
     recruiter_name: sender.name,
     company: c.currentCompany ?? "your company",
+    employment: EMPLOYMENT_LABELS[request.employmentType].toLowerCase(),
   };
   let subject: string | null = null;
   let body: string;
@@ -112,7 +133,7 @@ export async function draftContact(row: Row, channel: ContactChannel, kind: Cont
     subject = channel === "email" ? fillTemplate(template?.subject ?? "{{role_title}} at York Press", vars) : null;
     body = fillTemplate(channel === "whatsapp" ? text + WHATSAPP_EXTRA : text, vars);
   }
-  body = withArticle(body, request.title);
+  body = describeRole(body, request);
   if (channel === "linkedin") body = body.slice(0, LINKEDIN_NOTE_MAX);
   return {
     channel, kind, to, subject, body,
