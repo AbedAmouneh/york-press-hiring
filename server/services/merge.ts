@@ -53,7 +53,23 @@ export function mergeProfiles(profiles: NormalizedProfile[], excludeCompanies: s
 }
 
 /** Cheap 0–100 ranking used to pick which profiles go to Claude: title 50, skills 30, years 20. */
-export function prescore(p: NormalizedProfile, titles: string[], skills: string[], minYears: number | null) {
+/** Words on a profile that show freelance or contract work. Postgres `~*` reads the same pattern. */
+// No word-boundary escapes: JavaScript and Postgres read them differently (in Postgres it's a backspace).
+export const CONTRACT_WORK_PATTERN = "freelanc|contractor|contracting|contract (role|work|basis|position)|self[- ]employed|independent (consultant|contractor)";
+const CONTRACT_WORK = new RegExp(CONTRACT_WORK_PATTERN, "i");
+export const showsContractWork = (p: { currentTitle?: string | null; headline?: string | null; currentCompany?: string | null }) =>
+  CONTRACT_WORK.test(`${p.currentTitle ?? ""} ${p.headline ?? ""} ${p.currentCompany ?? ""}`);
+
+/**
+ * Quick pre-rank before scoring. For contractor and freelance roles, people whose profile shows freelance or contract
+ * work get a small bonus: favoured, never filtered.
+ */
+export function prescore(p: NormalizedProfile, titles: string[], skills: string[], minYears: number | null, contractWork = false) {
+  const bonus = contractWork && showsContractWork(p) ? 8 : 0;
+  return Math.min(100, basePrescore(p, titles, skills, minYears) + bonus);
+}
+
+function basePrescore(p: NormalizedProfile, titles: string[], skills: string[], minYears: number | null) {
   const t = `${p.currentTitle ?? ""} ${p.headline ?? ""}`.toLowerCase();
   const titleHit = titles.some((x) => t.includes(x.toLowerCase())) ? 1 : titles.some((x) => x.toLowerCase().split(/\s+/).some((w) => w.length > 3 && t.includes(w))) ? 0.5 : 0;
   const sk = new Set(p.skills.map((s) => s.toLowerCase()));
