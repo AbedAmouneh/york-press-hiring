@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/AppShell";
 import { RequestStatusBadge } from "@/components/Status";
 import { DeptDot, EmptyState } from "@/components/kit";
 import { Card } from "@/components/ui/card";
+import { employmentLabel } from "../../shared/employment";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** One request as a list row: what it is, the last comment if it was sent back, and where it stands. */
@@ -21,6 +22,7 @@ function RequestRowItem({ r, showBudget }: { r: RequestRow; showBudget: boolean 
           <span className="block font-medium">{r.title}</span>
           <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
             <DeptDot name={r.department} /><span aria-hidden>·</span><span>{r.seniority}</span>
+            {r.employmentType !== "full_time" && <><span aria-hidden>·</span><span>{employmentLabel(r)}</span></>}
             {r.headcount > 1 && <><span aria-hidden>·</span><span>{r.headcount} hires</span></>}
             {showBudget && <><span aria-hidden>·</span><span>{money(r.salaryMin, r.salaryMax, r.currency, r.salaryPeriod)}</span></>}
           </span>

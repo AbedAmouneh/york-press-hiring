@@ -6,7 +6,8 @@ import { call, rpc } from "@/lib/rpc";
 import { can, useMe } from "@/lib/auth";
 import { stageOf } from "@/lib/home";
 import type { CandidateRow, RequestRow } from "@/lib/types";
-import { cn, fmtDate, fmtDateTime } from "@/lib/utils";
+import { cn, fmtDate, fmtDateTime, money } from "@/lib/utils";
+import { employmentLabel } from "../../shared/employment";
 import { CandidateStatusBadge, OutreachBadge, RequestStatusBadge } from "@/components/Status";
 import { CandidateSheet } from "@/components/CandidateSheet";
 import { ContactDialog, type ContactTarget } from "@/components/ContactDialog";
@@ -245,6 +246,8 @@ export default function RoleDetail() {
             <Link to={`/requests/${r.id}`} className="font-mono text-xs hover:text-foreground hover:underline" title="Open the request">{r.code}</Link>
             <span aria-hidden>·</span><DeptDot name={r.department} />
             <span aria-hidden>·</span><span>{r.locationPolicy}</span>
+            <span aria-hidden>·</span><span>{employmentLabel(r)}</span>
+            {(r.salaryMin || r.salaryMax) && <><span aria-hidden>·</span><span title="Internal only: never shown to candidates">{money(r.salaryMin, r.salaryMax, r.currency, r.salaryPeriod)}</span></>}
             {r.hiringManagerName && <><span aria-hidden>·</span><span>HM {r.hiringManagerName}</span></>}
             {r.universities.length > 0 && (
               <><span aria-hidden>·</span><span title={r.universities.join(", ")}>Only graduates of {r.universities.length === 1 ? r.universities[0] : `${r.universities.length} universities`}</span></>
