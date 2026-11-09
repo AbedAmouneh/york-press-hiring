@@ -102,6 +102,16 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   to search. Suggestions only go into fields that are empty, unchanged or still hold the last suggestion. The
   starter lists (from York Press's LinkedIn postings, Oct 2026) are migration 0007. Levels are Entry, Junior,
   Mid, Senior, Manager, and any typed level is allowed.
+- **Employment type** (`shared/types.ts` EMPLOYMENT_TYPES / PAY_PERIODS / PAY_DEFAULT, migration 0024): every request
+  is Full time, Part time, Contractor or Freelance (required, default Full time). The pay basis (hour, day, month, year,
+  project) starts on the type's default and follows the type until someone picks one by hand. Part time adds hours per
+  week; Contractor and Freelance add contract length, expected workload and a project description (`toRequestInput`
+  drops details that don't belong to the type). A saved position can hold a usual type and pay basis, suggested like
+  its other details. Pay is internal only: never in outreach, the apply page or anything a candidate sees.
+  `describeRole` in outreach turns "a Editor" into "a part-time Editor, about 20 hours a week" or "a freelance
+  Illustrator for 3 months". For contract work, profiles showing freelance or contract work get a small bonus in the
+  pre-rank (`prescore`) and a tie-breaking nudge in `rerank`: favoured, never filtered. `CONTRACT_WORK_PATTERN` is read
+  by both JavaScript and Postgres, so it must not use `\b`.
 - **Universities** (`universities` table seeded by migration 0023 from `docs/universities-sources.md`, routes in
   `server/routes/universities.ts`, picker `src/components/UniversityPicker.tsx`): optional. A location can hold a
   starting list (Settings → Locations); a new request at that location starts with it and can change it (country
