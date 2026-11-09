@@ -14,15 +14,16 @@ import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { DeptDot, Badge, DataTable, Field, FormError, Select, Spinner, Td, Th, useToast } from "@/components/kit";
 import { Combobox } from "@/components/Combobox";
-import { DEPARTMENTS, SENIORITIES } from "../../shared/types";
+import { DEPARTMENTS, EMPLOYMENT_LABELS, EMPLOYMENT_TYPES, PAY_LABELS, PAY_PERIODS, SENIORITIES } from "../../shared/types";
 
 const EMPTY: PositionFormValues = {
-  title: "", department: DEPARTMENTS[0], seniority: "Mid", mustHaves: "", niceToHaves: "", languages: "English", minYears: "", idealYears: "", jdText: "", active: true,
+  title: "", department: DEPARTMENTS[0], seniority: "Mid", mustHaves: "", niceToHaves: "", languages: "English", minYears: "", idealYears: "", jdText: "", employmentType: "", salaryPeriod: "", active: true,
 };
 
 const toForm = (p: Position): PositionFormValues => ({
   title: p.title, department: p.department, seniority: p.seniority, mustHaves: p.mustHaves.join("\n"), niceToHaves: p.niceToHaves.join("\n"),
-  languages: p.languages.join(", "), minYears: p.minYears?.toString() ?? "", idealYears: p.idealYears?.toString() ?? "", jdText: p.jdText, active: p.active,
+  languages: p.languages.join(", "), minYears: p.minYears?.toString() ?? "", idealYears: p.idealYears?.toString() ?? "", jdText: p.jdText,
+  employmentType: p.employmentType ?? "", salaryPeriod: p.salaryPeriod ?? "", active: p.active,
 });
 
 const years = (p: Position) => (p.minYears == null && p.idealYears == null ? "—" : `${p.minYears ?? 0}–${p.idealYears ?? p.minYears}`);
@@ -37,7 +38,7 @@ export function PositionsSettings() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
           Managers pick these on the request form, or type a new title. Picking one suggests its department, level, job description,
-          must-haves, nice-to-haves, years and languages; the manager can change all of them.
+          must-haves, nice-to-haves, years, languages, employment type and pay basis; the manager can change all of them.
         </p>
         <Button onClick={() => setEditing("new")}><Plus className="h-4 w-4" /> Add position</Button>
       </div>
@@ -120,6 +121,18 @@ function PositionEditor({ position, onDone }: { position: Position | null; onDon
           <Field label="Minimum years" htmlFor="p-miny" error={errors.minYears?.message}><Input id="p-miny" inputMode="numeric" {...reg("minYears")} /></Field>
           <Field label="Ideal years" htmlFor="p-idy" error={errors.idealYears?.message}><Input id="p-idy" inputMode="numeric" {...reg("idealYears")} /></Field>
         </div>
+        <Field label="Usual employment type" htmlFor="p-type" error={errors.employmentType?.message}>
+          <Select id="p-type" {...reg("employmentType")}>
+            <option value="">No usual type</option>
+            {EMPLOYMENT_TYPES.map((t) => <option key={t} value={t}>{EMPLOYMENT_LABELS[t]}</option>)}
+          </Select>
+        </Field>
+        <Field label="Usual pay basis" hint="Empty: the type's usual basis." htmlFor="p-pay" error={errors.salaryPeriod?.message}>
+          <Select id="p-pay" {...reg("salaryPeriod")}>
+            <option value="">Type's default</option>
+            {PAY_PERIODS.map((p) => <option key={p} value={p}>{PAY_LABELS[p]}</option>)}
+          </Select>
+        </Field>
         <Field label="Job description" hint="Suggested on the request form. Leave out working hours and location: those come from the location the manager picks."
           htmlFor="p-jd" className="sm:col-span-3" error={errors.jdText?.message}>
           <Textarea id="p-jd" rows={10} className="max-h-[40vh]" {...reg("jdText")} />
