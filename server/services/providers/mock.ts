@@ -38,7 +38,11 @@ export function mockProfiles(source: "PDL" | "SignalHire", brief: SearchBrief, s
     do { first = pick(r, FIRST); last = pick(r, LAST); } while (used.has(first + last));
     used.add(first + last);
     const title = pick(r, titles);
-    const company = pick(r, COMPANIES);
+    // About one in six sample people work for themselves, so contractor and freelance roles have some to favour.
+    // The company is still drawn for them, so everyone else stays the same.
+    const freelance = i % 6 === 5;
+    const drawn = pick(r, COMPANIES);
+    const company = freelance ? "Self-employed" : drawn;
     const now = 2026;
     const curStart = now - Math.ceil(r() * 4);
     const prevStart = curStart - Math.ceil(1 + r() * 4);
@@ -50,7 +54,7 @@ export function mockProfiles(source: "PDL" | "SignalHire", brief: SearchBrief, s
       source,
       sourceId: `${source.toLowerCase()}-sample-${seed}-${i}`,
       fullName: `${first} ${last}`,
-      headline: `${title} at ${company}`,
+      headline: freelance ? `Freelance ${title}` : `${title} at ${company}`,
       currentTitle: title,
       currentCompany: company,
       location: pick(r, locs),
