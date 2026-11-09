@@ -230,6 +230,7 @@ export default function RequestDetail() {
               {!!r.dealBreakers.length && <div><div className="mb-1 text-xs text-muted-foreground">Deal-breakers</div><Chips items={r.dealBreakers} /></div>}
               {!!r.targetCompanies.length && <div><div className="mb-1 text-xs text-muted-foreground">Target companies</div><Chips items={r.targetCompanies} /></div>}
               {!!r.avoidCompanies.length && <div><div className="mb-1 text-xs text-muted-foreground">Avoid</div><Chips items={r.avoidCompanies} /></div>}
+              {!!r.universities.length && <div><div className="mb-1 text-xs text-muted-foreground">Only graduates and students of</div><Chips items={r.universities} /></div>}
               <div className="text-muted-foreground">
                 {r.minYears ?? "?"}+ years{r.idealYears ? `, ideally ${r.idealYears}` : ""}
                 {r.languages.length ? ` · ${r.languages.join(", ")}` : ""}

@@ -246,6 +246,9 @@ export default function RoleDetail() {
             <span aria-hidden>·</span><DeptDot name={r.department} />
             <span aria-hidden>·</span><span>{r.locationPolicy}</span>
             {r.hiringManagerName && <><span aria-hidden>·</span><span>HM {r.hiringManagerName}</span></>}
+            {r.universities.length > 0 && (
+              <><span aria-hidden>·</span><span title={r.universities.join(", ")}>Only graduates of {r.universities.length === 1 ? r.universities[0] : `${r.universities.length} universities`}</span></>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight">{r.title}</h1>
