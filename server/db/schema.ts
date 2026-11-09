@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { CandidateStatus, CriterionKey, EducationItem, ExperienceItem, HmDecision, MustHaveEvidence, OutreachStatus, RequestStatus, Role, Signals, Weights } from "../../shared/types.js";
+import type { CandidateStatus, CriterionKey, EducationItem, EmploymentType, ExperienceItem, HmDecision, MustHaveEvidence, OutreachStatus, PayPeriod, RequestStatus, Role, Signals, Weights } from "../../shared/types.js";
 
 const id = () => uuid("id").primaryKey().default(sql`gen_random_uuid()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -71,7 +71,12 @@ export const roleRequests = pgTable("role_requests", {
   salaryMin: integer("salary_min"),
   salaryMax: integer("salary_max"),
   currency: text("currency"),
-  salaryPeriod: text("salary_period").$type<"year" | "month">().notNull().default("month"),
+  employmentType: text("employment_type").$type<EmploymentType>().notNull().default("full_time"),
+  salaryPeriod: text("salary_period").$type<PayPeriod>().notNull().default("month"),
+  hoursPerWeek: integer("hours_per_week"),
+  contractLength: text("contract_length"),
+  workload: text("workload"),
+  projectDescription: text("project_description"),
   justification: text("justification").notNull().default(""),
   targetCompanies: text("target_companies").array().notNull().default(sql`'{}'::text[]`),
   avoidCompanies: text("avoid_companies").array().notNull().default(sql`'{}'::text[]`),
@@ -278,6 +283,8 @@ export const positions = pgTable("positions", {
   minYears: integer("min_years"),
   idealYears: integer("ideal_years"),
   jdText: text("jd_text").notNull().default(""),
+  employmentType: text("employment_type").$type<EmploymentType>(),
+  salaryPeriod: text("salary_period").$type<PayPeriod>(),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
   updatedAt: ts("updated_at").notNull().defaultNow(),

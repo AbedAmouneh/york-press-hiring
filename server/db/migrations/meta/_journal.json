@@ -169,6 +169,13 @@
       "when": 1794215608772,
       "tag": "0023_seed-universities",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794222641259,
+      "tag": "0024_employment-type",
+      "breakpoints": true
     }
   ]
 }
