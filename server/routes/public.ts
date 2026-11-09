@@ -22,6 +22,7 @@ import { z } from "zod";
 import { form, json } from "../validate.js";
 import { publicUser } from "./access.js";
 import { admit, APPLY_LIMITS, clearHits, clientIp, INVITE_LIMITS, LOGIN_LIMITS, MFA_LIMITS, release } from "../services/rate-limit.js";
+import { employmentLabel } from "../../shared/employment.js";
 
 /** The apply page's multipart form. Field rules live in ApplyFields and cvProblem, checked in the handler. */
 const ApplyForm = z.object({
@@ -214,7 +215,8 @@ export const publicRoutes = new Hono()
     const db = await getDb();
     const [r] = await db.select().from(schema.roleRequests).where(eq(schema.roleRequests.applyToken, c.req.param("token")));
     if (!r || !["open", "sourcing"].includes(r.status)) throw new HTTPException(404, { message: "This position is no longer open." });
-    return c.json({ title: r.title, department: r.department, locationPolicy: r.locationPolicy, description: r.jdText.slice(0, 3000) });
+    // Never the pay: it stays internal.
+    return c.json({ title: r.title, department: r.department, locationPolicy: r.locationPolicy, employment: employmentLabel(r), description: r.jdText.slice(0, 3000) });
   })
   .post("/public/apply/:token", form(ApplyForm), async (c) => {
     const db = await getDb();
