@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normalizeLinkedin, titleCase, totalYearsFromExperience, yearsBetween } from "../../server/services/providers/types.js";
 import { buildPdlQuery, countriesFrom, mapPdl } from "../../server/services/providers/pdl.js";
-import { parseCandidate, searchLadder, titleBoolean } from "../../server/services/providers/signalhire.js";
+import { educationQuery, parseCandidate, searchLadder, titleBoolean } from "../../server/services/providers/signalhire.js";
+import { mockProfiles } from "../../server/services/providers/mock.js";
 import type { SearchBrief } from "../../server/db/schema.js";
 
 describe("profile helpers", () => {
@@ -161,5 +162,26 @@ describe("SignalHire", () => {
 
   it("returns empty contacts when the reveal failed", () => {
     expect(parseCandidate("item-2", "failed", null)).toEqual({ item: "item-2", status: "failed", email: null, phone: null, linkedinUrl: null });
+  });
+});
+
+describe("chosen universities", () => {
+  it("adds SignalHire's education filter with full and short names, and nothing without universities", () => {
+    expect(educationQuery(["American University of Beirut", "AUB", "MU", "Lebanese American University"])).toBe('"American University of Beirut" OR AUB OR "Lebanese American University"');
+    expect(educationQuery([])).toBeNull();
+    expect(educationQuery(undefined)).toBeNull();
+  });
+
+  it("makes PDL require one of the universities", () => {
+    const q = buildPdlQuery({ ...brief, education: ["Cairo University", "AUC"] });
+    expect(q.bool.must[1]).toEqual({ bool: { should: [{ match_phrase: { "education.school.name": "cairo university" } }, { match_phrase: { "education.school.name": "auc" } }], minimum_should_match: 1 } });
+    expect(buildPdlQuery(brief).bool.must).toHaveLength(1);
+  });
+
+  it("gives sample people a chosen university and finds fewer of them, like a real filtered search", () => {
+    const people = mockProfiles("PDL", { ...brief, keywords: [], education: ["American University of Beirut", "AUB"] }, 50, 3);
+    expect(people.length).toBe(8);
+    expect(people.every((p) => p.education[0].school === "American University of Beirut")).toBe(true);
+    expect(mockProfiles("PDL", { ...brief, keywords: [] }, 50, 3)).toHaveLength(50);
   });
 });
