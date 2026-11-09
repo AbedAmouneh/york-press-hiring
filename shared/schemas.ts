@@ -185,6 +185,18 @@ export const TemplateFields = z.object({
   active: z.boolean().optional(),
 });
 export const LINKEDIN_NOTE_MAX = 300;
+
+/** How a person can be contacted from the Contact window. */
+export const CONTACT_CHANNELS = ["email", "linkedin", "whatsapp"] as const;
+export type ContactChannel = (typeof CONTACT_CHANNELS)[number];
+export type ContactKind = "first" | "follow_up";
+export const ContactDraftInput = z.object({ channel: z.enum(CONTACT_CHANNELS), kind: z.enum(["first", "follow_up"]).default("first") });
+export const ContactInput = z.object({
+  channel: z.enum(CONTACT_CHANNELS),
+  kind: z.enum(["first", "follow_up"]).default("first"),
+  subject: z.string().max(200, "Keep the subject under 200 characters.").nullable().optional(),
+  body: z.string().trim().min(5, "The message is too short.").max(5000, "Keep the message under 5,000 characters."),
+}).refine((m) => m.channel !== "linkedin" || m.body.length <= LINKEDIN_NOTE_MAX, { message: `LinkedIn notes are limited to ${LINKEDIN_NOTE_MAX} characters.`, path: ["body"] });
 export const TemplateInput = TemplateFields.refine((t) => t.channel !== "linkedin" || t.body.length <= LINKEDIN_NOTE_MAX, {
   message: `LinkedIn notes are limited to ${LINKEDIN_NOTE_MAX} characters (placeholders included).`,
   path: ["body"],
