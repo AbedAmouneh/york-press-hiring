@@ -111,6 +111,16 @@ export function searchLadder(brief: { titles: string[]; skills: string[]; coreKe
   return steps;
 }
 
+/**
+ * SignalHire's `education` filter (Boolean over university name, faculty and degree) for the chosen universities:
+ * "American University of Beirut" OR AUB OR … Short names under 3 letters are left out (too many false matches).
+ * Exported for tests.
+ */
+export function educationQuery(names?: string[]) {
+  const terms = [...new Set((names ?? []).map((n) => n.trim()).filter((n) => n.length >= 3))];
+  return terms.length ? terms.map(term).join(" OR ") : null;
+}
+
 type SHProfile = { uid: string; fullName: string; location?: string | null; experience?: { company?: string | null; title?: string | null }[]; skills?: string[]; openToWork?: boolean };
 
 function mapSearchProfile(p: SHProfile): NormalizedProfile {
@@ -139,6 +149,7 @@ export const signalhireProvider: CandidateSearchProvider = {
       return { profiles: mockProfiles("SignalHire", brief, size, seed + 7).map((p) => ({ ...p, email: null })), total: size, billedRecords: 0, searches: 1, mock: true };
     }
     const countries = countriesFrom(brief.locations).map((c) => c.replace(/\b\w/g, (m) => m.toUpperCase()));
+    const education = educationQuery(brief.education);
     // Searches are free (a daily quota), so step from precise to broad until the pool is full.
     const found = new Map<string, SHProfile>();
     let searches = 0;
@@ -147,6 +158,7 @@ export const signalhireProvider: CandidateSearchProvider = {
       if (found.size >= size) break;
       const body: Record<string, unknown> = { ...step, size: Math.min(size, 100) };
       if (countries.length) body.location = countries;
+      if (education) body.education = education;
       const { json, creditsLeft } = await call("/candidate/searchByQuery", { body });
       searches++;
       if (creditsLeft != null) lastCreditsLeft = creditsLeft;

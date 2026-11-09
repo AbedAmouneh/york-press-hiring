@@ -20,9 +20,14 @@ export function buildPdlQuery(brief: SearchBrief) {
   const titles = brief.titles.slice(0, 8);
   const countries = countriesFrom(brief.locations);
   const exclude = ["york press", ...brief.excludeCompanies.map((c) => c.toLowerCase())];
+  // Chosen universities: only people who studied (or study) at one of them.
+  const schools = [...new Set((brief.education ?? []).map((s) => s.trim().toLowerCase()).filter((s) => s.length >= 3))];
   return {
     bool: {
-      must: [{ bool: { should: titles.map((t) => ({ match_phrase: { job_title: t.toLowerCase() } })), minimum_should_match: 1 } }],
+      must: [
+        { bool: { should: titles.map((t) => ({ match_phrase: { job_title: t.toLowerCase() } })), minimum_should_match: 1 } },
+        ...(schools.length ? [{ bool: { should: schools.map((s) => ({ match_phrase: { "education.school.name": s } })), minimum_should_match: 1 } }] : []),
+      ],
       should: brief.skills.slice(0, 10).map((s) => ({ match: { skills: s.toLowerCase() } })),
       filter: countries.length ? [{ terms: { location_country: countries } }] : [],
       must_not: exclude.map((c) => ({ match_phrase: { job_company_name: c } })),
