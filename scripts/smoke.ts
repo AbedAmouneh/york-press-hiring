@@ -186,6 +186,62 @@ console.log(runs[0].state.log.map((l: any) => `  · ${l.msg}`).join("\n"));
 ok(runs[0].state.log.some((l: any) => /Checked 15 shortlisted people in depth/.test(l.msg)), "the top 15 were checked in depth before outreach");
 const topDetail = await admin("GET", `/role-candidates/${candidates.find((c: any) => c.isTop10).id}`);
 ok(topDetail.roleCandidate.signals && typeof topDetail.roleCandidate.signals.level === "string", "a Top-10 candidate carries facts computed from their profile");
+ok((await admin("GET", "/outreach?limit=200")).total === 0, "a run contacts nobody: no message is drafted or sent until someone presses Contact");
+ok(runs[0].state.log.some((l: any) => /Nothing is sent until someone presses Contact/.test(l.msg)), "the run log says the Top 10 are ready to contact");
+const detail = await admin("GET", `/role-candidates/${candidates[0].id}`);
+ok(detail.roleCandidate.scoreBreakdown, "candidate detail has a score breakdown");
+const hm = client();
+await hm("POST", "/auth/login", { email: "demo.manager@york-press.test", password: "demo-york-2026" });
+
+// ---------------------------------------------------------------- contacting people by hand
+{
+  const top = (await admin("GET", `/requests/${id}/candidates`)).candidates.filter((c: any) => c.isTop10);
+  const byEmail = top.find((c: any) => c.email);
+  const draft = await hm("POST", `/role-candidates/${byEmail.id}/contact/draft`, { channel: "email" });
+  ok(draft.to === byEmail.email && draft.subject && draft.body.length > 50, "the hiring manager gets an email draft from the template");
+  ok(draft.email.cc.includes("abdulrahman.mansour@york-press.com") && draft.email.replyTo.includes("careers@york-press.com") && draft.email.from.startsWith("Demo Manager at York Press"), "the draft shows the sender, reply-to and copy");
+  ok((await outsider.raw("POST", `/role-candidates/${byEmail.id}/contact/draft`, { channel: "email" })).status === 403, "someone without access to the role can't draft");
+  ok((await ceo.raw("POST", `/role-candidates/${byEmail.id}/contact`, { channel: "email", body: "Hello there, a role for you." })).status === 403, "the CEO can view but not contact");
+  await admin("PATCH", "/settings", { autoSendEnabled: false });
+  const paused = await hm.raw("POST", `/role-candidates/${byEmail.id}/contact`, { channel: "email", subject: draft.subject, body: draft.body });
+  ok(paused.status === 400 && (await paused.json()).error.includes("paused"), "the pause switch in Settings stops a manual email");
+  await admin("PATCH", "/settings", { autoSendEnabled: true });
+  const mailCount = (await admin("GET", "/outbox?limit=200")).total;
+  const sent = await hm("POST", `/role-candidates/${byEmail.id}/contact`, { channel: "email", subject: "A role at York Press", body: `${draft.body}\n\nEdited by the hiring manager.` });
+  ok(sent.status === "sent", "pressing Send sends the email straight away");
+  const mail = (await admin("GET", "/outbox?limit=1")).emails[0];
+  ok((await admin("GET", "/outbox?limit=200")).total === mailCount + 1 && mail.subject === "A role at York Press" && mail.body.includes("Edited by the hiring manager."), "the edited email is the one sent");
+  ok(mail.cc === "abdulrahman.mansour@york-press.com" && mail.replyTo.includes("careers@york-press.com") && mail.replyTo.includes("demo.manager@york-press.test") && mail.fromAddress.startsWith("Demo Manager at York Press"), "it comes from the sender's name, replies go to careers@ and them, Abdulrahman is copied");
+  ok(mail.body.includes("/api/public/unsubscribe/"), "the sent email ends with the unsubscribe link");
+  const after = (await admin("GET", `/role-candidates/${byEmail.id}`)).roleCandidate;
+  ok(after.status === "contacted" && after.dateContacted && after.followUpDate > after.dateContacted, "the person is Contacted today with a follow-up date");
+  const followDraft = await admin("POST", `/role-candidates/${byEmail.id}/contact/draft`, { channel: "email", kind: "follow_up" });
+  ok(followDraft.subject.startsWith("Re: ") && followDraft.body.includes("follow up"), "a follow-up draft is offered");
+  await admin("POST", `/role-candidates/${byEmail.id}/contact`, { channel: "email", kind: "follow_up", subject: followDraft.subject, body: followDraft.body });
+  ok((await admin("GET", `/role-candidates/${byEmail.id}`)).roleCandidate.followUpDate === null, "after the follow-up there is no further reminder");
+
+  const fresh = top.find((c: any) => c.id !== byEmail.id && c.status === "new" && c.email);
+  ok((await admin.raw("POST", `/role-candidates/${fresh.id}/contact`, { channel: "email", kind: "follow_up", body: "Just following up on my note." })).status === 400, "a follow-up needs a first message");
+
+  const byLinkedin = top.find((c: any) => c.linkedinUrl && c.status === "new" && c.id !== byEmail.id);
+  if (byLinkedin) {
+    ok((await admin.raw("POST", `/role-candidates/${byLinkedin.id}/contact`, { channel: "linkedin", body: "x".repeat(301) })).status === 400, "a LinkedIn note over 300 characters is refused");
+    const li = await admin("POST", `/role-candidates/${byLinkedin.id}/contact`, { channel: "linkedin", body: "Hi, a short note about a role at York Press." });
+    ok(li.status === "approved", "a LinkedIn note goes straight to Approved, ready for Cowork");
+    ok((await admin("GET", `/role-candidates/${byLinkedin.id}`)).roleCandidate.status === "new", "it counts as contacted only once Cowork sends it");
+  }
+
+  const byPhone = top.find((c: any) => c.phone && c.status === "new" && c.id !== byLinkedin?.id && c.id !== byEmail.id);
+  if (byPhone) {
+    const wa = await admin("POST", `/role-candidates/${byPhone.id}/contact`, { channel: "whatsapp", body: "Hi, a role at York Press for you." });
+    ok(wa.link.startsWith("https://wa.me/") && wa.link.includes(encodeURIComponent("a role at York Press")), "WhatsApp opens with the message filled in");
+    ok((await admin("GET", `/role-candidates/${byPhone.id}`)).roleCandidate.status === "contacted", "WhatsApp marks the person Contacted");
+    await admin("POST", `/outreach/${wa.messageId}/undo`);
+    const undone = (await admin("GET", `/role-candidates/${byPhone.id}`)).roleCandidate;
+    ok(undone.status === "new" && !undone.dateContacted && !undone.followUpDate, "undo puts them back to New when it wasn't sent");
+  }
+  ok((await admin.raw("POST", `/role-candidates/${byEmail.id}/contact`, { channel: "whatsapp", body: "Hello there" })).status === (byEmail.phone ? 200 : 400), "WhatsApp needs a phone number");
+}
 {
   const p1 = await admin("GET", "/outreach?limit=2");
   const p2 = await admin("GET", `/outreach?limit=2&before=${p1.next}`);
@@ -194,12 +250,6 @@ ok(topDetail.roleCandidate.signals && typeof topDetail.roleCandidate.signals.lev
   ok(new Date(p1.messages[1].queuedAt) >= new Date(p2.messages[0].queuedAt) && p1.total === p2.total, "pages keep newest-first order and the same total");
   ok((await admin.raw("GET", "/outreach?limit=500")).status === 400, "a page is at most 200 rows");
 }
-const outreach = await admin("GET", "/outreach?limit=200");
-ok(outreach.messages.length > 0, `${outreach.messages.length} outreach messages (email ${outreach.messages.filter((m: any) => m.channel === "email").length}, LinkedIn ${outreach.messages.filter((m: any) => m.channel === "linkedin").length})`);
-const detail = await admin("GET", `/role-candidates/${candidates[0].id}`);
-ok(detail.roleCandidate.scoreBreakdown, "candidate detail has a score breakdown");
-const hm = client();
-await hm("POST", "/auth/login", { email: "demo.manager@york-press.test", password: "demo-york-2026" });
 await hm("PATCH", `/role-candidates/${candidates[0].id}`, { hmDecision: "yes", hmComment: "Interview" });
 ok(true, "hiring manager recorded a decision");
 {
