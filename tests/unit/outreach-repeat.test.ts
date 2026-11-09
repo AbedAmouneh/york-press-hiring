@@ -6,7 +6,7 @@ import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../server/db/client.js";
-import { draftContact, FOLLOW_UP_DAYS, sendContact, undoWhatsapp, whatsappLink } from "../../server/services/outreach.js";
+import { draftContact, FOLLOW_UP_DAYS, sendContact, undoWhatsapp, whatsappLink, withArticle } from "../../server/services/outreach.js";
 import { seedTemplates } from "../../server/services/templates.js";
 import { addBusinessDays, localDate } from "../../server/services/dates.js";
 
@@ -59,6 +59,15 @@ describe("the Contact window's draft", () => {
     const wa = await draftContact({ rc: rcB, c, request: second }, "whatsapp", "first", user);
     expect(wa.to).toBe("9613123456");
     expect(wa.body).toContain(`/apply/${second.applyToken}`);
+  });
+});
+
+describe("wording", () => {
+  it("says 'an' before a title starting with a vowel sound", () => {
+    expect(withArticle("We're hiring a Accountant at York Press", "Accountant")).toBe("We're hiring an Accountant at York Press");
+    expect(withArticle("I'm hiring a Illustrator", "Illustrator")).toBe("I'm hiring an Illustrator");
+    expect(withArticle("We're hiring a Senior Editor", "Senior Editor")).toBe("We're hiring a Senior Editor");
+    expect(withArticle("We're hiring a University Liaison", "University Liaison")).toBe("We're hiring a University Liaison");
   });
 });
 
