@@ -4,7 +4,8 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm"
 import { getDb, schema } from "../db/client.js";
 import { json } from "../validate.js";
 import { hasRole, requireRole, type AppEnv, type SessionUser } from "../auth.js";
-import { ApplicationPatch, RoleCandidatePatch } from "../../shared/schemas.js";
+import { ApplicationPatch, ContactDraftInput, ContactInput, RoleCandidatePatch } from "../../shared/schemas.js";
+import { ContactError, draftContact, sendContact } from "../services/outreach.js";
 import { canEditCandidates, isStaff, loadRequest, visibleRequests } from "./access.js";
 import { appIsPublic, env, mock } from "../env.js";
 import { revealContacts } from "../services/providers/signalhire.js";
@@ -108,7 +109,10 @@ export const candidateRoutes = new Hono<AppEnv>()
         isSample: cand.isSample,
         hasEmail: !!cand.email,
         email: contacts ? cand.email : null,
+        phone: contacts ? cand.phone : null,
         linkedinUrl: cand.linkedinUrl,
+        dateContacted: rc.dateContacted,
+        followUpDate: rc.followUpDate,
         redFlags: rc.redFlags,
         outreach: outreach.get(rc.id) ? { channel: outreach.get(rc.id)!.channel, status: outreach.get(rc.id)!.status } : null,
       })),
@@ -138,6 +142,10 @@ export const candidateRoutes = new Hono<AppEnv>()
       roleCandidate: rc,
       candidate: { ...cand, email: contacts ? cand.email : null, phone: contacts ? cand.phone : null, hasEmail: !!cand.email },
       messages: contacts ? messages : [],
+      // Who pressed Send on each message, by user id.
+      senders: Object.fromEntries((contacts && messages.some((m) => m.senderId)
+        ? await db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users).where(inArray(schema.users.id, [...new Set(messages.map((m) => m.senderId).filter((x): x is string => !!x))]))
+        : []).map((u) => [u.id, u.name])) as Record<string, string>,
       reveals,
       otherRoles,
       applications,
@@ -162,6 +170,27 @@ export const candidateRoutes = new Hono<AppEnv>()
       await db.update(schema.outreachMessages).set({ status: "cancelled" }).where(and(eq(schema.outreachMessages.roleCandidateId, rc.id), inArray(schema.outreachMessages.status, ["queued", "awaiting_approval", "approved"])));
     }
     return c.json({ ok: true });
+  })
+  /** The message the Contact window starts with, for one channel. Nothing is saved or sent. */
+  .post("/role-candidates/:id/contact/draft", json(ContactDraftInput), async (c) => {
+    const user = c.get("user");
+    const row = await loadRc(c.req.param("id"), user);
+    if (!canEditCandidates(user, row.request)) throw new HTTPException(403, { message: "Only recruiters and this role's hiring manager can contact candidates." });
+    const { channel, kind } = c.req.valid("json");
+    return c.json(await draftContact(row, channel, kind, user));
+  })
+  /** Send (email), approve for Cowork (LinkedIn) or record (WhatsApp) a message someone wrote or edited. */
+  .post("/role-candidates/:id/contact", json(ContactInput), async (c) => {
+    const user = c.get("user");
+    const row = await loadRc(c.req.param("id"), user);
+    if (!canEditCandidates(user, row.request)) throw new HTTPException(403, { message: "Only recruiters and this role's hiring manager can contact candidates." });
+    try {
+      const { message, link } = await sendContact(row, c.req.valid("json"), user);
+      return c.json({ ok: true, messageId: message.id, status: message.status, link });
+    } catch (e) {
+      if (e instanceof ContactError) throw new HTTPException(400, { message: e.message });
+      throw e;
+    }
   })
   .post("/role-candidates/:id/reveal", async (c) => {
     const user = requireRole(c, "recruiter", "admin");
