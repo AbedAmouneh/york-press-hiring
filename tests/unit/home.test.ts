@@ -50,6 +50,21 @@ describe("tasksFor", () => {
   });
 });
 
+describe("contacting by hand", () => {
+  it("asks recruiters and the role's hiring manager to contact a Top 10 nobody has contacted", () => {
+    const ready = req({ hiringManagerId: "hm", stats: { ...stats, screened: 48 } });
+    expect(tasksFor({ id: "rec", roles: ["recruiter"] }, [ready]).map((t) => t.text)).toEqual(["Contact the Top 10 for R-101 Editor"]);
+    expect(tasksFor({ id: "hm", roles: ["hm"] }, [ready]).map((t) => t.to)).toEqual(["/roles/r1"]);
+    expect(tasksFor({ id: "other", roles: ["hm"] }, [ready])).toEqual([]);
+    expect(tasksFor({ id: "ceo", roles: ["ceo"] }, [ready])).toEqual([]);
+  });
+
+  it("lists follow-ups that are due, not roles already in outreach", () => {
+    const due = req({ stats: { ...stats, screened: 48, contacted: 3, followUpsDue: 2 } });
+    expect(tasksFor({ id: "rec", roles: ["recruiter"] }, [due]).map((t) => t.text)).toEqual(["Follow up with 2 candidates for R-101"]);
+  });
+});
+
 describe("greeting", () => {
   it("matches the time of day", () => {
     expect(greeting(new Date(2026, 9, 28, 9))).toBe("Good morning");
