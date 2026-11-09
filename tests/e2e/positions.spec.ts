@@ -133,7 +133,7 @@ test.describe("saved positions and locations", () => {
     await page.getByLabel("Name").fill("Riyadh, Saudi Arabia");
     await page.getByRole("button", { name: "Add location" }).last().click();
     await expect(page.getByText("Add the country.")).toBeVisible();
-    await page.getByLabel("Country").fill("Saudi Arabia");
+    await page.getByLabel("Country", { exact: true }).fill("Saudi Arabia");
     await page.getByLabel("Work arrangement").selectOption("Hybrid");
     await page.getByLabel("Working hours").fill("Sun–Thu 8:00–16:00");
     await page.getByRole("button", { name: "Add location" }).last().click();
