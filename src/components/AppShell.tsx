@@ -33,7 +33,7 @@ function useNavItems(me: Me): Item[][] {
       { to: "/requests", label: "Requests", icon: FileText, show: true },
     ],
     [
-      { to: "/outreach", label: "Email outreach", icon: Mail, show: staff },
+      { to: "/outreach", label: "Outreach", icon: Mail, show: staff },
       { to: "/linkedin", label: "LinkedIn queue", icon: Send, show: staff },
       { to: "/outbox", label: "Sent emails", icon: Inbox, show: staff },
     ],
