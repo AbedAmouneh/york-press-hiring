@@ -6,7 +6,7 @@ import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../server/db/client.js";
-import { draftContact, FOLLOW_UP_DAYS, sendContact, undoWhatsapp, whatsappLink, withArticle } from "../../server/services/outreach.js";
+import { describeRole, draftContact, FOLLOW_UP_DAYS, sendContact, undoWhatsapp, whatsappLink, withArticle } from "../../server/services/outreach.js";
 import { seedTemplates } from "../../server/services/templates.js";
 import { addBusinessDays, localDate } from "../../server/services/dates.js";
 
@@ -39,6 +39,17 @@ describe("the Contact window's draft", () => {
     expect(d.email?.cc).toEqual(["abdulrahman.mansour@york-press.com"]);
   });
 
+  it("mentions a part-time role's hours in every channel, and never the pay", async () => {
+    const { db, user, c, second, rcB } = await twoRolesOnePerson({ linkedinUrl: "https://www.linkedin.com/in/rana-haddad", phone: "+961 3 123456" });
+    const [partTime] = await db.update(schema.roleRequests).set({ employmentType: "part_time", hoursPerWeek: 20, salaryMin: 900, currency: "USD" })
+      .where(eq(schema.roleRequests.id, second.id)).returning();
+    for (const channel of ["email", "linkedin", "whatsapp"] as const) {
+      const d = await draftContact({ rc: rcB, c, request: partTime }, channel, "first", user);
+      expect(d.body).toContain("part-time Copy Editor");
+      expect(d.body).not.toContain("900");
+    }
+  });
+
   it("warns when they were contacted for another role in the last 30 days", async () => {
     const { db, user, c, second, rcA, rcB } = await twoRolesOnePerson();
     await db.insert(schema.outreachMessages).values({ roleCandidateId: rcA.id, channel: "email", toAddress: "x@mail.example", body: "Hi", status: "sent", sentAt: new Date() });
@@ -68,6 +79,15 @@ describe("wording", () => {
     expect(withArticle("I'm hiring a Illustrator", "Illustrator")).toBe("I'm hiring an Illustrator");
     expect(withArticle("We're hiring a Senior Editor", "Senior Editor")).toBe("We're hiring a Senior Editor");
     expect(withArticle("We're hiring a University Liaison", "University Liaison")).toBe("We're hiring a University Liaison");
+  });
+
+  it("says what kind of work it is, never the pay", () => {
+    const text = "We're hiring a Illustrator at York Press";
+    expect(describeRole(text, { title: "Illustrator", employmentType: "full_time" })).toBe("We're hiring an Illustrator at York Press");
+    expect(describeRole("We're hiring a Editor here", { title: "Editor", employmentType: "part_time", hoursPerWeek: 20 })).toBe("We're hiring a part-time Editor, about 20 hours a week here");
+    expect(describeRole(text, { title: "Illustrator", employmentType: "freelance", contractLength: "3 months" })).toBe("We're hiring a freelance Illustrator for 3 months at York Press");
+    expect(describeRole(text, { title: "Illustrator", employmentType: "contractor", contractLength: "until June" })).toBe("We're hiring a contract Illustrator (until June) at York Press");
+    expect(describeRole(text, { title: "Illustrator", employmentType: "contractor" })).toBe("We're hiring a contract Illustrator at York Press");
   });
 });
 
