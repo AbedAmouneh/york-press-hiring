@@ -102,6 +102,14 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   to search. Suggestions only go into fields that are empty, unchanged or still hold the last suggestion. The
   starter lists (from York Press's LinkedIn postings, Oct 2026) are migration 0007. Levels are Entry, Junior,
   Mid, Senior, Manager, and any typed level is allowed.
+- **Universities** (`universities` table seeded by migration 0023 from `docs/universities-sources.md`, routes in
+  `server/routes/universities.ts`, picker `src/components/UniversityPicker.tsx`): optional. A location can hold a
+  starting list (Settings → Locations); a new request at that location starts with it and can change it (country
+  pre-selected from the location, other countries allowed, missing universities can be added by managers and
+  recruiters). With universities chosen, the search step passes them (plus short names like AUB) as SignalHire's
+  `education` filter and a PDL `education.school.name` must-clause, so only their graduates and current students are
+  found, any graduation year (years are never used: age proxy). Fewer than the usual pool is logged as "Only N people
+  found…". Request universities are applied per search, never saved in the brief.
 - **Typed API (Hono RPC):** each `server/routes/*.ts` is one chained router; inputs go through
   `json()`, `query()` or `form()` from `server/validate.ts`. `server/app.ts` exports `AppType`.
   The browser calls `call(rpc.requests[":id"].$get({ param: { id } }))` from `src/lib/rpc.ts`, and

@@ -162,6 +162,14 @@ button:
 After a first message the person is Contacted and a follow-up reminder appears on Home 5 working days later, with a
 **Contact again** button that starts from a short follow-up message.
 
+## Searching graduates of chosen universities (optional)
+
+On a request, **Universities (optional)** starts on the location's country. Tick the universities to search; you can
+switch country and add others, or type a missing one and press **Add**. When any are ticked, the search only finds
+people who studied or are studying there (any graduation year). Leave it empty to search everyone. In **Settings →
+Locations** you can give a location a starting list that new requests there begin with. If few people match, the run
+log says "Only N people found…" so you can widen the list.
+
 ## LinkedIn messages
 
 These are never sent automatically. They wait in **LinkedIn queue**, then in Cowork say:
