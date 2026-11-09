@@ -31,7 +31,9 @@ export function mockProfiles(source: "PDL" | "SignalHire", brief: SearchBrief, s
   const locs = brief.locations.length ? [...brief.locations.map((l) => (l.includes(",") ? l : `Beirut, ${l}`)), ...LOCATIONS] : LOCATIONS;
   const out: NormalizedProfile[] = [];
   const used = new Set<string>();
-  for (let i = 0; i < size; i++) {
+  // Like a real filtered search, a short list of universities finds fewer people (about 8 per university).
+  const count = brief.education?.length ? Math.min(size, 8 * brief.education.filter((s) => s.length > 5).length || 8) : size;
+  for (let i = 0; i < count; i++) {
     let first: string, last: string;
     do { first = pick(r, FIRST); last = pick(r, LAST); } while (used.has(first + last));
     used.add(first + last);
@@ -59,7 +61,8 @@ export function mockProfiles(source: "PDL" | "SignalHire", brief: SearchBrief, s
         { title: titles.length > 1 ? pick(r, titles) : `Associate ${title}`, company: pick(r, COMPANIES), start: String(prevStart), end: String(curStart) },
         { title: `Junior ${title.replace(/^(Senior|Lead|Head of)\s+/i, "")}`, company: pick(r, COMPANIES), start: String(firstStart), end: String(prevStart) },
       ],
-      education: [{ school: pick(r, SCHOOLS), degree: pick(r, DEGREES), field: pick(r, ["Business", "English Literature", "Computer Science", "Education", "Finance", "Design"]), start: String(firstStart - 4), end: String(firstStart) }],
+      // With chosen universities, sample people studied at one of them, like the real filtered search.
+      education: [{ school: brief.education?.length ? pick(r, brief.education.filter((s) => s.length > 5).length ? brief.education.filter((s) => s.length > 5) : brief.education) : pick(r, SCHOOLS), degree: pick(r, DEGREES), field: pick(r, ["Business", "English Literature", "Computer Science", "Education", "Finance", "Design"]), start: String(firstStart - 4), end: String(firstStart) }],
       skills,
       languages: r() > 0.4 ? ["English", "Arabic"] : ["English", "French"],
       totalYears: now - firstStart,
