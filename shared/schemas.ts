@@ -12,6 +12,9 @@ const universities = z.array(z.string().trim().min(2).max(200)).max(UNIVERSITIES
 /** A whole number, with a plain message for text or decimals. */
 const whole = (message = "Enter a whole number.") => z.coerce.number<number | string>(message).int(message);
 const optionalInt = (max: number) => whole().min(0).max(max).nullable().optional();
+/** Pay: hourly and daily rates need cents (12.50), so up to two decimals. */
+const amount = z.coerce.number<number | string>("Enter an amount, like 2500 or 12.50.").min(0, "Enter an amount, like 2500 or 12.50.")
+  .refine((n) => Math.abs(Math.round(n * 100) - n * 100) < 1e-6, "Use at most two decimals.").nullable().optional();
 
 // ---------------------------------------------------------------- auth & setup
 
@@ -57,8 +60,8 @@ export const RequestFields = z.object({
   locationPolicy: z.string().trim().default("Remote, global"),
   searchLocations: list,
   timeZone: z.string().nullable().optional(),
-  salaryMin: z.coerce.number<number | string>().int().min(0).nullable().optional(),
-  salaryMax: z.coerce.number<number | string>().int().min(0).nullable().optional(),
+  salaryMin: amount,
+  salaryMax: amount,
   currency: z.enum(CURRENCIES, "Choose a currency.").nullable().optional(),
   employmentType: z.enum(EMPLOYMENT_TYPES, "Choose the type of employment.").default("full_time"),
   salaryPeriod: z.enum(PAY_PERIODS, "Choose how pay is quoted.").default("month"),
