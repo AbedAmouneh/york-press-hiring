@@ -10,7 +10,7 @@ import { lines, RequestDraftForm, RequestForm as RequestFormSchema, type Request
 import { UniversityPicker } from "@/components/UniversityPicker";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { CURRENCIES, DEPARTMENTS, EMPLOYMENT_LABELS, EMPLOYMENT_TYPES, isContractWork, PAY_DEFAULT, PAY_LABELS, PAY_PERIODS, SENIORITIES, type EmploymentType } from "../../shared/types";
+import { CURRENCIES, DEPARTMENTS, EMPLOYMENT_LABELS, EMPLOYMENT_TYPES, isContractWork, PAY_DEFAULT, PAY_PERIODS, SENIORITIES, type EmploymentType, type PayPeriod } from "../../shared/types";
 import type { RequestInputT } from "../../shared/schemas";
 import { Field, FormError, Select, Spinner, useToast } from "@/components/kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,9 @@ import { PositionPicker } from "@/components/PositionPicker";
 import { yearsLabel } from "@/lib/positions";
 import { Check, Circle, CircleCheck, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/** The pay basis after "Per", so the options read Hour, Day, Month, Year, Project. */
+const PER: Record<PayPeriod, string> = { hour: "Hour", day: "Day", month: "Month", year: "Year", project: "Project" };
 
 /** Small numbered circle in front of a section title. */
 const Step = ({ n }: { n: number }) => <span className="mr-2 inline-grid size-5 place-items-center rounded-full bg-secondary text-xs font-semibold text-muted-foreground">{n}</span>;
@@ -353,7 +356,7 @@ export default function RequestForm() {
               <Field required label="Currency" htmlFor="cur" error={errors.currency?.message}><Select id="cur" {...reg("currency")}><option value="">Choose…</option>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
               <Field label="Salary from" htmlFor="smin" error={errors.salaryMin?.message}><Input id="smin" inputMode="numeric" {...reg("salaryMin")} /></Field>
               <Field label="Salary to" htmlFor="smax" error={errors.salaryMax?.message}><Input id="smax" inputMode="numeric" {...reg("salaryMax")} /></Field>
-              <Field label="Per" htmlFor="per" hint="Internal only"><Select id="per" {...reg("salaryPeriod")}>{PAY_PERIODS.map((p) => <option key={p} value={p}>{PAY_LABELS[p].replace("Per ", "")}</option>)}</Select></Field>
+              <Field label="Per" htmlFor="per" hint="Internal only"><Select id="per" {...reg("salaryPeriod")}>{PAY_PERIODS.map((p) => <option key={p} value={p}>{PER[p]}</option>)}</Select></Field>
               <Field required label="Business justification for Khalil" htmlFor="just" className="sm:col-span-4" error={errors.justification?.message}><Textarea id="just" {...reg("justification")} /></Field>
             </CardContent>
           </Card>
