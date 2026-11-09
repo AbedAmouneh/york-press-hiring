@@ -7,6 +7,7 @@ import { call, rpc } from "@/lib/rpc";
 import { can, useMe } from "@/lib/auth";
 import type { RequestEvent, RequestRow } from "@/lib/types";
 import { cn, fmtDate, fmtDateTime, money } from "@/lib/utils";
+import { employmentLabel } from "../../shared/employment";
 import { RequestStatusBadge } from "@/components/Status";
 import { Button } from "@/components/ui/button";
 import { Avatar, Badge, DeptDot, Field, FormError, Spinner, useToast } from "@/components/kit";
@@ -209,7 +210,8 @@ export default function RequestDetail() {
             <Fact k="Headcount">{r.headcount} · {r.kind === "backfill" ? "Backfill" : "New role"}</Fact>
             <Fact k="Start">{fmtDate(r.startDate)}</Fact>
             <Fact k="Location">{r.locationPolicy}</Fact>
-            <Fact k="Salary">{money(r.salaryMin, r.salaryMax, r.currency, r.salaryPeriod)}</Fact>
+            <Fact k="Employment">{employmentLabel(r)}</Fact>
+            <Fact k="Pay (internal)">{money(r.salaryMin, r.salaryMax, r.currency, r.salaryPeriod)}</Fact>
             <Fact k="Hiring manager">{r.hiringManagerName ?? "–"}</Fact>
           </dl>
 
