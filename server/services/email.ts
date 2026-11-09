@@ -7,7 +7,9 @@ export type EmailInput = {
   subject: string;
   text: string;
   from?: string; // defaults to EMAIL_FROM
-  replyTo?: string;
+  replyTo?: string | string[];
+  /** Visible copies. */
+  cc?: string[];
   kind: "system" | "outreach";
   /** Keep it in the outbox even when Resend is live (sample candidates, test accounts). */
   outboxOnly?: boolean;
@@ -34,33 +36,30 @@ export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; id?: 
   const db = await getDb();
   const from = input.from ?? env.emailFrom;
   const logged = hideAuthLinks(input.text);
+  const replyTo = Array.isArray(input.replyTo) ? [...new Set(input.replyTo.filter(Boolean))] : input.replyTo;
+  const cc = input.cc?.length ? [...new Set(input.cc)] : undefined;
+  const log = { toAddress: input.to, fromAddress: from, replyTo: Array.isArray(replyTo) ? replyTo.join(", ") : replyTo, cc: cc?.join(", "), subject: input.subject, body: logged, kind: input.kind };
   // Sample people and demo accounts only ever reach the outbox, so a live Resend key can't bounce
   // mail off made-up addresses and hurt the domain's sender reputation.
   if (mock.email || input.outboxOnly || isTestAddress(input.to)) {
     const [row] = await db
       .insert(schema.emailLog)
-      .values({ toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: logged, kind: input.kind, mock: true })
+      .values({ ...log, mock: true })
       .returning({ id: schema.emailLog.id });
     return { ok: true, id: `mock_${row.id}`, mock: true };
   }
   client ??= new Resend(env.resendKey);
   try {
     const headers = input.listUnsubscribe ? { "List-Unsubscribe": `<${input.listUnsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : undefined;
-    const payload = { from, to: input.to, subject: input.subject, text: input.text, replyTo: input.replyTo, headers };
+    const payload = { from, to: input.to, subject: input.subject, text: input.text, replyTo, cc, headers };
     const res = input.idempotencyKey ? await client.emails.send(payload, { idempotencyKey: input.idempotencyKey }) : await client.emails.send(payload);
     if (res.error) throw new Error(res.error.message);
-    await db.insert(schema.emailLog).values({
-      toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: logged,
-      kind: input.kind, mock: false, providerMessageId: res.data?.id,
-    });
+    await db.insert(schema.emailLog).values({ ...log, mock: false, providerMessageId: res.data?.id });
     await db.insert(schema.usageLog).values({ provider: "resend", action: input.kind, units: 1 });
     return { ok: true, id: res.data?.id, mock: false };
   } catch (e) {
     const error = redactSecrets(e instanceof Error ? e.message : String(e));
-    await db.insert(schema.emailLog).values({
-      toAddress: input.to, fromAddress: from, replyTo: input.replyTo, subject: input.subject, body: logged,
-      kind: input.kind, mock: false, status: "failed", error,
-    });
+    await db.insert(schema.emailLog).values({ ...log, mock: false, status: "failed", error });
     return { ok: false, mock: false, error };
   }
 }
