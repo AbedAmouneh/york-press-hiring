@@ -6,6 +6,9 @@ import { MESSAGE_MAX } from "./messages.js";
 const email = z.email("Enter a valid email address.");
 const password = z.string().min(10, "Use at least 10 characters.");
 const list = z.array(z.string().trim().min(1)).default([]);
+export const UNIVERSITIES_MAX = 40;
+/** Optional university names: only graduates and students of these are searched. Empty = everyone. */
+const universities = z.array(z.string().trim().min(2).max(200)).max(UNIVERSITIES_MAX, `Choose at most ${UNIVERSITIES_MAX} universities.`).default([]);
 const optionalInt = (max: number) => z.coerce.number<number | string>().int().min(0).max(max).nullable().optional();
 
 // ---------------------------------------------------------------- auth & setup
@@ -62,6 +65,7 @@ export const RequestFields = z.object({
   hiringManagerId: z.uuid().nullable().optional(),
   locationId: z.uuid().nullable().optional(),
   workingHours: z.string().trim().max(200).nullable().optional(),
+  universities,
 });
 
 export type Problem = { path: string; message: string };
@@ -251,12 +255,21 @@ const LocationFields = z.object({
   city: z.string().trim().nullable(),
   workArrangement: z.string().trim().min(1, "Choose on-site, hybrid or remote."),
   workingHours: z.string().trim().max(200),
+  // No default here: a patch that doesn't send universities must not clear them.
+  universities: universities.unwrap(),
   active: z.boolean(),
+});
+
+export const UniversityInput = z.object({
+  country: z.string().trim().min(2, "Choose the country."),
+  name: z.string().trim().min(3, "Add the university's name.").max(200),
+  city: z.string().trim().max(80).nullable().optional(),
 });
 export const LocationInput = LocationFields.extend({
   city: LocationFields.shape.city.optional().default(null),
   workArrangement: LocationFields.shape.workArrangement.default("On-site"),
   workingHours: LocationFields.shape.workingHours.default(""),
+  universities,
   active: z.boolean().default(true),
 });
 export const LocationPatch = LocationFields.partial();
