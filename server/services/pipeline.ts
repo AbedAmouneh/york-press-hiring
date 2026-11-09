@@ -290,7 +290,9 @@ async function stepBrief({ run, request, state }: Ctx) {
 
 async function stepSearch({ run, request, state, counters }: Ctx) {
   const db = await getDb();
-  const brief = state.brief!;
+  // Chosen universities (current request, not the saved brief) with their short names, e.g. AUB.
+  const education = await universityTerms(request.universities);
+  const brief = { ...state.brief!, education };
   const size = run.kind === "initial" ? POOL_SIZE : 25;
   const seed = Math.floor(Date.now() / 1000) % 100000;
   const providers = searchProviders();
@@ -350,6 +352,20 @@ async function stepSearch({ run, request, state, counters }: Ctx) {
   state.newRoleCandidateIds = newIds;
   counters.kept += newIds.length;
   log(state, `${unique.length} unique people after merging; ${newIds.length} new for this role.`);
+  if (request.universities.length) {
+    const n = request.universities.length;
+    log(state, run.kind === "initial" && newIds.length < POOL_SIZE
+      ? `Only ${newIds.length} people found from the ${n} chosen universit${n === 1 ? "y" : "ies"}. Widen the universities or remove them to search everyone.`
+      : `Searched only graduates and students of the ${n} chosen universit${n === 1 ? "y" : "ies"}.`);
+  }
+}
+
+/** Full names plus the short names people write on profiles (AUB, LAU) for the chosen universities. */
+async function universityTerms(names: string[]) {
+  if (!names.length) return [];
+  const db = await getDb();
+  const known = await db.select({ name: schema.universities.name, aka: schema.universities.aka }).from(schema.universities).where(inArray(sql`lower(${schema.universities.name})`, names.map((n) => n.toLowerCase())));
+  return [...new Set([...names, ...known.flatMap((u) => u.aka)])];
 }
 
 async function upsertCandidate(p: MergedProfile) {
