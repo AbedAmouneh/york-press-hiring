@@ -107,9 +107,12 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   project) starts on the type's default and follows the type until someone picks one by hand. Part time adds hours per
   week; Contractor and Freelance add contract length, expected workload and a project description (`toRequestInput`
   drops details that don't belong to the type). A saved position can hold a usual type and pay basis, suggested like
-  its other details. Pay is internal only: never in outreach, the apply page or anything a candidate sees.
-  `describeRole` in outreach turns "a Editor" into "a part-time Editor, about 20 hours a week" or "a freelance
-  Illustrator for 3 months". For contract work, profiles showing freelance or contract work get a small bonus in the
+  its other details; a position with no usual type suggests Full time. Pay is internal only: never in outreach, the
+  apply page or anything a candidate sees. Pay amounts allow two decimals (hourly rates like 12.50; migration 0025 made
+  the salary columns double precision). `describeRole` in outreach turns "a Editor" into "a part-time Editor (about
+  20 hours a week)" or "a freelance Illustrator for 3 months"; a LinkedIn note that would pass 300 characters drops the
+  length, then `fitNote` cuts at a word. About one in six sample candidates is self-employed, so mock runs show the
+  contract nudge. For contract work, profiles showing freelance or contract work get a small bonus in the
   pre-rank (`prescore`) and a tie-breaking nudge in `rerank`: favoured, never filtered. `CONTRACT_WORK_PATTERN` is read
   by both JavaScript and Postgres, so it must not use `\b`.
 - **Universities** (`universities` table seeded by migration 0023 from `docs/universities-sources.md`, routes in

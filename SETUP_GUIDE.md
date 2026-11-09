@@ -166,10 +166,10 @@ After a first message the person is Contacted and a follow-up reminder appears o
 
 Every request says whether the job is **Full time**, **Part time**, **Contractor** or **Freelance** (Full time unless
 you change it). The pay basis under **Per** follows the type (month for full and part time, day for contractors, hour
-for freelancers) and you can change it to hour, day, month, year or project. Part time asks for hours per week;
+for freelancers) and you can change it to hour, day, month, year or project. Amounts can have cents, like 12.50 an hour. Part time asks for hours per week;
 contractors and freelancers get contract length, expected workload and a project description. Pay is only for York
 Press: it never appears in messages to candidates or on the apply page. Messages do say the kind of work, for example
-"a part-time Editor, about 20 hours a week". For contractor and freelance roles, people who already work freelance or
+"a part-time Editor (about 20 hours a week)". For contractor and freelance roles, people who already work freelance or
 on contract are ranked a little higher, but nobody is left out. In **Settings → Positions** a position can keep a usual
 type and pay basis that new requests start with.
 
