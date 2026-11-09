@@ -126,13 +126,12 @@ function General() {
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ["settings"], queryFn: () => call(rpc.settings.$get()) });
-  const [cap, setCap] = useState("");
   const [w, setW] = useState<Weights>(DEFAULT_WEIGHTS);
   const [limit, setLimit] = useState("");
   const [minScore, setMinScore] = useState("");
   const [busy, setBusy] = useState<"email" | "credits" | null>(null);
   const isAdmin = can(useMe().data?.user, "admin");
-  useEffect(() => { if (q.data) { setCap(String(q.data.settings.dailySendCap)); setLimit(q.data.settings.signalhireMonthlyLimit == null ? "" : String(q.data.settings.signalhireMonthlyLimit)); setMinScore(String(q.data.settings.minOutreachScore)); setW(q.data.settings.defaultWeights ?? DEFAULT_WEIGHTS); } }, [q.data]);
+  useEffect(() => { if (q.data) { setLimit(q.data.settings.signalhireMonthlyLimit == null ? "" : String(q.data.settings.signalhireMonthlyLimit)); setMinScore(String(q.data.settings.minOutreachScore)); setW(q.data.settings.defaultWeights ?? DEFAULT_WEIGHTS); } }, [q.data]);
   if (!q.data) return <Spinner />;
   const s = q.data.settings;
   const i = q.data.integrations;
@@ -166,15 +165,9 @@ function General() {
       <Card className={cn(!s.autoSendEnabled && "border-destructive")}>
         <CardHeader><CardTitle>Sending</CardTitle></CardHeader>
         <CardContent className="grid gap-4">
-          <SwitchRow id="ks" label="Automatic email sending" hint="Turn off to pause every outreach email at once (kill switch)." checked={s.autoSendEnabled}
-            onChange={(v) => patch({ autoSendEnabled: v }, v ? "Automatic sending is on." : "All sending paused.")} />
-          <Field label="Daily send cap" hint={`Across all roles. Sent today: ${q.data.sentToday}.`} htmlFor="cap">
-            <div className="flex gap-2">
-              <Input id="cap" type="number" min={0} value={cap} onChange={(e) => setCap(e.target.value)} />
-              <Button variant="outline" onClick={() => patch({ dailySendCap: Number(cap) }, "Daily cap saved.")}>Save</Button>
-            </div>
-          </Field>
-          <Field label="Minimum score to contact" hint="Top-10 candidates below this aren't contacted automatically. You can still contact them by hand." htmlFor="minscore">
+          <SwitchRow id="ks" label="Email sending" hint={`Nothing is sent automatically: emails go out when someone presses Send. Turn off to block every email at once. Sent today: ${q.data.sentToday}.`} checked={s.autoSendEnabled}
+            onChange={(v) => patch({ autoSendEnabled: v }, v ? "Email sending is on." : "All email sending paused.")} />
+          <Field label="Strong match score" hint="Top-10 people below this count as weaker matches: fewer than 3 above it sends a notice, and contact lookups skip people far below it." htmlFor="minscore">
             <div className="flex gap-2">
               <Input id="minscore" type="number" min={0} max={100} value={minScore} onChange={(e) => setMinScore(e.target.value)} />
               <Button variant="outline" onClick={() => patch({ minOutreachScore: Number(minScore) }, "Minimum score saved.")}>Save</Button>
