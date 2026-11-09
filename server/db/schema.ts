@@ -293,7 +293,9 @@ export const outreachMessages = pgTable("outreach_messages", {
   id: id(),
   roleCandidateId: uuid("role_candidate_id").notNull().references(() => roleCandidates.id, { onDelete: "cascade" }),
   templateId: uuid("template_id").references(() => outreachTemplates.id, { onDelete: "set null" }),
-  channel: text("channel").$type<"email" | "linkedin">().notNull(),
+  channel: text("channel").$type<"email" | "linkedin" | "whatsapp">().notNull(),
+  /** "first" contact or the one "follow_up" after it. Every message is sent by a person pressing Send. */
+  kind: text("kind").$type<"first" | "follow_up">().notNull().default("first"),
   senderId: uuid("sender_id").references(() => users.id),
   toAddress: text("to_address").notNull(), // email or LinkedIn URL
   subject: text("subject"),
@@ -328,7 +330,7 @@ export const settings = pgTable("settings", {
   // Most SignalHire credits the app may spend in a calendar month. Null means no limit.
   signalhireMonthlyLimit: integer("signalhire_monthly_limit"),
   weeklySummaryEnabled: boolean("weekly_summary_enabled").notNull().default(true),
-  /** Top-10 candidates below this score are not contacted automatically. */
+  /** "Strong match" bar: fewer than 3 Top-10 people above it triggers a notice; reveals skip people far below it. */
   minOutreachScore: integer("min_outreach_score").notNull().default(50),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 });
@@ -366,6 +368,7 @@ export const emailLog = pgTable("email_log", {
   toAddress: text("to_address").notNull(),
   fromAddress: text("from_address").notNull(),
   replyTo: text("reply_to"),
+  cc: text("cc"),
   subject: text("subject").notNull(),
   body: text("body").notNull(),
   kind: text("kind").notNull(), // system | outreach
