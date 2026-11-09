@@ -355,8 +355,8 @@ export default function RequestForm() {
             <CardHeader><CardTitle><Step n={4} /> Budget and reason</CardTitle></CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-4">
               <Field required label="Currency" htmlFor="cur" error={errors.currency?.message}><Select id="cur" {...reg("currency")}><option value="">Choose…</option>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
-              <Field label="Salary from" htmlFor="smin" error={errors.salaryMin?.message}><Input id="smin" inputMode="numeric" {...reg("salaryMin")} /></Field>
-              <Field label="Salary to" htmlFor="smax" error={errors.salaryMax?.message}><Input id="smax" inputMode="numeric" {...reg("salaryMax")} /></Field>
+              <Field label="Salary from" htmlFor="smin" error={errors.salaryMin?.message}><Input id="smin" inputMode="decimal" {...reg("salaryMin")} /></Field>
+              <Field label="Salary to" htmlFor="smax" error={errors.salaryMax?.message}><Input id="smax" inputMode="decimal" {...reg("salaryMax")} /></Field>
               <Field label="Per" htmlFor="per" hint="Internal only"><Select id="per" {...reg("salaryPeriod")}>{PAY_PERIODS.map((p) => <option key={p} value={p}>{PER[p]}</option>)}</Select></Field>
               <Field required label="Business justification for Khalil" htmlFor="just" className="sm:col-span-4" error={errors.justification?.message}><Textarea id="just" {...reg("justification")} /></Field>
             </CardContent>
