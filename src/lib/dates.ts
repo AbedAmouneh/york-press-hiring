@@ -1,3 +1,8 @@
+/** Today as YYYY-MM-DD in Beirut time, the calendar the server keeps contact and follow-up dates in. */
+export function todayLocal(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Beirut", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
 /** "Today", "Yesterday", or a date like "Mon 26 Oct", for grouping lists by day. */
 export function dayGroup(value: string | Date, now = new Date()) {
   const d = new Date(value);
