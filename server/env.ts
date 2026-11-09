@@ -44,6 +44,11 @@ export const env = {
   get signalhireKey() { return key("SIGNALHIRE_API_KEY"); },
   get resendKey() { return key("RESEND_API_KEY"); },
   get emailFrom() { return v("EMAIL_FROM") || "York Press Careers <careers@york-press.com>"; },
+  /** Copied (visible CC) on every outreach email. OUTREACH_CC="" turns it off; several addresses are comma-separated. */
+  get outreachCc() {
+    const raw = process.env.OUTREACH_CC ?? "abdulrahman.mansour@york-press.com";
+    return raw.split(",").map((s) => s.trim()).filter(Boolean);
+  },
   get demoMode() { return v("DEMO_MODE").toLowerCase() === "true"; },
   /**
    * True where the built-in demo password (it's in this public repo) may be used and shown on the sign-in page:
