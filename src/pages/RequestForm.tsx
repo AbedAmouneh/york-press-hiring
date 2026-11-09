@@ -86,6 +86,8 @@ export default function RequestForm() {
   const form = useForm({ resolver: zodResolver(RequestFormSchema), defaultValues: EMPTY });
   const { errors, isSubmitting } = form.formState;
   const reg = (name: keyof RequestFormValues) => ({ ...form.register(name), "aria-invalid": !!errors[name] });
+  const saving = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => { if (existing.data) form.reset(toForm(existing.data.request)); }, [existing.data, form]);
   // A native select can't show a value whose option isn't there yet. When the lists arrive after the saved
@@ -153,6 +155,11 @@ export default function RequestForm() {
 
   async function save(body: RequestInputT, submit: boolean) {
     try {
+    // One save at a time, and none after a successful one: the form stays on screen while the next page loads,
+    // and a second click there would otherwise create a second request.
+    if (saving.current) return;
+    saving.current = true;
+    setBusy(true);
       let rid = id;
       if (id) {
         await call(rpc.requests[":id"].$patch({ param: { id }, json: body }));
@@ -166,6 +173,8 @@ export default function RequestForm() {
       nav(`/requests/${rid}`);
     } catch (err) {
       form.setError("root", { message: (err as Error).message });
+      saving.current = false;
+      setBusy(false);
     }
   }
 
@@ -328,8 +337,8 @@ export default function RequestForm() {
           </div>
           <FormError>{errors.root?.message}</FormError>
           <div className="grid gap-2">
-            <Button type="submit" disabled={isSubmitting}>Submit to Khalil</Button>
-            <Button type="button" variant="outline" disabled={isSubmitting} onClick={saveDraft}>Save draft</Button>
+            <Button type="submit" disabled={isSubmitting || busy}>Submit to Khalil</Button>
+            <Button type="button" variant="outline" disabled={isSubmitting || busy} onClick={saveDraft}>Save draft</Button>
             <Button type="button" variant="ghost" onClick={() => nav(-1)}>Cancel</Button>
           </div>
         </Card>
