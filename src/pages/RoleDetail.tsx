@@ -9,6 +9,9 @@ import type { CandidateRow, RequestRow } from "@/lib/types";
 import { cn, fmtDate, fmtDateTime } from "@/lib/utils";
 import { CandidateStatusBadge, OutreachBadge, RequestStatusBadge } from "@/components/Status";
 import { CandidateSheet } from "@/components/CandidateSheet";
+import { ContactDialog, type ContactTarget } from "@/components/ContactDialog";
+import { todayLocal } from "@/lib/dates";
+import type { ContactKind } from "../../shared/schemas";
 import { StageBar } from "@/components/StageBar";
 import { Button } from "@/components/ui/button";
 import { CANDIDATE_STATUSES, CRITERIA, DEFAULT_WEIGHTS, type CandidateStatus, type HmDecision, type Weights } from "../../shared/types";
@@ -36,7 +39,7 @@ function DecisionPicker({ value, canEdit, onChange }: { value: HmDecision | null
   );
 }
 
-function CandidateTable({ rows, onOpen, canEdit, onDecision, top }: { rows: CandidateRow[]; onOpen: (id: string) => void; canEdit: boolean; onDecision: (id: string, d: HmDecision | null) => void; top: boolean }) {
+function CandidateTable({ rows, onOpen, canEdit, onDecision, onContact, top }: { rows: CandidateRow[]; onOpen: (id: string) => void; canEdit: boolean; onDecision: (id: string, d: HmDecision | null) => void; onContact: (c: CandidateRow, kind: ContactKind) => void; top: boolean }) {
   if (!rows.length) return <EmptyState title="No candidates match">Try a different filter.</EmptyState>;
   return (
     <DataTable>
@@ -71,7 +74,13 @@ function CandidateTable({ rows, onOpen, canEdit, onDecision, top }: { rows: Cand
             <Td onClick={(e) => e.stopPropagation()}>
               <DecisionPicker value={c.hmDecision} canEdit={canEdit} onChange={(d) => onDecision(c.id, d)} />
             </Td>
-            <Td className="text-xs">{top ? <OutreachBadge outreach={c.outreach} /> : <span className="text-muted-foreground">{c.location}</span>}</Td>
+            <Td className="text-xs" onClick={(e) => top && canEdit && e.stopPropagation()}>
+              {!top ? <span className="text-muted-foreground">{c.location}</span>
+                : canEdit && (!c.outreach || ["cancelled", "failed", "skipped"].includes(c.outreach.status)) ? <Button size="sm" variant="outline" className="h-7" onClick={() => onContact(c, "first")}>Contact</Button>
+                : canEdit && c.status === "contacted" && c.followUpDate && c.followUpDate <= todayLocal() && c.outreach?.status === "sent"
+                  ? <Button size="sm" variant="outline" className="h-7" onClick={() => onContact(c, "follow_up")}>Follow up</Button>
+                : <OutreachBadge outreach={c.outreach} />}
+            </Td>
           </TableRow>
         ))}
       </TableBody>
@@ -124,6 +133,8 @@ export default function RoleDetail() {
   const isRecruiter = can(me, "recruiter", "admin");
   const tab = params.get("tab") ?? "top";
   const [open, setOpen] = useState<string | null>(null);
+  const [contact, setContact] = useState<ContactTarget | null>(null);
+  const contactPerson = (c: CandidateRow, kind: ContactKind) => setContact({ id: c.id, name: c.fullName, email: c.email, phone: c.phone, linkedinUrl: c.linkedinUrl, kind });
   const [filter, setFilter] = useState({ q: "", status: "", min: 0 });
   const [closing, setClosing] = useState(false);
   const [finding, setFinding] = useState(false);
@@ -287,7 +298,7 @@ export default function RoleDetail() {
           <TabsTrigger value="brief">Scorecard & brief</TabsTrigger>
         </TabsList>
         <TabsContent value="top">
-          {cands.isLoading ? <Spinner /> : top.length ? <CandidateTable rows={top} top onOpen={setOpen} canEdit={!!cands.data?.canEdit} onDecision={decision} /> : <EmptyState title={running ? "Candidates are being found and scored…" : "No candidates yet"} />}
+          {cands.isLoading ? <Spinner /> : top.length ? <CandidateTable rows={top} top onOpen={setOpen} canEdit={!!cands.data?.canEdit} onDecision={decision} onContact={contactPerson} /> : <EmptyState title={running ? "Candidates are being found and scored…" : "No candidates yet"} />}
         </TabsContent>
         <TabsContent value="all">
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -301,7 +312,7 @@ export default function RoleDetail() {
             </Select>
             <span className="text-sm text-muted-foreground">{filtered.length} shown</span>
           </div>
-          <CandidateTable rows={filtered} top={false} onOpen={setOpen} canEdit={!!cands.data?.canEdit} onDecision={decision} />
+          <CandidateTable rows={filtered} top={false} onOpen={setOpen} canEdit={!!cands.data?.canEdit} onDecision={decision} onContact={contactPerson} />
         </TabsContent>
         <TabsContent value="applications">
           {apps.isLoading ? <Spinner /> : apps.data?.applications.length ? (
@@ -423,6 +434,7 @@ export default function RoleDetail() {
       </Tabs>
 
       <CandidateSheet id={open} onClose={() => setOpen(null)} onChanged={() => qc.invalidateQueries({ queryKey: ["candidates", id] })} />
+      <ContactDialog target={contact} onClose={() => setContact(null)} onSent={() => { qc.invalidateQueries({ queryKey: ["candidates", id] }); qc.invalidateQueries({ queryKey: ["outreach"] }); qc.invalidateQueries({ queryKey: ["request", id] }); }} />
 
       <Modal open={closing} onOpenChange={setClosing} title={`Close ${r.title}?`} description="Closing stops the weekly refresh and cancels any outreach that hasn't been sent.">
         <label className="flex items-start gap-2 text-sm">
