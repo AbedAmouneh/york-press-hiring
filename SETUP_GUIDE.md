@@ -142,15 +142,29 @@ SignalHire sends contact results back to the app automatically. This only works 
 
 Vercel runs `/api/cron/daily` every day at 06:00 UTC (08:00–09:00 Beirut). It:
 
-- sends queued outreach emails within the daily cap (unless the kill switch is off),
 - reminds Khalil about requests waiting more than 48 hours,
 - resumes any sourcing run that was interrupted,
 - deletes personal data nobody has touched for 24 months (candidates not in an open role, CVs for closed roles, copies of sent emails, old notifications). The do-not-contact list is kept. **Settings** shows what the next run would delete,
 - on **Mondays**: re-runs sourcing for every open role (new profiles only, "New contender" flags) and emails Khalil the weekly summary.
 
-## LinkedIn messages (candidates without an email)
+## Contacting candidates
 
-These are never sent automatically. Approve them in **LinkedIn queue**, then in Cowork say:
+Nothing is ever sent automatically. On a role page, press **Contact** next to a candidate (recruiters, admins and the
+role's hiring manager can), choose **Email**, **LinkedIn** or **WhatsApp**, edit the drafted message and press the
+button:
+
+- **Email** goes out straight away from "Your name at York Press" (careers@york-press.com). Replies go to careers@ and
+  to you, and abdulrahman.mansour@york-press.com is copied on every email (change with the `OUTREACH_CC` variable).
+- **WhatsApp** opens WhatsApp with the message filled in; you press send there. The person is marked Contacted; if
+  you didn't send it, open the candidate and press **Undo: not sent**.
+- **LinkedIn** puts the note in **LinkedIn queue** as approved, for Cowork to send (below).
+
+After a first message the person is Contacted and a follow-up reminder appears on Home 5 working days later, with a
+**Contact again** button that starts from a short follow-up message.
+
+## LinkedIn messages
+
+These are never sent automatically. They wait in **LinkedIn queue**, then in Cowork say:
 
 > Send the approved LinkedIn messages from the York Press Hiring queue.
 
@@ -176,7 +190,7 @@ Open http://localhost:5173. Data is stored in the `.data` folder.
 | "DATABASE_URL is not set" | Step 3: add the Neon database and redeploy |
 | A deployment fails with "Migration failed" | The database update didn't apply, so the previous version stays live and nothing is lost. Send me the build log |
 | Candidates never appear | Role page → *Runs & cost* shows the error. Check the API key in Settings → Connections |
-| Emails stay "queued" | Settings → the kill switch may be off, or today's cap is reached |
+| "Sending is paused in Settings" when pressing Send | Settings → turn Email sending back on |
 | Contacts stay "Waiting for SignalHire" | Check `APP_URL` is the live https address; SignalHire also emails you about failed deliveries |
 | Someone forgot their password | Users → *Resend invite* |
 | Admin or CEO lost their phone (two-step login on) | Sign in with one of the recovery codes in place of the 6-digit code. If those are gone too, another admin opens **Users → Reset 2-step**, and the person sets it up again with a new QR code |
