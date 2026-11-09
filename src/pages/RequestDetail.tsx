@@ -224,6 +224,15 @@ export default function RequestDetail() {
             </Section>
           )}
 
+          {(r.workload || r.projectDescription) && (
+            <Section title="The work">
+              <div className="grid gap-3 text-sm">
+                {r.workload && <div><div className="mb-1 text-xs text-muted-foreground">Expected workload</div><p className="whitespace-pre-line">{r.workload}</p></div>}
+                {r.projectDescription && <div><div className="mb-1 text-xs text-muted-foreground">Project</div><p className="whitespace-pre-line">{r.projectDescription}</p></div>}
+              </div>
+            </Section>
+          )}
+
           <Section title="Requirements">
             <div className="grid gap-3 text-sm">
               <div><div className="mb-1 text-xs text-muted-foreground">Must-haves</div><Chips items={musts.core} /></div>
