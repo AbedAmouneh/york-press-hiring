@@ -9,6 +9,7 @@ import { StageBar } from "@/components/StageBar";
 import { DeptDot, EmptyState, FilterChips } from "@/components/kit";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { employmentLabel } from "../../shared/employment";
 
 const FILTERS = [
   ["all", "All"],
@@ -46,7 +47,10 @@ export default function Roles() {
                   <span className="hidden font-mono text-xs text-muted-foreground md:block">{r.code}</span>
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{r.title}</span>
-                    <DeptDot name={r.department} className="text-xs text-muted-foreground" />
+                    <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                      <DeptDot name={r.department} />
+                      {r.employmentType !== "full_time" && <><span aria-hidden>·</span><span>{employmentLabel(r)}</span></>}
+                    </span>
                   </span>
                   <StageBar stage={stageOf(r)} closed={r.status === "closed"} className="hidden md:block" />
                   <span className="num hidden text-right md:block">{r.stats.screened}</span>
