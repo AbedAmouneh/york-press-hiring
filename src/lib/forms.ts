@@ -1,6 +1,7 @@
 // Form schemas for react-hook-form. Each one keeps the browser's field shape (text inputs, one item
 // per line) and pipes into the shared API schema, so the browser enforces the same rules as the server.
 import { z } from "zod";
+import { EMPLOYMENT_TYPES, isContractWork, PAY_PERIODS } from "../../shared/types";
 import { ApplyFields, cvProblem, InvitePasswordInput, LocationInput, ManagerInvite, PositionInput, RequestInput, SetupInput, submitProblems } from "../../shared/schemas";
 
 /** "a\nb\n\nc" → ["a", "b", "c"] */
@@ -39,7 +40,12 @@ export const RequestFormFields = z.object({
   salaryMin: z.string(),
   salaryMax: z.string(),
   currency: z.string(),
-  salaryPeriod: z.enum(["year", "month"]),
+  employmentType: z.enum(EMPLOYMENT_TYPES),
+  salaryPeriod: z.enum(PAY_PERIODS),
+  hoursPerWeek: z.string(),
+  contractLength: z.string(),
+  workload: z.string(),
+  projectDescription: z.string(),
   justification: z.string(),
   targetCompanies: z.string(),
   avoidCompanies: z.string(),
@@ -71,7 +77,13 @@ const toRequestInput = (f: RequestFormValues) => ({
   salaryMin: num(f.salaryMin),
   salaryMax: num(f.salaryMax),
   currency: f.currency || null,
+  employmentType: f.employmentType,
   salaryPeriod: f.salaryPeriod,
+  // Details that belong to another type are dropped, so switching type never leaves stale ones behind.
+  hoursPerWeek: f.employmentType === "part_time" ? num(f.hoursPerWeek) : null,
+  contractLength: isContractWork(f.employmentType) ? f.contractLength.trim() || null : null,
+  workload: isContractWork(f.employmentType) ? f.workload.trim() || null : null,
+  projectDescription: isContractWork(f.employmentType) ? f.projectDescription.trim() || null : null,
   justification: f.justification,
   targetCompanies: csv(f.targetCompanies),
   avoidCompanies: csv(f.avoidCompanies),
@@ -140,6 +152,9 @@ export const PositionFormFields = z.object({
   minYears: z.string(),
   idealYears: z.string(),
   jdText: z.string(),
+  /** "" = no usual type / pay basis. */
+  employmentType: z.string(),
+  salaryPeriod: z.string(),
   active: z.boolean(),
 });
 export type PositionFormValues = z.input<typeof PositionFormFields>;
@@ -154,6 +169,8 @@ const toPositionInput = (f: PositionFormValues) => ({
   minYears: num(f.minYears),
   idealYears: num(f.idealYears),
   jdText: f.jdText,
+  employmentType: f.employmentType || null,
+  salaryPeriod: f.salaryPeriod || null,
   active: f.active,
 });
 
