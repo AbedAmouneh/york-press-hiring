@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  doublePrecision,
   index,
   integer,
   type AnyPgColumn,
@@ -68,8 +69,9 @@ export const roleRequests = pgTable("role_requests", {
   locationPolicy: text("location_policy").notNull().default("Remote, global"),
   searchLocations: text("search_locations").array().notNull().default(sql`'{}'::text[]`),
   timeZone: text("time_zone"),
-  salaryMin: integer("salary_min"),
-  salaryMax: integer("salary_max"),
+  // Hourly and daily rates need cents.
+  salaryMin: doublePrecision("salary_min"),
+  salaryMax: doublePrecision("salary_max"),
   currency: text("currency"),
   employmentType: text("employment_type").$type<EmploymentType>().notNull().default("full_time"),
   salaryPeriod: text("salary_period").$type<PayPeriod>().notNull().default("month"),
