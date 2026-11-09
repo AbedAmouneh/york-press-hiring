@@ -46,6 +46,8 @@ export const RequestFormFields = z.object({
   hiringManagerId: z.string(),
   locationId: z.string(),
   workingHours: z.string(),
+  /** One university per line (names can contain commas). */
+  universities: z.string(),
 });
 export type RequestFormValues = z.input<typeof RequestFormFields>;
 
@@ -76,6 +78,7 @@ const toRequestInput = (f: RequestFormValues) => ({
   hiringManagerId: f.hiringManagerId || null,
   locationId: f.locationId || null,
   workingHours: f.workingHours.trim() || null,
+  universities: lines(f.universities),
 });
 
 /** All rules run in one pass so every error shows at once: three form-only rules, then the API's. */
@@ -166,11 +169,13 @@ export const LocationFormFields = z.object({
   city: z.string(),
   workArrangement: z.string(),
   workingHours: z.string(),
+  /** One university per line. */
+  universities: z.string(),
   active: z.boolean(),
 });
 export type LocationFormValues = z.input<typeof LocationFormFields>;
 
-const toLocationInput = (f: LocationFormValues) => ({ ...f, city: f.city.trim() || null });
+const toLocationInput = (f: LocationFormValues) => ({ ...f, city: f.city.trim() || null, universities: lines(f.universities) });
 
 export const LocationForm = LocationFormFields.superRefine((f, ctx) => {
   validateWith(LocationInput, toLocationInput(f), ctx);

@@ -6,7 +6,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { call, rpc } from "@/lib/rpc";
 import { useMe } from "@/lib/auth";
 import type { HiringLocation, Position, RequestRow } from "@/lib/types";
-import { RequestDraftForm, RequestForm as RequestFormSchema, type RequestFormValues } from "@/lib/forms";
+import { lines, RequestDraftForm, RequestForm as RequestFormSchema, type RequestFormValues } from "@/lib/forms";
+import { UniversityPicker } from "@/components/UniversityPicker";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { CURRENCIES, DEPARTMENTS, SENIORITIES } from "../../shared/types";
@@ -31,7 +32,7 @@ const EMPTY: RequestFormValues = {
   title: "", department: DEPARTMENTS[0], seniority: "Mid", headcount: "1", startDate: "", kind: "new", jdText: "",
   mustHaves: "", niceToHaves: "", dealBreakers: "", minYears: "", idealYears: "", languages: "English",
   locationPolicy: "", searchLocations: "", timeZone: "", locationId: "", workingHours: "", salaryMin: "", salaryMax: "", currency: "", salaryPeriod: "month",
-  justification: "", targetCompanies: "", avoidCompanies: "", hiringManagerId: "",
+  justification: "", targetCompanies: "", avoidCompanies: "", hiringManagerId: "", universities: "",
 };
 
 const toForm = (r: RequestRow): RequestFormValues => ({
@@ -41,7 +42,7 @@ const toForm = (r: RequestRow): RequestFormValues => ({
   locationPolicy: r.locationPolicy, searchLocations: r.searchLocations.join(", "), timeZone: r.timeZone ?? "",
   salaryMin: r.salaryMin?.toString() ?? "", salaryMax: r.salaryMax?.toString() ?? "", currency: r.currency ?? "", salaryPeriod: r.salaryPeriod,
   justification: r.justification, targetCompanies: r.targetCompanies.join(", "), avoidCompanies: r.avoidCompanies.join(", "), hiringManagerId: r.hiringManagerId ?? "",
-  locationId: r.locationId ?? "", workingHours: r.workingHours ?? "",
+  locationId: r.locationId ?? "", workingHours: r.workingHours ?? "", universities: r.universities.join("\n"),
 });
 
 type Suggestable = "department" | "seniority" | "jdText" | "mustHaves" | "niceToHaves" | "minYears" | "idealYears" | "languages";
@@ -49,12 +50,12 @@ const SUGGESTION_LABELS: Record<Suggestable, string> = {
   department: "department", seniority: "level", jdText: "job description", mustHaves: "must-haves", niceToHaves: "nice-to-haves",
   minYears: "minimum years", idealYears: "ideal years", languages: "languages",
 };
-type LocationField = "locationPolicy" | "searchLocations" | "workingHours";
+type LocationField = "locationPolicy" | "searchLocations" | "workingHours" | "universities";
 type AutoField = Suggestable | LocationField;
 
-/** What picking a location fills in: arrangement and place, the country to search, and the hours. */
+/** What picking a location fills in: arrangement and place, the country to search, the hours and its universities. */
 const fromLocation = (l: HiringLocation): Record<LocationField, string> => ({
-  locationPolicy: `${l.workArrangement}, ${l.name}`, searchLocations: l.country, workingHours: l.workingHours,
+  locationPolicy: `${l.workArrangement}, ${l.name}`, searchLocations: l.country, workingHours: l.workingHours, universities: l.universities.join("\n"),
 });
 
 /** A saved position's details in the form's text shape. Empty values are left out so they never clear a field. */
@@ -85,9 +86,9 @@ export default function RequestForm() {
   const myDepartment = me.department && (DEPARTMENTS as readonly string[]).includes(me.department) ? me.department : EMPTY.department;
   const form = useForm({ resolver: zodResolver(RequestFormSchema), defaultValues: EMPTY });
   const { errors, isSubmitting } = form.formState;
-  const reg = (name: keyof RequestFormValues) => ({ ...form.register(name), "aria-invalid": !!errors[name] });
   const saving = useRef(false);
   const [busy, setBusy] = useState(false);
+  const reg = (name: keyof RequestFormValues) => ({ ...form.register(name), "aria-invalid": !!errors[name] });
 
   useEffect(() => { if (existing.data) form.reset(toForm(existing.data.request)); }, [existing.data, form]);
   // A native select can't show a value whose option isn't there yet. When the lists arrive after the saved
@@ -154,12 +155,12 @@ export default function RequestForm() {
   }
 
   async function save(body: RequestInputT, submit: boolean) {
-    try {
     // One save at a time, and none after a successful one: the form stays on screen while the next page loads,
     // and a second click there would otherwise create a second request.
     if (saving.current) return;
     saving.current = true;
     setBusy(true);
+    try {
       let rid = id;
       if (id) {
         await call(rpc.requests[":id"].$patch({ param: { id }, json: body }));
@@ -172,9 +173,9 @@ export default function RequestForm() {
       toast(submit ? "Submitted. Khalil has been notified." : "Draft saved.");
       nav(`/requests/${rid}`);
     } catch (err) {
-      form.setError("root", { message: (err as Error).message });
       saving.current = false;
       setBusy(false);
+      form.setError("root", { message: (err as Error).message });
     }
   }
 
@@ -264,6 +265,12 @@ export default function RequestForm() {
                   <option value="">Me</option>
                   {people.data?.users.filter((u) => u.id !== me.id).map((u) => <option key={u.id} value={u.id}>{u.name}{u.department ? ` · ${u.department}` : ""}</option>)}
                 </Select>
+              </Field>
+              <Field label="Universities (optional)" className="sm:col-span-2" error={errors.universities?.message}
+                hint="Leave empty to search everyone. When some are chosen, only their graduates and current students are searched.">
+                <Controller control={form.control} name="universities" render={({ field }) => (
+                  <UniversityPicker value={lines(field.value)} onChange={(names) => field.onChange(names.join("\n"))} defaultCountry={location?.country ?? null} />
+                )} />
               </Field>
             </CardContent>
           </Card>
