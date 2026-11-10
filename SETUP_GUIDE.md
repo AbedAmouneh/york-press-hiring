@@ -67,7 +67,8 @@ Add each key under **Vercel → Settings → Environment Variables**, then **Red
 | Service | Variable | Where to get it | What changes |
 |---|---|---|---|
 | Claude | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys (needs prepaid API credit; a Claude Team plan doesn't cover it) | Real search briefs, scoring, personal lines, web research on the Top 10, CV scoring, half-price weekly scoring. Used first whenever it is set. |
-| Google Gemini | `GEMINI_API_KEY` | aistudio.google.com/apikey (needs prepaid credit) | Finds each candidate's LinkedIn profile with Google search. If there is no Claude key, it also does the scoring (`GEMINI_MODEL`, default `gemini-3.8-flash`), without web research or half-price batches. |
+| Brave Search | `BRAVE_SEARCH_API_KEY` | api-dashboard.search.brave.com → subscribe to the free plan → API keys | Finds each candidate's LinkedIn profile from real search results, before Gemini is asked. The free plan allows about one search a second, so a role's lookups take about a minute. |
+| Google Gemini | `GEMINI_API_KEY` | aistudio.google.com/apikey (needs prepaid credit) | Finds LinkedIn profiles with Google search when Brave has no key or finds nothing. If there is no Claude key, it also does the scoring (`GEMINI_MODEL`, default `gemini-3.8-flash`), without web research or half-price batches. |
 | Claude through OpenCode | `OPENCODE_API_KEY` | opencode.ai/console → API keys (starts with `oc_sk_`) | Used only when neither key above is set. No web research or half-price batches. Set `AI_PROVIDER` (`anthropic`, `gemini` or `opencode`) to choose a service explicitly. |
 | People Data Labs (optional) | `PDL_API_KEY` | dashboard.peopledatalabs.com → API keys | A second candidate source with fuller profiles (dates, education). Without it, SignalHire alone is searched |
 | SignalHire | `SIGNALHIRE_API_KEY` | signalhire.com/apiIntegrations | Real search + contact reveal for the Top 10 |
