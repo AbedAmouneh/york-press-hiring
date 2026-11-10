@@ -358,7 +358,7 @@ function Usage() {
           <Card key={p.provider} className="p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label[p.provider] ?? p.provider} · 30 days</div>
             <div className="num mt-1 text-xl font-semibold">{p.provider === "claude" ? `${(p.inputTokens / 1000).toFixed(0)}k / ${(p.outputTokens / 1000).toFixed(0)}k` : p.units}</div>
-            <div className="text-xs text-muted-foreground">{p.provider === "claude" ? `tokens in / out · ${p.calls} calls` : p.provider === "pdl" ? "records" : p.provider === "signalhire" ? "searches + credits" : "emails"}</div>
+            <div className="text-xs text-muted-foreground">{p.provider === "claude" ? `tokens in / out · ${p.calls} calls` : p.provider === "pdl" ? "records" : p.provider === "signalhire" ? "searches + credits" : p.provider === "brave" || p.provider === "gemini" ? "LinkedIn searches" : "emails"}</div>
             {p.provider === "claude" && (p.cacheReadTokens > 0 || p.batchCalls > 0) && (
               <div className="mt-1 text-xs text-success">
                 {cacheShare(p)}% of input read from cache{p.batchCalls ? ` · ${p.batchCalls} half-price batch calls` : ""}
