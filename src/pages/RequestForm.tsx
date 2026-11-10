@@ -202,7 +202,8 @@ export default function RequestForm() {
       }
       await qc.invalidateQueries({ queryKey: ["requests"] });
       await qc.invalidateQueries({ queryKey: ["request", rid] });
-      toast(submit ? "Submitted. Khalil has been notified." : "Draft saved.");
+      const wasDraft = !id || ["draft", "changes_requested"].includes(existing.data?.request.status ?? "draft");
+      toast(submit ? "Submitted. Khalil has been notified." : wasDraft ? "Draft saved." : "Changes saved.");
       nav(`/requests/${rid}`);
     } catch (err) {
       saving.current = false;
@@ -213,6 +214,9 @@ export default function RequestForm() {
 
   if (id && existing.isLoading) return <Spinner />;
   const returned = existing.data?.request.status === "changes_requested" ? existing.data.request.lastEvent : null;
+  // A request already approved (or being decided) is only edited: one Save, no draft or resubmission.
+  const status = existing.data?.request.status;
+  const approved = !!id && !!status && !["draft", "changes_requested"].includes(status);
 
   const v = form.watch();
   const location = locations.data?.locations.find((l) => l.id === v.locationId);
@@ -243,7 +247,7 @@ export default function RequestForm() {
       <PageHeader eyebrow={id ? existing.data?.request.code : undefined} title={id ? "Edit request" : "New request"} />
       <p className="-mt-4 mb-5 text-sm text-muted-foreground"><span aria-hidden className="text-primary">*</span> Required to submit. A draft only needs a job title.</p>
       {returned?.comment && <p dir="auto" className="mb-4 rounded-lg border-l-[3px] border-chip-amber bg-chip-amber/15 px-3 py-2 text-sm whitespace-pre-line break-words"><b>{returned.actorName}:</b> {returned.comment}</p>}
-      <form className="grid items-start gap-5 lg:grid-cols-3" onSubmit={form.handleSubmit((vals) => save(vals, true))} noValidate>
+      <form className="grid items-start gap-5 lg:grid-cols-3" onSubmit={form.handleSubmit((vals) => save(vals, !approved))} noValidate>
         <div className="grid gap-5 lg:col-span-2">
           {/* overflow-visible so the job title list can open past the card's edge */}
           <Card className="overflow-visible">
@@ -391,8 +395,10 @@ export default function RequestForm() {
           </div>
           <FormError>{errors.root?.message}</FormError>
           <div className="grid gap-2">
-            <Button type="submit" disabled={isSubmitting || busy}>Submit to Khalil</Button>
-            <Button type="button" variant="outline" disabled={isSubmitting || busy} onClick={saveDraft}>Save draft</Button>
+            {approved ? <Button type="submit" disabled={isSubmitting || busy}>Save changes</Button> : <>
+              <Button type="submit" disabled={isSubmitting || busy}>Submit to Khalil</Button>
+              <Button type="button" variant="outline" disabled={isSubmitting || busy} onClick={saveDraft}>Save draft</Button>
+            </>}
             <Button type="button" variant="ghost" onClick={() => nav(-1)}>Cancel</Button>
           </div>
         </Card>
