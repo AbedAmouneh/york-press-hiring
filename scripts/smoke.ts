@@ -85,7 +85,9 @@ ok((await manager.raw("POST", "/locations", { name: "Somewhere", country: "Nowhe
 const { location } = await recruiter("POST", "/locations", { name: "Riyadh, Saudi Arabia", country: "Saudi Arabia", city: "Riyadh", workArrangement: "Hybrid" });
 ok(location.workingHours === "" && location.active, "a recruiter added a location");
 ok((await recruiter.raw("POST", "/locations", { name: "riyadh, saudi arabia", country: "Saudi Arabia" })).status === 409, "the same location can't be added twice");
-await recruiter("PATCH", `/locations/${location.id}`, { workingHours: "Sun–Thu 8:00–16:00" });
+ok(location.currency === null, "a new location suggests no currency");
+const patched = (await recruiter("PATCH", `/locations/${location.id}`, { workingHours: "Sun–Thu 8:00–16:00", currency: "SAR" })).location;
+ok(patched.currency === "SAR" && patched.workingHours.startsWith("Sun"), "a location can suggest a currency");
 await recruiter("DELETE", `/locations/${location.id}`);
 ok(!(await recruiter("GET", "/locations")).locations.some((l: any) => l.id === location.id), "a recruiter edited and deleted it");
 const ghost = await manager.raw("POST", "/requests", { title: "Ghost role", department: "Finance", seniority: "Mid", locationId: location.id });
