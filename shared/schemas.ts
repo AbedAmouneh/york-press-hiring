@@ -272,6 +272,7 @@ const LocationFields = z.object({
   city: z.string().trim().nullable(),
   workArrangement: z.string().trim().min(1, "Choose on-site, hybrid or remote."),
   workingHours: z.string().trim().max(200),
+  currency: z.enum(CURRENCIES, "Choose a currency.").nullable(),
   // No default here: a patch that doesn't send universities must not clear them.
   universities: universities.unwrap(),
   active: z.boolean(),
@@ -286,6 +287,7 @@ export const LocationInput = LocationFields.extend({
   city: LocationFields.shape.city.optional().default(null),
   workArrangement: LocationFields.shape.workArrangement.default("On-site"),
   workingHours: LocationFields.shape.workingHours.default(""),
+  currency: LocationFields.shape.currency.default(null),
   universities,
   active: z.boolean().default(true),
 });
