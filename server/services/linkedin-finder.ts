@@ -194,7 +194,7 @@ async function geminiFind(p: LookupPerson, runId?: string | null, onMiss?: (m: L
       throw new Error(last);
     }
     const out = readLookup((await res.json()) as LookupResponse, p.fullName);
-    await logUsage({ runId: runId ?? null, provider: "claude", action: "linkedin_lookup", units: out.searches });
+    await logUsage({ runId: runId ?? null, provider: "gemini", action: "linkedin_lookup", units: out.searches });
     // Answered from memory without searching: no evidence, so ask the next model rather than trust or drop it.
     if (!out.searches) { last = ""; noSearch = true; continue; }
     preferred = model;
