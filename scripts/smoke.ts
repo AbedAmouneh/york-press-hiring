@@ -571,6 +571,19 @@ ok((await manager.raw("DELETE", `/requests/${waiting.id}`)).status === 403, "som
 ok((await second("DELETE", `/requests/${waiting.id}`)).ok && (await second.raw("GET", `/requests/${waiting.id}`)).status === 404, "the requester deletes the draft");
 ok((await second.raw("DELETE", `/requests/${id}`)).status === 400, "an approved role can't be deleted");
 {
+  // An admin removes a request still waiting for the CEO, without anyone being notified.
+  const { id: stray } = await manager("POST", "/requests?submit=true", { title: "Stray request", department: "Editorial", seniority: "Mid", locationId: lebanon.id, currency: "USD", justification: "Clean-up check." });
+  const strayNotices = async () => (await smokeDb.select().from(tables.notifications)).filter((n: any) => n.title.includes("Stray request")).length;
+  const noticesBefore = await strayNotices();
+  ok((await manager.raw("DELETE", `/requests/${stray}`)).status === 400, "the requester can't delete a request that's waiting (withdraw first)");
+  ok((await second("DELETE", `/requests/${stray}`)).ok && (await second.raw("GET", `/requests/${stray}`)).status === 404, "an admin deletes a request waiting for a decision");
+  ok((await strayNotices()) === noticesBefore, "and nobody is notified about it");
+  const { id: kept } = await manager("POST", "/requests?submit=true", { title: "Kept request", department: "Editorial", seniority: "Mid", locationId: lebanon.id, currency: "USD", justification: "Demo admin check." });
+  const demoAdminAgain = client();
+  await demoAdminAgain("POST", "/auth/login", { email: "demo.admin@york-press.test", password: "demo-york-2026" });
+  ok((await demoAdminAgain.raw("DELETE", `/requests/${kept}`)).status === 400, "the demo admin can't delete a waiting request");
+}
+{
   // One person on two open roles: closing the first with "delete contacts" keeps their details for the second.
   const me = (await second("GET", "/auth/me")).user;
   const openRole = async (title: string) => (await smokeDb.insert(tables.roleRequests).values({ title, department: "Editorial", seniority: "Mid", requesterId: me.id, status: "open", applyToken: `smoke-${title}` }).returning())[0];
