@@ -513,6 +513,19 @@ ok(!changed.user.passwordChangeRequired && (await khalilWeb("GET", "/auth/me")).
 ok((await khalilOther("GET", "/auth/me")).user === null, "other sessions opened with the starting password are signed out");
 ok((await khalilWeb.raw("POST", "/auth/password", { password: "yet-another-password" })).status === 400, "the forced change only happens once");
 
+// ---------------------------------------------------------------- demo admin: demo and test accounts only
+const demoAdmin = client();
+await demoAdmin("POST", "/auth/login", { email: "demo.admin@york-press.test", password: "demo-york-2026" });
+const owner = (await demoAdmin("GET", "/users")).users.find((u: any) => u.email === "abed.amouneh@york-press.com");
+ok(!!owner, "the demo admin can see the users list");
+ok((await demoAdmin.raw("PATCH", `/users/${owner.id}`, { active: false })).status === 403, "the demo admin can't switch off a real account");
+ok((await demoAdmin.raw("POST", `/users/${owner.id}/two-factor/reset`)).status === 403, "or reset a real person's two-step login");
+ok((await demoAdmin.raw("POST", "/users", { name: "Real Person", email: "real.person@york-press.com", roles: ["manager"] })).status === 403, "or invite a real address");
+const trial = await demoAdmin("POST", "/users", { name: "Trial Person", email: "trial.person@example.com", roles: ["manager"] });
+ok(trial.user.email === "trial.person@example.com", "a test address can be invited");
+ok((await demoAdmin.raw("PATCH", `/users/${trial.user.id}`, { email: "trial.person@york-press.com" })).status === 403, "and can't be moved to a real address");
+ok((await demoAdmin.raw("DELETE", `/users/${trial.user.id}`)).ok, "and its invite can be cancelled");
+
 // ---------------------------------------------------------------- DEMO_MODE switches demo accounts
 const demoUser = client();
 await demoUser("POST", "/auth/login", { email: "demo.recruiter@york-press.test", password: "demo-york-2026" });
