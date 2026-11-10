@@ -14,7 +14,7 @@ import { createUserWithPassword, inviteUser } from "../services/setup.js";
 import { getSettings, updateSettings } from "../services/settings.js";
 import { sentTodayCount } from "../services/outreach.js";
 import { PLACEHOLDERS } from "../services/templates.js";
-import { publicUser } from "./access.js";
+import { demoCanManage, publicUser } from "./access.js";
 import { searchProviders } from "../services/providers/select.js";
 import { previewRetention, RETENTION_MONTHS } from "../services/retention.js";
 import { signalhireBudget } from "../services/credit-budget.js";
@@ -36,6 +36,7 @@ export const adminRoutes = new Hono<AppEnv>()
   .post("/users", json(UserInviteInput), async (c) => {
     const admin = requireRole(c, "admin");
     const { password, ...body } = c.req.valid("json");
+    demoCanManage(admin, { email: body.email });
     const { user, link } = password
       ? { user: await createUserWithPassword(body, password), link: null }
       : await inviteUser(body, admin.name);
@@ -48,6 +49,7 @@ export const adminRoutes = new Hono<AppEnv>()
     const db = await getDb();
     const [u] = await db.select().from(schema.users).where(eq(schema.users.id, c.req.param("id")));
     if (!u) throw new HTTPException(404, { message: "User not found." });
+    demoCanManage(admin, u);
     if (u.passwordHash || u.lastLoginAt) throw new HTTPException(400, { message: "Only invites that were never accepted can be cancelled. Switch the account off instead." });
     try {
       await db.delete(schema.users).where(eq(schema.users.id, u.id));
@@ -63,7 +65,11 @@ export const adminRoutes = new Hono<AppEnv>()
       throw new HTTPException(400, { message: "You can't remove your own admin access." });
     }
     const db = await getDb();
-    const [u] = await db.update(schema.users).set({ ...body, email: body.email?.toLowerCase() }).where(eq(schema.users.id, c.req.param("id"))).returning();
+    const [target] = await db.select().from(schema.users).where(eq(schema.users.id, c.req.param("id")));
+    if (!target) throw new HTTPException(404, { message: "User not found." });
+    demoCanManage(admin, target);
+    if (body.email) demoCanManage(admin, { email: body.email });
+    const [u] = await db.update(schema.users).set({ ...body, email: body.email?.toLowerCase() }).where(eq(schema.users.id, target.id)).returning();
     if (body.active === false) await db.delete(schema.sessions).where(eq(schema.sessions.userId, u.id));
     return c.json({ user: publicUser(u) });
   })
@@ -72,6 +78,7 @@ export const adminRoutes = new Hono<AppEnv>()
     const db = await getDb();
     const [u] = await db.select().from(schema.users).where(eq(schema.users.id, c.req.param("id")));
     if (!u) throw new HTTPException(404, { message: "User not found." });
+    demoCanManage(admin, u);
     const { link } = await inviteUser({ email: u.email, name: u.name, roles: u.roles as (typeof ROLES)[number][], department: u.department }, admin.name);
     return c.json({ ok: true, inviteLink: mock.email ? link : undefined });
   })
@@ -80,6 +87,9 @@ export const adminRoutes = new Hono<AppEnv>()
     const admin = requireRole(c, "admin");
     if (c.req.param("id") === admin.id) throw new HTTPException(400, { message: "Ask another admin to reset your two-step login, or use a recovery code." });
     const db = await getDb();
+    const [target] = await db.select().from(schema.users).where(eq(schema.users.id, c.req.param("id")));
+    if (!target) throw new HTTPException(404, { message: "User not found." });
+    demoCanManage(admin, target);
     const [u] = await db.update(schema.users)
       .set({ totpSecret: null, totpPendingSecret: null, totpEnabledAt: null, totpLastStep: null, recoveryCodes: [] })
       .where(eq(schema.users.id, c.req.param("id")))
@@ -248,7 +258,7 @@ export const adminRoutes = new Hono<AppEnv>()
     const [entry] = await db.select().from(schema.suppressionList).where(eq(schema.suppressionList.id, c.req.param("id")));
     if (!entry) throw new HTTPException(404, { message: "Not found." });
     // Someone who asked not to be contacted stays on the list unless an admin removes them.
-    if (entry.reason === "opted_out" && !hasRole(user, "admin")) throw new HTTPException(403, { message: "This person opted out. Only an admin can remove them from the list." });
+    if (entry.reason === "opted_out" && (!hasRole(user, "admin") || user.isDemo)) throw new HTTPException(403, { message: "This person opted out. Only an admin can remove them from the list." });
     await db.delete(schema.suppressionList).where(eq(schema.suppressionList.id, entry.id));
     return c.json({ ok: true });
   })
