@@ -168,11 +168,12 @@ export default function RequestDetail() {
     } catch (e) { toast((e as Error).message, "error"); }
   }
   async function deleteDraft() {
-    if (!window.confirm("Delete this draft? This can't be undone.")) return;
+    const draft = r.status === "draft";
+    if (!window.confirm(draft ? "Delete this draft? This can't be undone." : "Delete this request? It leaves Approvals without notifying anyone. This can't be undone.")) return;
     try {
       await call(rpc.requests[":id"].$delete({ param: { id: r.id } }));
       await qc.invalidateQueries();
-      toast("Draft deleted.");
+      toast(draft ? "Draft deleted." : "Request deleted.");
       navigate("/requests");
     } catch (e) { toast((e as Error).message, "error"); }
   }
@@ -197,6 +198,7 @@ export default function RequestDetail() {
           {canEdit && <Button asChild variant="outline" size="sm"><Link to={`/requests/${r.id}/edit`}>Edit</Link></Button>}
           {mine && ["submitted", "changes_requested"].includes(r.status) && <Button variant="ghost" size="sm" onClick={withdraw}>Withdraw</Button>}
           {mine && r.status === "draft" && <Button variant="ghost" size="sm" onClick={deleteDraft}>Delete draft</Button>}
+          {can(me, "admin") && !me.isDemo && ["submitted", "changes_requested"].includes(r.status) && <Button variant="ghost" size="sm" className="text-destructive" onClick={deleteDraft}>Delete request</Button>}
           {r.requesterId === me.id && r.status === "draft" && <Button size="sm" onClick={submitDraft}>Submit to Khalil</Button>}
         </div>
       </div>
