@@ -24,7 +24,7 @@ if (uploadSourceMaps) {
 export default defineConfig({
   plugins,
   resolve: {
-    alias: { "@": path.resolve(__dirname, "src") },
+    alias: { "@": path.resolve(import.meta.dirname, "src") },
   },
   define: release ? { "import.meta.env.VITE_RELEASE": JSON.stringify(release) } : {},
   build: {
