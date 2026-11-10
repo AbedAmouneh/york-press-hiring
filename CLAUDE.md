@@ -103,8 +103,8 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
 - `shared/schemas.ts`: Zod rules used by both the API and the forms (`src/lib/forms.ts`).
 - Saved positions and hiring locations (`server/routes/positions.ts`, `server/routes/locations.ts`, Settings →
   Positions / Locations). On the request form a position (pick or type, `src/components/Combobox.tsx`) suggests
-  department, level, JD and requirements; the required location suggests work arrangement, hours and the country
-  to search. Suggestions only go into fields that are empty, unchanged or still hold the last suggestion. The
+  department, level, JD and requirements; the required location suggests work arrangement, hours, the country
+  to search and its currency (`locations.currency`, migration 0026, e.g. GBP for London). Suggestions only go into fields that are empty, unchanged or still hold the last suggestion. The
   starter lists (from York Press's LinkedIn postings, Oct 2026) are migration 0007. Levels are Entry, Junior,
   Mid, Senior, Manager, and any typed level is allowed.
 - **Employment type** (`shared/types.ts` EMPLOYMENT_TYPES / PAY_PERIODS / PAY_DEFAULT, migration 0024): every request
