@@ -193,13 +193,15 @@ export const LocationFormFields = z.object({
   city: z.string(),
   workArrangement: z.string(),
   workingHours: z.string(),
+  /** "" = no currency suggested. */
+  currency: z.string(),
   /** One university per line. */
   universities: z.string(),
   active: z.boolean(),
 });
 export type LocationFormValues = z.input<typeof LocationFormFields>;
 
-const toLocationInput = (f: LocationFormValues) => ({ ...f, city: f.city.trim() || null, universities: lines(f.universities) });
+const toLocationInput = (f: LocationFormValues) => ({ ...f, city: f.city.trim() || null, currency: f.currency || null, universities: lines(f.universities) });
 
 export const LocationForm = LocationFormFields.superRefine((f, ctx) => {
   validateWith(LocationInput, toLocationInput(f), ctx);
