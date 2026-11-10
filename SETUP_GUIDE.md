@@ -44,7 +44,7 @@ The code lives at **https://github.com/AbedAmouneh/york-press-hiring**. The loca
 4. **Two-step login (optional, off):** to make admin and CEO accounts enter a code from a phone app as well as the password, add `REQUIRE_TWO_FACTOR=true` in Vercel and redeploy. Each of them then scans a QR code on their next sign-in and saves 8 recovery codes.
 
 **Try the whole flow with the demo accounts** (password `demo-york-2026`, buttons on the sign-in page):
-Manager → *New request* → *Submit* · CEO → *Approvals* → *Approve* · Recruiter → *Open roles* → watch ~50 sample candidates get scored → Top 10 contacted.
+Manager → *New request* → *Submit* · CEO → *Approvals* → *Approve* · Recruiter → *Open roles* → watch ~50 sample candidates get scored → Top 10 contacted. Admin opens Users and Settings; it can only change demo accounts and test addresses (like name@example.com), never real people's accounts.
 
 **Positions and locations:** Settings → **Positions** holds the jobs York Press hires for often, with a suggested job description and requirements; Settings → **Locations** holds the offices and countries York Press hires in, with their work arrangement and hours. Managers pick from both on every request and can change anything. Add, edit or hide entries as the company grows.
 
