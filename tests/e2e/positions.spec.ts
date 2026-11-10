@@ -140,6 +140,7 @@ test.describe("saved positions and locations", () => {
     await page.getByLabel("Country", { exact: true }).fill("Saudi Arabia");
     await page.getByLabel("Work arrangement").selectOption("Hybrid");
     await page.getByLabel("Working hours").fill("Sun–Thu 8:00–16:00");
+    await page.getByLabel("Currency").selectOption("SAR");
     await page.getByRole("button", { name: "Add location" }).last().click();
     await expect(page.getByRole("cell", { name: "Riyadh, Saudi Arabia", exact: true })).toBeVisible();
 
@@ -159,5 +160,6 @@ test.describe("saved positions and locations", () => {
     await page.getByLabel("Location", { exact: true }).selectOption({ label: "Riyadh, Saudi Arabia" });
     await expect(page.getByLabel("Location policy")).toHaveValue("Hybrid, Riyadh, Saudi Arabia");
     await expect(page.getByLabel("Working hours")).toHaveValue("Sun–Thu 8:00–16:00");
+    await expect(page.getByLabel("Currency")).toHaveValue("SAR");
   });
 });
