@@ -25,7 +25,7 @@ function client() {
 const admin = client();
 if ((await admin("GET", "/setup")).needsSetup) {
   await admin("POST", "/setup", {
-    adminName: "Demo Admin", adminEmail: "demo.admin@york-press.test", adminPassword: "demo-york-2026",
+    adminName: "Setup Admin", adminEmail: "setup.admin@york-press.test", adminPassword: "demo-york-2026",
     ceoName: "Khalil Sayegh", ceoEmail: "khalil.sayegh@york-press.com", managers: [],
   });
 } else {
