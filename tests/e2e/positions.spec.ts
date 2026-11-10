@@ -9,6 +9,8 @@ test.describe("saved positions and locations", () => {
     const title = page.getByRole("combobox", { name: "Job title" });
     await title.click();
     await expect(page.getByRole("listbox", { name: "Saved positions" })).toBeVisible();
+    // Wait for the saved positions to load: typing before then has nothing to pick.
+    await expect(title).toHaveAttribute("placeholder", /Search [1-9]\d* saved positions/);
     await title.fill("account");
     // The best match is highlighted while typing, so Enter picks it.
     await page.keyboard.press("Enter");
