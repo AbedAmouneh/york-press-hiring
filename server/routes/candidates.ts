@@ -197,7 +197,8 @@ export const candidateRoutes = new Hono<AppEnv>()
     const { rc, c: cand } = await loadRc(c.req.param("id"), user);
     if (cand.email) return c.json({ ok: true, already: true });
     if (!revealAvailable()) throw new HTTPException(400, { message: "SignalHire isn't set up yet, so contact details can't be looked up." });
-    const item = cand.linkedinUrl ?? cand.signalhireUid;
+    // SignalHire's own id first: it is exactly the person found, while a LinkedIn link may come from a web search.
+    const item = cand.signalhireUid ?? cand.linkedinUrl;
     if (!item) throw new HTTPException(400, { message: "No LinkedIn URL or SignalHire ID to look this person up." });
     // Hold the credit first (so two clicks or a running reveal can't both spend the last one), then call SignalHire.
     const { rows: held, budget } = await reserveReveals([{ roleCandidateId: rc.id, candidateId: cand.id, item }]);
