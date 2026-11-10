@@ -202,6 +202,10 @@ function General() {
             <Live live={i.email.live} />
           </div>
           <div className="flex justify-between gap-2"><span>Database</span><Badge tone={i.database.live ? "good" : "warn"} dot>{i.database.live ? "Postgres" : "Local file"}</Badge></div>
+          <div className="flex justify-between gap-2">
+            <span>LinkedIn links <span className="text-xs text-muted-foreground">· SignalHire first</span></span>
+            {i.linkedinLookup.via ? <Badge tone="good" dot>{i.linkedinLookup.via}</Badge> : <Badge tone="neutral" dot>Off</Badge>}
+          </div>
           <div className="flex justify-between gap-2"><span>LinkedIn messaging</span><Badge tone="info">Claude in Chrome · approval required</Badge></div>
           <p className="text-xs text-muted-foreground">Add API keys in Vercel → Project → Settings → Environment Variables, then redeploy. See SETUP_GUIDE.md.</p>
         </CardContent>
