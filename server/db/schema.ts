@@ -433,7 +433,7 @@ export const applications = pgTable("applications", {
 export const usageLog = pgTable("usage_log", {
   id: id(),
   runId: uuid("run_id"),
-  provider: text("provider").notNull(), // claude | pdl | signalhire | resend
+  provider: text("provider").notNull(), // claude | pdl | signalhire | resend | brave
   action: text("action").notNull(),
   units: integer("units").notNull().default(0),
   inputTokens: integer("input_tokens").notNull().default(0),
