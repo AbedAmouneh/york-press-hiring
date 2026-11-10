@@ -24,6 +24,8 @@ export const env = {
   get opencodeBaseUrl() { return (v("OPENCODE_BASE_URL") || "https://opencode.ai/inference/anthropic").replace(/\/$/, ""); },
   /** Google Gemini key. Used for the LinkedIn lookup (Google Search), and for all AI calls when it is the only AI key. */
   get geminiKey() { return key("GEMINI_API_KEY"); },
+  /** Brave Search API: finds LinkedIn profile links before Gemini is asked. */
+  get braveKey() { return key("BRAVE_SEARCH_API_KEY"); },
   get geminiModel() { return v("GEMINI_MODEL") || "gemini-3.8-flash"; },
   /** Gemini thinking level: low by default (fast, cheap), or minimal/medium/high where the model supports it. */
   get geminiThinking() { return v("GEMINI_THINKING").toLowerCase() || "low"; },
@@ -92,6 +94,7 @@ export const mock = {
   get claude() { return !env.aiProvider || previewSafe(); },
   /** Gemini's Google Search (LinkedIn lookup) works whenever its key is set, whichever service scores. */
   get gemini() { return !env.geminiKey || previewSafe(); },
+  get brave() { return !env.braveKey || previewSafe(); },
   get pdl() { return !env.pdlKey || previewSafe(); },
   get signalhire() { return !env.signalhireKey || previewSafe(); },
   get email() { return !env.resendKey || previewSafe(); },
