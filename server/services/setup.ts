@@ -106,6 +106,8 @@ export async function seedDemoUsers() {
     { email: "demo.ceo@york-press.test", name: "Demo CEO", roles: ["ceo"], department: "Leadership" },
     { email: "demo.recruiter@york-press.test", name: "Demo Recruiter", roles: ["recruiter"], department: "HR" },
     { email: "demo.hm@york-press.test", name: "Demo Hiring Manager", roles: ["hm"], department: "Editorial" },
+    // Can open the admin screens, but only changes demo accounts and test addresses (see demoCanManage).
+    { email: "demo.admin@york-press.test", name: "Demo Admin", roles: ["admin"], department: "HR" },
   ];
   for (const d of demo) {
     // DEMO_MODE decides whether demo accounts work, so switching it on brings back any that were switched off
