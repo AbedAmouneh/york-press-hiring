@@ -7,7 +7,7 @@ import { call, rpc } from "@/lib/rpc";
 import type { HiringLocation } from "@/lib/types";
 import { lines, LocationForm, type LocationFormValues } from "@/lib/forms";
 import { UniversityPicker } from "@/components/UniversityPicker";
-import { WORK_ARRANGEMENTS } from "../../shared/types";
+import { CURRENCIES, WORK_ARRANGEMENTS } from "../../shared/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,10 @@ import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge, DataTable, Field, FormError, Select, Spinner, Td, Th, useToast } from "@/components/kit";
 
 type Values = LocationFormValues;
-const EMPTY: Values = { name: "", country: "", city: "", workArrangement: "On-site", workingHours: "", universities: "", active: true };
+const EMPTY: Values = { name: "", country: "", city: "", workArrangement: "On-site", workingHours: "", currency: "", universities: "", active: true };
 const toForm = (l: HiringLocation): Values => ({
-  name: l.name, country: l.country, city: l.city ?? "", workArrangement: l.workArrangement, workingHours: l.workingHours, universities: l.universities.join("\n"), active: l.active,
+  name: l.name, country: l.country, city: l.city ?? "", workArrangement: l.workArrangement, workingHours: l.workingHours, currency: l.currency ?? "",
+  universities: l.universities.join("\n"), active: l.active,
 });
 
 /** Settings tab: the places managers choose on a request; each fills arrangement, hours and the country to search. */
@@ -36,7 +37,7 @@ export function LocationsSettings() {
         <Button onClick={() => setEditing("new")}><Plus className="h-4 w-4" /> Add location</Button>
       </div>
       <DataTable>
-        <TableHeader><TableRow><Th>Location</Th><Th>Country</Th><Th>Arrangement</Th><Th>Working hours</Th><Th>Universities</Th><Th>Status</Th><Th /></TableRow></TableHeader>
+        <TableHeader><TableRow><Th>Location</Th><Th>Country</Th><Th>Arrangement</Th><Th>Working hours</Th><Th>Currency</Th><Th>Universities</Th><Th>Status</Th><Th /></TableRow></TableHeader>
         <TableBody>
           {q.data.locations.map((l) => (
             <TableRow key={l.id}>
@@ -44,12 +45,13 @@ export function LocationsSettings() {
               <Td>{l.country}</Td>
               <Td>{l.workArrangement}</Td>
               <Td className="max-w-xs text-muted-foreground">{l.workingHours || "—"}</Td>
+              <Td className="text-muted-foreground">{l.currency ?? "—"}</Td>
               <Td className="text-muted-foreground" title={l.universities.join(", ")}>{l.universities.length ? `${l.universities.length} chosen` : "Everyone"}</Td>
               <Td><Badge tone={l.active ? "good" : "neutral"} dot>{l.active ? "Shown" : "Hidden"}</Badge></Td>
               <Td><Button size="sm" variant="ghost" onClick={() => setEditing(l)}>Edit</Button></Td>
             </TableRow>
           ))}
-          {!q.data.locations.length && <TableRow><Td colSpan={7} className="text-center text-muted-foreground">No locations yet.</Td></TableRow>}
+          {!q.data.locations.length && <TableRow><Td colSpan={8} className="text-center text-muted-foreground">No locations yet.</Td></TableRow>}
         </TableBody>
       </DataTable>
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
@@ -106,6 +108,9 @@ function LocationEditor({ location, onDone }: { location: HiringLocation | null;
           <Select id="l-arr" {...reg("workArrangement")}>{[...new Set([...WORK_ARRANGEMENTS, form.watch("workArrangement")])].map((a) => <option key={a}>{a}</option>)}</Select>
         </Field>
         <Field label="Working hours" htmlFor="l-hours" error={errors.workingHours?.message}><Input id="l-hours" placeholder="Mon–Fri 8:00–17:00" {...reg("workingHours")} /></Field>
+        <Field label="Currency" hint="New requests here start with it." htmlFor="l-cur" error={errors.currency?.message}>
+          <Select id="l-cur" {...reg("currency")}><option value="">None</option>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</Select>
+        </Field>
         <Field label="Universities (optional)" className="sm:col-span-2" error={errors.universities?.message}
           hint="New requests here start with these ticked; each request can change them. Empty means everyone is searched.">
           <Controller control={form.control} name="universities" render={({ field }) => (
