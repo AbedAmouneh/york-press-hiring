@@ -18,6 +18,7 @@ const DEMO = [
   ["demo.ceo@york-press.test", "CEO approver"],
   ["demo.recruiter@york-press.test", "Recruiter"],
   ["demo.hm@york-press.test", "Hiring manager"],
+  ["demo.admin@york-press.test", "Admin"],
 ] as const;
 
 export function AuthLayout({ children }: { children: React.ReactNode }) {
