@@ -155,6 +155,11 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   The built-in demo password is public (it's in this repo), so it only works and is only shown locally, in tests and on
   previews. A public deployment (Vercel production, e.g. the demo site, which holds real data) needs `DEMO_PASSWORD`;
   without it demo accounts can't sign in, and the demo buttons there only fill in the email.
+  Demo Admin (`demo.admin@york-press.test`, roles admin) opens the admin screens, but `demoCanManage` in
+  `routes/access.ts` limits any demo account to changing demo accounts and test addresses (example.com, `*.test`):
+  no inviting, switching off, editing or resetting two-step login of real people, and it can't remove opted-out
+  people from the do-not-contact list. Seeds and browser tests use `setup.admin@york-press.test` as the normal admin
+  made by setup (two-step login applies to it).
 - `tests/unit/`: Vitest. `tests/e2e/`: Playwright, signing in with the demo accounts.
 
 ## Rules the code must keep
