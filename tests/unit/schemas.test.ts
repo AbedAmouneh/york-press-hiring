@@ -131,9 +131,15 @@ describe("browser forms reuse the API rules", () => {
   });
 
   it("checks a hiring location and treats an empty city as none", () => {
-    const base = { name: "Dubai, UAE", country: "", city: " ", workArrangement: "On-site", workingHours: "", universities: "", active: true };
+    const base = { name: "Dubai, UAE", country: "", city: " ", workArrangement: "On-site", workingHours: "", currency: "", universities: "", active: true };
     expect(messages(LocationForm.safeParse(base))).toEqual({ country: "Add the country." });
-    expect(LocationForm.parse({ ...base, country: "United Arab Emirates" })).toMatchObject({ city: null, country: "United Arab Emirates" });
+    expect(LocationForm.parse({ ...base, country: "United Arab Emirates" })).toMatchObject({ city: null, country: "United Arab Emirates", currency: null });
+  });
+
+  it("saves a location's currency, or none", () => {
+    const base = { name: "London, United Kingdom", country: "United Kingdom", city: "London", workArrangement: "Hybrid", workingHours: "", currency: "GBP", universities: "", active: true };
+    expect(LocationForm.parse(base)).toMatchObject({ currency: "GBP" });
+    expect(messages(LocationForm.safeParse({ ...base, currency: "XYZ" }))).toEqual({ currency: "Choose a currency." });
   });
 
   it("checks that the two passwords match", () => {
