@@ -110,3 +110,20 @@ test("a submitted request shows its timeline with the next step", async ({ page 
   await expect(page.getByText("Waiting for Khalil")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve and start sourcing" })).toBeVisible();
 });
+
+test("an approved role is edited with one Save, without resubmitting it", async ({ page }) => {
+  await signInAs(page, "Recruiter");
+  await page.goto("/requests");
+  await page.getByRole("link", { name: /Senior Product Designer/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible();
+  await page.getByRole("link", { name: "Edit" }).click();
+  await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submit to Khalil" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save draft" })).toHaveCount(0);
+  await page.getByLabel("Target start date").fill("2027-02-01");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Changes saved.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible();
+  await expect(page.getByText("1 Feb 2027")).toBeVisible();
+  await expect(page.getByText("Waiting for Khalil")).toHaveCount(0);
+});
