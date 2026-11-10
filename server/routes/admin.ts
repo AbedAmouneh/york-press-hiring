@@ -21,6 +21,7 @@ import { signalhireBudget } from "../services/credit-budget.js";
 import { hideAuthLinks, sendEmail } from "../services/email.js";
 import { MIN_EACH_CLASS, MIN_LABELS, runLearning } from "../services/learning.js";
 import { signalhireCredits } from "../services/providers/signalhire.js";
+import { linkedinLookupVia } from "../services/linkedin-finder.js";
 
 const AI_LABELS = { gemini: "Gemini", opencode: "OpenCode", anthropic: "Anthropic" } as const;
 
@@ -102,6 +103,7 @@ export const adminRoutes = new Hono<AppEnv>()
         signalhire: { live: !mock.signalhire, inUse: searchProviders().some((p) => p.name === "SignalHire"), creditsLeft: s.signalhireCreditsLeft, spentThisMonth: budget.spent + budget.held },
         email: { live: !mock.email, from: env.emailFrom },
         database: { live: !!env.databaseUrl },
+        linkedinLookup: { via: linkedinLookupVia() },
         appUrl: env.appUrl,
       },
     });
