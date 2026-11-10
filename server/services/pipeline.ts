@@ -750,7 +750,8 @@ async function stepReveal({ run, request, state, counters }: Ctx) {
   const wanted = targets.filter(({ rc, c }) => !done.has(rc.id) && (c.linkedinUrl || c.signalhireUid));
   if (!wanted.length) { log(state, "No contacts to reveal."); return; }
   // Hold the credits first, then call SignalHire: two callers can't both spend the last credit.
-  const wantedRows = wanted.map(({ rc, c }) => ({ roleCandidateId: rc.id, candidateId: c.id, item: (c.linkedinUrl ?? c.signalhireUid)!, runId: run.id }));
+  // SignalHire's own id first: it is exactly the person found, while a LinkedIn link may come from a web search.
+  const wantedRows = wanted.map(({ rc, c }) => ({ roleCandidateId: rc.id, candidateId: c.id, item: (c.signalhireUid ?? c.linkedinUrl)!, runId: run.id }));
   const { rows: held, budget } = await reserveReveals(wantedRows);
   if (held.length < wanted.length) {
     log(state, `This month's SignalHire limit (${budget.limit} credits) leaves room for ${held.length} of ${wanted.length} contacts; the rest weren't looked up.`);
