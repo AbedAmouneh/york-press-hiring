@@ -50,7 +50,7 @@ export const candidateRoutes = new Hono<AppEnv>()
   .post("/requests/:id/linkedin", async (c) => {
     const user = requireRole(c, "recruiter", "admin");
     const r = await loadRequest(c.req.param("id"), user);
-    if (!linkedinLookupAvailable()) throw new HTTPException(400, { message: "LinkedIn lookup needs the Gemini key (GEMINI_API_KEY)." });
+    if (!linkedinLookupAvailable()) throw new HTTPException(400, { message: "LinkedIn lookup needs a Brave Search or Gemini key (BRAVE_SEARCH_API_KEY or GEMINI_API_KEY)." });
     const db = await getDb();
     const rows = await db
       .select({ c: schema.candidates })
@@ -72,7 +72,7 @@ export const candidateRoutes = new Hono<AppEnv>()
   .post("/role-candidates/:id/linkedin-probe", async (c) => {
     const user = requireRole(c, "recruiter", "admin");
     const { c: p } = await loadRc(c.req.param("id"), user);
-    if (!linkedinLookupAvailable()) throw new HTTPException(400, { message: "LinkedIn lookup needs the Gemini key (GEMINI_API_KEY)." });
+    if (!linkedinLookupAvailable()) throw new HTTPException(400, { message: "LinkedIn lookup needs a Brave Search or Gemini key (BRAVE_SEARCH_API_KEY or GEMINI_API_KEY)." });
     return c.json({ person: p.fullName, results: await probeLookup(p) });
   })
   .get("/requests/:id/candidates", async (c) => {
