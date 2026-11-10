@@ -145,6 +145,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   hiring manager, assigned recruiter, the CEO and earlier posters (in the app and by email), filtered to people who can
   still open the request. Authors can delete a message for 15 minutes; 2,000 characters max; 20 messages per user per
   10 minutes. Messages on closed or rejected requests are removed by retention after 24 months.
+- **Deleting requests** (`DELETE /requests/:id`): the requester, a recruiter or an admin deletes drafts; an admin (not
+  a demo account) can also delete a request still waiting for a decision (submitted or changes requested), which
+  notifies nobody, unlike withdrawing. Approved requests can't be deleted: close the role instead.
 - **Users** (`server/routes/admin.ts`, `src/pages/Users.tsx`): an admin adds people by emailing an invite link or by
   setting a starting password (`createUserWithPassword`, `must_change_password`). Such an account is locked by
   `requireAuth` until its owner picks a new password at `POST /auth/password`, which also signs out other sessions.
