@@ -3,6 +3,7 @@ import { eq, or } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, type SessionUser } from "../auth.js";
 import { needsTwoFactorSetup } from "../services/two-factor.js";
+import { isTestAddress } from "../services/email.js";
 
 type Request = typeof schema.roleRequests.$inferSelect;
 
@@ -20,6 +21,16 @@ export function visibleRequests(u: SessionUser) {
 
 /** Recruiter/admin/CEO, the hiring manager, and the requesting manager (read-only). */
 export const canViewCandidates = canViewRequest;
+
+/**
+ * The demo admin (and any demo account) may only manage demo accounts and test addresses (example.com, *.test),
+ * so the public demo can open the admin screens without touching real people's accounts or inviting anyone real.
+ */
+export function demoCanManage(actor: SessionUser, target: { email: string; isDemo?: boolean }) {
+  if (actor.isDemo && !target.isDemo && !isTestAddress(target.email)) {
+    throw new HTTPException(403, { message: "Demo accounts can only change demo accounts and test addresses (like name@example.com)." });
+  }
+}
 
 export const canEditCandidates = (u: SessionUser, r: Request) => hasRole(u, "admin", "recruiter") || r.hiringManagerId === u.id;
 
