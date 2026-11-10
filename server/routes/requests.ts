@@ -4,7 +4,7 @@ import { and, asc, desc, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm
 import { z } from "zod";
 import { getDb, schema } from "../db/client.js";
 import { hasRole, randomToken, requireRole, type AppEnv, type SessionUser } from "../auth.js";
-import type { Weights } from "../../shared/types.js";
+import type { RequestStatus, Weights } from "../../shared/types.js";
 import { DecisionInput, MessageInput, rangeProblems, RequestInput, RequestPatch, submitProblems, WeightsInput, type Problem } from "../../shared/schemas.js";
 import { canDeleteMessage, MESSAGE_DELETE_MINUTES } from "../../shared/messages.js";
 import { canViewRequest, isStaff, loadRequest, visibleRequests } from "./access.js";
@@ -246,9 +246,15 @@ export const requestRoutes = new Hono<AppEnv>()
     const user = c.get("user");
     const r = await loadRequest(c.req.param("id"), user);
     if (r.requesterId !== user.id && !hasRole(user, "admin", "recruiter")) throw new HTTPException(403, { message: "Only the requester can delete this draft." });
-    if (r.status !== "draft") throw new HTTPException(400, { message: "Only drafts can be deleted. Withdraw the request first, or close the role." });
+    // An admin (not a demo account) can also remove a request that is still waiting for a decision (clean-up),
+    // without notifying anyone. Anything approved stays: close the role instead, so its candidates and history are kept.
+    const cleanUp = hasRole(user, "admin") && !user.isDemo;
+    const deletable: RequestStatus[] = cleanUp ? ["draft", "submitted", "changes_requested"] : ["draft"];
+    if (!deletable.includes(r.status)) {
+      throw new HTTPException(400, { message: cleanUp ? "Only requests that haven't been approved can be deleted. Close the role instead." : "Only drafts can be deleted. Withdraw the request first, or close the role." });
+    }
     const db = await getDb();
-    await db.delete(schema.roleRequests).where(and(eq(schema.roleRequests.id, r.id), eq(schema.roleRequests.status, "draft")));
+    await db.delete(schema.roleRequests).where(and(eq(schema.roleRequests.id, r.id), inArray(schema.roleRequests.status, deletable)));
     return c.json({ ok: true });
   })
   /** A role closed by mistake opens again; nothing is searched or sent until someone presses Refresh. */
