@@ -300,6 +300,8 @@ export const locations = pgTable("locations", {
   city: text("city"),
   workArrangement: text("work_arrangement").notNull().default("On-site"),
   workingHours: text("working_hours").notNull().default(""),
+  /** The currency a new request at this location starts with (e.g. GBP for London). Null = none suggested. */
+  currency: text("currency"),
   /** Universities a new request at this location starts with (it can change them). Empty = everyone. */
   universities: text("universities").array().notNull().default(sql`'{}'::text[]`),
   active: boolean("active").notNull().default(true),
