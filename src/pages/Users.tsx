@@ -134,6 +134,7 @@ export default function Users() {
       <PageHeader title="Users">
         <Button onClick={() => setOpen(true)}><UserPlus /> Add user</Button>
       </PageHeader>
+      {me.isDemo && <p className="mb-4 rounded-md bg-secondary px-3 py-2 text-sm text-muted-foreground">Demo admin: you can look around, but only change demo accounts and test addresses (like name@example.com).</p>}
       {link && <p className="mb-4 break-all rounded-md border border-primary/20 bg-accent p-3 text-sm">Email is in mock mode — share this invite link yourself: <span className="font-mono">{link}</span></p>}
       {q.isLoading ? <Spinner /> : (
         <DataTable>
