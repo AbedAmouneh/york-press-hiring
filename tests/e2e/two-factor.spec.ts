@@ -2,7 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { currentCode } from "../../server/services/two-factor";
 
 // The seeded admin (created by first-run setup) is a real account, so two-step login applies.
-const ADMIN = { email: "demo.admin@york-press.test", password: "demo-york-2026" };
+// The admin made by setup: a normal account, so two-step login applies (demo accounts skip it).
+const ADMIN = { email: "setup.admin@york-press.test", password: "demo-york-2026" };
 
 async function signInWithPassword(page: Page) {
   await page.goto("/login");
