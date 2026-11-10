@@ -93,12 +93,12 @@ describe("LinkedIn lookup order", () => {
   });
 
   it("spaces Brave searches out, even when several start together", async () => {
-    braveTiming.gapMs = 60;
+    braveTiming.gapMs = 120;
     const times: number[] = [];
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => { times.push(Date.now()); return brave(); }));
     await Promise.all([1, 2, 3].map(() => findLinkedinUrl({ fullName: "Nour Haidar" })));
-    expect(times[1] - times[0]).toBeGreaterThanOrEqual(55);
-    expect(times[2] - times[1]).toBeGreaterThanOrEqual(55);
+    expect(times[1] - times[0]).toBeGreaterThanOrEqual(90);
+    expect(times[2] - times[1]).toBeGreaterThanOrEqual(90);
   });
 
   it("says which searches run", () => {
