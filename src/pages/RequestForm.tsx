@@ -56,12 +56,13 @@ const SUGGESTION_LABELS: Record<Suggestable, string> = {
   department: "department", seniority: "level", jdText: "job description", mustHaves: "must-haves", niceToHaves: "nice-to-haves",
   minYears: "minimum years", idealYears: "ideal years", languages: "languages", employmentType: "employment type", salaryPeriod: "pay basis",
 };
-type LocationField = "locationPolicy" | "searchLocations" | "workingHours" | "universities";
+type LocationField = "locationPolicy" | "searchLocations" | "workingHours" | "universities" | "currency";
 type AutoField = Suggestable | LocationField;
 
-/** What picking a location fills in: arrangement and place, the country to search, the hours and its universities. */
+/** What picking a location fills in: arrangement and place, the country to search, the hours, currency and universities. */
 const fromLocation = (l: HiringLocation): Record<LocationField, string> => ({
   locationPolicy: `${l.workArrangement}, ${l.name}`, searchLocations: l.country, workingHours: l.workingHours, universities: l.universities.join("\n"),
+  currency: l.currency ?? "",
 });
 
 /** A saved position's details in the form's text shape. Empty values are left out so they never clear a field. */
