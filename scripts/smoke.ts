@@ -515,6 +515,23 @@ ok(!changed.user.passwordChangeRequired && (await khalilWeb("GET", "/auth/me")).
 ok((await khalilOther("GET", "/auth/me")).user === null, "other sessions opened with the starting password are signed out");
 ok((await khalilWeb.raw("POST", "/auth/password", { password: "yet-another-password" })).status === 400, "the forced change only happens once");
 
+// ---------------------------------------------------------------- forgotten password
+const stranger = client();
+const forgot = (email: string) => stranger.raw("POST", "/auth/forgot", { email });
+const answers = await Promise.all(["khalil.sayegh@york-press.com", "nobody@york-press.com", "demo.ceo@york-press.test"].map(async (e) => (await forgot(e)).text()));
+ok(answers.every((a) => a === answers[0]), "\"Forgot password?\" answers the same whether or not the account exists");
+const resetMail = (await second("GET", "/outbox?limit=200")).emails.find((e: any) => e.subject === "Reset your York Press Hiring password");
+ok(resetMail?.toAddress === "khalil.sayegh@york-press.com" && resetMail.body.includes("/reset/[hidden]") && !/\/reset\/(?!\[hidden\])[A-Za-z0-9_-]+/.test(JSON.stringify(resetMail)), "the reset email goes out and nobody can read its link in the outbox");
+const { requestPasswordReset } = await import("../server/services/password-reset.js");
+const resetToken = (await requestPasswordReset("khalil.sayegh@york-press.com")).link!.split("/reset/")[1];
+ok((await stranger("GET", `/auth/reset/${resetToken}`)).email === "khalil.sayegh@york-press.com", "the reset link opens for its owner");
+ok((await stranger.raw("POST", `/auth/reset/${resetToken}`, { password: "short" })).status === 400, "the new password needs 10 characters");
+ok((await stranger("POST", `/auth/reset/${resetToken}`, { password: "khalil-reset-password" })).mfaRequired === false && (await stranger("GET", "/auth/me")).user?.email === "khalil.sayegh@york-press.com", "a reset signs straight in");
+ok((await khalilWeb("GET", "/auth/me")).user === null, "and signs out every other device");
+ok((await stranger.raw("POST", `/auth/reset/${resetToken}`, { password: "third-password-123" })).status === 404, "a reset link works once");
+ok((await client().raw("POST", "/auth/login", { email: "khalil.sayegh@york-press.com", password: "khalils-own-password" })).status === 401, "the old password stops working");
+ok((await second("GET", "/outbox?limit=200")).emails.some((e: any) => e.subject === "Your York Press Hiring password was changed"), "the owner gets a confirmation email");
+
 // ---------------------------------------------------------------- demo admin: demo and test accounts only
 const demoAdmin = client();
 await demoAdmin("POST", "/auth/login", { email: "demo.admin@york-press.test", password: "demo-york-2026" });
