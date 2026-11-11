@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { call, rpc } from "@/lib/rpc";
 import { nextPath, useMe } from "@/lib/auth";
 import { Logo } from "@/components/Logo";
@@ -82,7 +82,7 @@ export default function Login() {
           <FormError>{errors.root?.message}</FormError>
           <Button type="submit" disabled={isSubmitting}>Sign in</Button>
         </form>
-        <p className="mt-4 text-xs text-muted-foreground">Forgot your password? Ask your admin to send a new invite link.</p>
+        <Link to="/forgot" className="mt-4 block text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">Forgot your password?</Link>
         {me.data?.demoMode && (
           <div className="mt-6 border-t pt-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Demo · sign in as</p>
