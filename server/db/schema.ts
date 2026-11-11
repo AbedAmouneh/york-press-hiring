@@ -31,6 +31,9 @@ export const users = pgTable("users", {
   isDemo: boolean("is_demo").notNull().default(false),
   inviteToken: text("invite_token"),
   inviteExpiresAt: ts("invite_expires_at"),
+  // Forgotten password: SHA-256 of the emailed token (the token itself is never stored), valid for an hour, used once.
+  resetTokenHash: text("reset_token_hash"),
+  resetExpiresAt: ts("reset_expires_at"),
   // Set when an admin creates the account with a starting password: they choose their own at first sign-in.
   mustChangePassword: boolean("must_change_password").notNull().default(false),
   lastLoginAt: ts("last_login_at"),
