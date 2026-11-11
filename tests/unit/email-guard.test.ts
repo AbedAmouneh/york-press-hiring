@@ -62,6 +62,7 @@ describe("invitation links", () => {
 
   it("hides every invitation link in a text", () => {
     expect(hideAuthLinks("a /invite/AAA b /invite/b-c_d")).toBe("a /invite/[hidden] b /invite/[hidden]");
+    expect(hideAuthLinks("x https://h.test/reset/Zz_9-a y")).toBe("x https://h.test/reset/[hidden] y");
     expect(hideAuthLinks("no links here")).toBe("no links here");
   });
 });
