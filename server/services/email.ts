@@ -29,7 +29,7 @@ let client: Resend | null = null;
  * Sign-in links (invites) let whoever holds them set the account's password, so the email log never keeps them:
  * the person receives the real link, the log and the outbox show "/invite/[hidden]".
  */
-export const hideAuthLinks = (text: string) => text.replace(/\/invite\/[A-Za-z0-9_-]+/g, "/invite/[hidden]");
+export const hideAuthLinks = (text: string) => text.replace(/\/(invite|reset)\/[A-Za-z0-9_-]+/g, "/$1/[hidden]");
 
 /** Sends through Resend, or records the email in the outbox when no key is set or it is test data. */
 export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; id?: string; mock: boolean; error?: string }> {
