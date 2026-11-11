@@ -25,6 +25,9 @@ export const LoginInput = z.object({
 
 export const InvitePasswordInput = z.object({ password });
 
+/** "Forgot password?": the email to send a reset link to. */
+export const ForgotPasswordInput = z.object({ email });
+
 /** A 6-digit authenticator code, or a recovery code like "abcd-efgh-ijkl". */
 export const TwoFactorCodeInput = z.object({ code: z.string().trim().min(6, "Enter the 6-digit code.").max(20) });
 
