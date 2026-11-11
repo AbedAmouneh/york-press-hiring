@@ -14,6 +14,8 @@ import { Spinner } from "./components/kit";
 const Login = lazy(() => import("./pages/Login"));
 const Setup = lazy(() => import("./pages/Setup"));
 const Invite = lazy(() => import("./pages/Invite"));
+const Reset = lazy(() => import("./pages/Reset"));
+const Forgot = lazy(() => import("./pages/Forgot"));
 const TwoFactorSetup = lazy(() => import("./pages/TwoFactor"));
 const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 const Apply = lazy(() => import("./pages/Apply"));
@@ -52,6 +54,7 @@ function AppRoutes() {
 
   if (location.pathname.startsWith("/apply/")) return <Routes><Route path="/apply/:token" element={<Apply />} /></Routes>;
   if (location.pathname.startsWith("/invite/")) return <Routes><Route path="/invite/:token" element={<Invite />} /></Routes>;
+  if (location.pathname.startsWith("/reset/")) return <Routes><Route path="/reset/:token" element={<Reset />} /></Routes>;
   if (setup.isLoading || me.isLoading) return <Loading />;
   if (setup.data?.needsSetup) return <Setup />;
   const user = me.data?.user;
@@ -59,6 +62,7 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot" element={<Forgot />} />
         <Route path="*" element={<Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />} />
       </Routes>
     );
