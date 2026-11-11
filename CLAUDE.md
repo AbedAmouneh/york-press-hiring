@@ -152,6 +152,12 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   setting a starting password (`createUserWithPassword`, `must_change_password`). Such an account is locked by
   `requireAuth` until its owner picks a new password at `POST /auth/password`, which also signs out other sessions.
   Unaccepted invites (no password, never signed in) can be cancelled; anyone else is switched off, never deleted.
+- **Forgotten passwords** (`server/services/password-reset.ts`, `/auth/forgot` and `/auth/reset/:token` in
+  `routes/public.ts`, pages `Forgot.tsx` and `Reset.tsx`): "Forgot your password?" emails a link valid for 1 hour that
+  works once (only its SHA-256 is stored, the outbox shows `/reset/[hidden]`). The answer is always the same, so it
+  never reveals who has an account. Demo and switched-off accounts get nothing; an unaccepted invite gets a fresh
+  invite. Using the link signs out every session, emails a "password was changed" notice and signs straight in,
+  still asking for the two-step code when that is on. Limited to 3 requests per email and 10 per network an hour.
 - **Demo accounts** (`demo.*@york-press.test`, `isDemo`): `DEMO_MODE` alone decides whether they work. Off, they
   can't sign in and open demo sessions stop (`canSignIn` in `server/auth.ts`). On, `ensureDemoUsers` recreates and
   reactivates them once per server start, so test copies of the live database get working demo buttons.

@@ -212,6 +212,6 @@ Open http://localhost:5173. Data is stored in the `.data` folder.
 | Candidates never appear | Role page → *Runs & cost* shows the error. Check the API key in Settings → Connections |
 | "Sending is paused in Settings" when pressing Send | Settings → turn Email sending back on |
 | Contacts stay "Waiting for SignalHire" | Check `APP_URL` is the live https address; SignalHire also emails you about failed deliveries |
-| Someone forgot their password | Users → *Resend invite* |
+| Someone forgot their password | They click *Forgot your password?* on the sign-in page and get a link by email (works once, for 1 hour). Someone who never accepted their invite gets a fresh invite instead. |
 | Admin or CEO lost their phone (two-step login on) | Sign in with one of the recovery codes in place of the 6-digit code. If those are gone too, another admin opens **Users → Reset 2-step**, and the person sets it up again with a new QR code |
 | Everyone's two-step login stopped working after changing `SESSION_SECRET` | The authenticator secrets are encrypted with it. Put the old value back, or reset two-step login for each admin and CEO |
