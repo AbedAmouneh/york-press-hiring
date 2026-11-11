@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { getDb, schema } from "../db/client.js";
-import { ApplyFields, cvProblem, InvitePasswordInput, LoginInput, NewPasswordInput, SetupInput, TwoFactorCodeInput } from "../../shared/schemas.js";
+import { ApplyFields, cvProblem, ForgotPasswordInput, InvitePasswordInput, LoginInput, NewPasswordInput, SetupInput, TwoFactorCodeInput } from "../../shared/schemas.js";
 import { env, mock } from "../env.js";
 import { canSignIn, clearMfaChallenge, createSession, currentUser, destroySession, getMfaChallenge, hashPassword, randomToken, setMfaChallenge, verifyPassword } from "../auth.js";
 import { checkCode, createChallenge, decryptSecret, encryptSecret, newRecoveryCodes, newSetup, readChallenge, redeemRecoveryCode } from "../services/two-factor.js";
@@ -21,8 +21,9 @@ import { verifyQueueRequest } from "../services/queue.js";
 import { z } from "zod";
 import { form, json } from "../validate.js";
 import { publicUser } from "./access.js";
-import { admit, APPLY_LIMITS, clearHits, clientIp, INVITE_LIMITS, LOGIN_LIMITS, MFA_LIMITS, release } from "../services/rate-limit.js";
+import { admit, APPLY_LIMITS, clearHits, clientIp, INVITE_LIMITS, LOGIN_LIMITS, MFA_LIMITS, release, RESET_LIMITS } from "../services/rate-limit.js";
 import { employmentLabel } from "../../shared/employment.js";
+import { completeReset, findReset, requestPasswordReset } from "../services/password-reset.js";
 
 /** The apply page's multipart form. Field rules live in ApplyFields and cvProblem, checked in the handler. */
 const ApplyForm = z.object({
@@ -206,6 +207,35 @@ export const publicRoutes = new Hono()
       setMfaChallenge(c, createChallenge(u.id));
       return c.json({ ok: true, mfaRequired: true as const });
     }
+    await db.update(schema.users).set({ lastLoginAt: new Date() }).where(eq(schema.users.id, u.id));
+    await createSession(c, u.id);
+    return c.json({ ok: true, mfaRequired: false as const });
+  })
+  // ---------------------------------------------------------------- forgotten password
+  /** Always the same answer, so nobody can use it to find out who has an account. */
+  .post("/auth/forgot", json(ForgotPasswordInput), async (c) => {
+    const email = c.req.valid("json").email.trim().toLowerCase();
+    // Every request counts (each can send an email), so this is never released.
+    await admit(RESET_LIMITS(email, clientIp(c)), "Too many reset requests. Please wait an hour and try again.");
+    await requestPasswordReset(email);
+    return c.json({ ok: true });
+  })
+  .get("/auth/reset/:token", async (c) => {
+    const u = await findReset(c.req.param("token"));
+    if (!u) throw new HTTPException(404, { message: "This reset link is invalid or has expired. Ask for a new one." });
+    return c.json({ name: u.name, email: u.email });
+  })
+  .post("/auth/reset/:token", json(InvitePasswordInput), async (c) => {
+    const attempt = await admit(INVITE_LIMITS(clientIp(c)));
+    const u = await completeReset(c.req.param("token"), c.req.valid("json").password);
+    if (!u) throw new HTTPException(404, { message: "This reset link is invalid or has expired. Ask for a new one." });
+    await release(attempt);
+    if (u.totpEnabledAt) {
+      // Two-step login stays on: the new password alone doesn't sign in.
+      setMfaChallenge(c, createChallenge(u.id));
+      return c.json({ ok: true, mfaRequired: true as const });
+    }
+    const db = await getDb();
     await db.update(schema.users).set({ lastLoginAt: new Date() }).where(eq(schema.users.id, u.id));
     await createSession(c, u.id);
     return c.json({ ok: true, mfaRequired: false as const });
