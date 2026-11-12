@@ -81,6 +81,32 @@ export async function startRun(requestId: string, kind: "initial" | "weekly" | "
   return run.id;
 }
 
+/**
+ * Picks up a role's failed run where it stopped (for example after Claude credits ran out), keeping everything it
+ * already did: the same people, reveals and scores, so nothing is searched or paid for twice. Returns the run id,
+ * or null when the role's latest run didn't fail or another run is going.
+ */
+export async function continueRun(requestId: string): Promise<string | null> {
+  const db = await getDb();
+  const t = schema.sourcingRuns;
+  const [last] = await db.select().from(t).where(eq(t.requestId, requestId)).orderBy(desc(t.createdAt)).limit(1);
+  if (!last || last.status !== "failed") return null;
+  const state = last.state ?? { log: [] };
+  log(state, `Continued from step "${last.step}".`);
+  // The database allows one active run per role, so this fails quietly if another run started meanwhile.
+  const [run] = await db.update(t)
+    .set({ status: "queued", error: null, finishedAt: null, lockedUntil: null, state })
+    .where(and(eq(t.id, last.id), eq(t.status, "failed")))
+    .returning({ id: t.id })
+    .catch(() => []);
+  if (!run) return null;
+  if (last.kind === "initial") {
+    await db.update(schema.roleRequests).set({ status: "sourcing", updatedAt: new Date() }).where(and(eq(schema.roleRequests.id, requestId), eq(schema.roleRequests.status, "open")));
+  }
+  kick(run.id);
+  return run.id;
+}
+
 function reportBackgroundError(e: unknown, runId: string) {
   console.error("pipeline", e);
   void captureError(e, { tags: { area: "pipeline" }, extra: { runId } });
@@ -190,6 +216,17 @@ async function whyNotAcquired(runId: string): Promise<RunOutcome> {
   return r && !["done", "failed", "cancelled"].includes(r.status) && r.lockedUntil && r.lockedUntil > new Date() ? "busy" : "skipped";
 }
 
+/** A plain-English reason for the common provider errors, with the original kept in brackets where useful. */
+export function runErrorMessage(raw: string) {
+  return /invalid header value/i.test(raw)
+    ? `An API key in Vercel has a character that isn't allowed, often a space or line break. Paste the key again and redeploy. (${raw})`
+    : /invalid x-api-key|authentication_error/i.test(raw)
+      ? `Anthropic rejected the Claude API key. Create a new key at console.anthropic.com (it starts with sk-ant-api03-), paste it as ANTHROPIC_API_KEY in Vercel and redeploy. (${raw})`
+      : /credit balance is too low/i.test(raw)
+        ? "Claude credits ran out. Add credits at platform.claude.com/settings/billing, then press Continue on the role page."
+        : raw;
+}
+
 export async function runPipeline(runId: string): Promise<RunOutcome> {
   const run = await acquire(runId);
   if (!run) return whyNotAcquired(runId);
@@ -226,18 +263,13 @@ export async function runPipeline(runId: string): Promise<RunOutcome> {
     await finish(run, request, state, counters);
   } catch (e) {
     // A provider error can echo the API key (e.g. an invalid header value), so hide secrets before saving or showing it.
-    const raw = redactSecrets(e instanceof Error ? e.message : String(e));
-    const message = /invalid header value/i.test(raw)
-      ? `An API key in Vercel has a character that isn't allowed, often a space or line break. Paste the key again and redeploy. (${raw})`
-      : /invalid x-api-key|authentication_error/i.test(raw)
-        ? `Anthropic rejected the Claude API key. Create a new key at console.anthropic.com (it starts with sk-ant-api03-), paste it as ANTHROPIC_API_KEY in Vercel and redeploy. (${raw})`
-        : raw;
+    const message = runErrorMessage(redactSecrets(e instanceof Error ? e.message : String(e)));
     captureError(e, { tags: { area: "pipeline", step, kind: run.kind }, extra: { runId, requestId: run.requestId } });
     log(state, `Failed at step "${step}": ${message}`);
     await save(runId, { step, state, ...counters, status: "failed", error: message, lockedUntil: null, finishedAt: new Date() });
     // Only a role that is still sourcing becomes open again (never one closed meanwhile).
     await db.update(schema.roleRequests).set({ status: "open" }).where(and(eq(schema.roleRequests.id, request.id), eq(schema.roleRequests.status, "sourcing")));
-    await notifyRoles(["recruiter"], { type: "run_failed", title: `Sourcing failed for ${request.title}`, link: `/roles/${request.id}`, emailBody: `The sourcing run stopped at "${step}": ${message}\nYou can re-run it from the role page.` });
+    await notifyRoles(["recruiter"], { type: "run_failed", title: `Sourcing failed for ${request.title}`, link: `/roles/${request.id}`, emailBody: `The sourcing run stopped at "${step}": ${message}\nPress Continue on the role page to pick it up where it stopped.` });
   }
   return "ran";
 }
