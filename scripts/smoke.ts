@@ -570,6 +570,16 @@ const { getDb, schema: tables } = await import("../server/db/client.js");
 const { eq: eqOp } = await import("drizzle-orm");
 const { runPipeline } = await import("../server/services/pipeline.js");
 const smokeDb = await getDb();
+// A run that stopped on an error (say Claude credits ran out) continues where it stopped.
+ok((await second.raw("POST", `/requests/${id}/runs/continue`)).status === 400, "there's nothing to continue while the last run finished");
+await smokeDb.insert(tables.sourcingRuns).values({ requestId: id, kind: "manual", status: "failed", step: "rank", error: "Claude credits ran out.", state: { log: [] } });
+await second("POST", `/requests/${id}/runs/continue`);
+let continued: any;
+for (let i = 0; i < 100 && continued?.status !== "done"; i++) {
+  await new Promise((r) => setTimeout(r, 100));
+  continued = (await second("GET", `/requests/${id}/runs`)).runs[0];
+}
+ok(continued.status === "done" && !continued.error && continued.state.log.some((l: any) => l.msg === 'Continued from step "rank".'), "a failed run can be continued from the step where it stopped");
 // A run that already reached outreach when the role is closed (it would contact the Top 10 next).
 const [lateRun] = await smokeDb.insert(tables.sourcingRuns).values({ requestId: id, kind: "manual", status: "queued", step: "outreach", state: { log: [] } }).returning();
 const messagesBefore = (await second("GET", "/outreach?limit=200")).total;
