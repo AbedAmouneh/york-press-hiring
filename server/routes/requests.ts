@@ -11,7 +11,7 @@ import { canViewRequest, isStaff, loadRequest, visibleRequests } from "./access.
 import { notifyRoles, notifyUsers, usersWithRoles } from "../services/notify.js";
 import { admit, MESSAGE_LIMITS } from "../services/rate-limit.js";
 import { decisionNotice } from "../services/decision-notice.js";
-import { cancelRuns, startRun } from "../services/pipeline.js";
+import { cancelRuns, continueRun, startRun } from "../services/pipeline.js";
 import { getSettings, weightsFor } from "../services/settings.js";
 import { scoreFractions, scoreWithWeights, type Fractions } from "../services/claude.js";
 import { json, query } from "../validate.js";
@@ -299,6 +299,15 @@ export const requestRoutes = new Hono<AppEnv>()
     const db = await getDb();
     const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.roleCandidates).where(eq(schema.roleCandidates.requestId, r.id));
     const runId = await startRun(r.id, n ? "manual" : "initial");
+    return c.json({ runId });
+  })
+  // Picks a failed run up where it stopped: the same people, nothing searched or revealed twice.
+  .post("/requests/:id/runs/continue", async (c) => {
+    const user = requireRole(c, "recruiter", "admin");
+    const r = await loadRequest(c.req.param("id"), user);
+    if (!["open", "sourcing"].includes(r.status)) throw new HTTPException(400, { message: "Only open roles can be sourced." });
+    const runId = await continueRun(r.id);
+    if (!runId) throw new HTTPException(400, { message: "There's no stopped run to continue." });
     return c.json({ runId });
   })
   // Score everyone already on the role again with the current rules: no searches, credits or messages.
