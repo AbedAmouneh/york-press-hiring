@@ -185,6 +185,13 @@ export default function RoleDetail() {
       qc.invalidateQueries({ queryKey: ["runs", id] });
     } catch (e) { toast((e as Error).message, "error"); }
   }
+  async function continueRun() {
+    try {
+      await call(rpc.requests[":id"].runs.continue.$post({ param: { id } }));
+      toast("Continuing where the run stopped.");
+      qc.invalidateQueries({ queryKey: ["runs", id] });
+    } catch (e) { toast((e as Error).message, "error"); }
+  }
   async function scoreAgain() {
     try {
       await call(rpc.requests[":id"].rescore.$post({ param: { id } }));
@@ -281,7 +288,10 @@ export default function RoleDetail() {
         </div>
       )}
       {lastRun?.status === "failed" && !running && (
-        <div role="alert" className="mb-4 rounded-lg bg-destructive/10 px-4 py-2.5 text-sm text-destructive">Last run failed: {lastRun.error}</div>
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-lg bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+          <span className="min-w-0 flex-1">Last run failed: {lastRun.error}</span>
+          {isRecruiter && r.status !== "closed" && <Button size="sm" onClick={continueRun}>Continue</Button>}
+        </div>
       )}
 
       <Card className="mb-6 flex-row flex-wrap items-center gap-x-10 gap-y-4 px-5 py-4">
