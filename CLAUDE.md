@@ -60,6 +60,9 @@ Keep it green. New logic gets a unit test; a new screen or flow gets a browser t
   "Score again" (`POST /requests/:id/rescore`, run kind `rescore`) re-scores everyone already on a role with the
   current rules and ranks them: brief, score and rank only. No searches, reveals, web search, contenders or outreach,
   so it never contacts anyone; it logs how many Top-10 people now qualify but haven't been contacted.
+  A failed run (for example when Claude credits run out, shown in plain English by `runErrorMessage`) can be picked up
+  where it stopped with "Continue" (`POST /requests/:id/runs/continue`, `continueRun`): same run, same step, so nothing
+  is searched or revealed twice. "Refresh" instead starts a new run that looks for new people.
 - `server/services/learning.ts`: the scorecard learns from decisions (hiring manager Yes = 1, No = 0; interview or
   hired = 1). Daily (cron) it tunes the criterion weights per department and across departments to rank past
   decisions better (pairwise accuracy), in whole points, at most ±5 per cycle and ±10 from the defaults, only with
