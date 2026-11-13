@@ -7,9 +7,14 @@ import { TooltipProvider } from "./components/ui/tooltip";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { initMonitoring } from "./lib/monitoring";
+import { reloadForNewBuild } from "./lib/stale-build";
 import "./index.css";
 
 initMonitoring();
+// Vite reports a page's code or styles it couldn't preload, which happens in a tab opened before a deploy.
+window.addEventListener("vite:preloadError", (event) => {
+  if (reloadForNewBuild()) event.preventDefault();
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {
