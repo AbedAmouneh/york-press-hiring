@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { captureError } from "@/lib/monitoring";
+import { isStaleBuildError, reloadForNewBuild } from "@/lib/stale-build";
 import { Button } from "@/components/ui/button";
 
 type State = { error: Error | null };
@@ -13,6 +14,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    // A tab opened before a deploy can't load the new pages' code: reload once instead of showing an error.
+    if (isStaleBuildError(error) && reloadForNewBuild()) return;
     console.error(error);
     captureError(error, { componentStack: info.componentStack ?? "" });
   }
